@@ -26,6 +26,7 @@ export function addSuggestPill(client: PluginClientContext): () => void {
     if (stopped) return;
     if (!agent.workspaceId || agent.archivedAt) return remove(agent.id);
     agents.set(agent.id, agent);
+    if (agent.status !== "idle") texts.delete(agent.id); // a returning idle must not resurrect the previous suggestion
     const text = agent.status === "idle" ? (texts.get(agent.id) ?? null) : null;
     const pill = pills.get(agent.id);
     const button = {
@@ -40,7 +41,13 @@ export function addSuggestPill(client: PluginClientContext): () => void {
             kind: "item" as const,
             id: "send",
             title: text ?? "",
-            behavior: { kind: "action" as const, onPress: () => void client.paseo.agents.ref(agent.id).send(text ?? "") },
+            behavior: {
+              kind: "action" as const,
+              onPress: () => {
+                texts.delete(agent.id);
+                void client.paseo.agents.ref(agent.id).send(text ?? "");
+              },
+            },
           },
           {
             kind: "item" as const,

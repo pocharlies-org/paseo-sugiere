@@ -7,8 +7,10 @@ tira la sugerencia pendiente. Es el port del `session-assist` que funcionaba en 
 OpenChamber.
 
 Es un plugin hermano del de [claude-account-switcher](https://github.com/pocharlies-org/claude-account-switcher):
-comparte reglas de lectura (el contrato `file.claude-cuentas.v1` — solo lee `<id>.token`, nunca
-escribe) y el mismo router local, pero es código propio en repo propio.
+usa el mismo router local, pero no consume el contrato `file.claude-cuentas.v1` — para un alias local
+como `qwen38-off` el router descarta el bearer (medido 13-10: 200 con un token falso), así que aquí no
+se lee ninguna cuenta ni ningún token. El aplanado del transcript es una copia declarada de
+`shared/ask.ts` del repo hermano (ver `ARCHITECTURE.md`).
 
 ## Cómo funciona
 
@@ -18,22 +20,26 @@ escribe) y el mismo router local, pero es código propio en repo propio.
   sesión). El transcript se aplanaba igual que en las preguntas laterales: los tool calls dejan una
   línea, nunca su contenido.
 - El prompt es apéndice-estable (el transcript solo crece; la instrucción fija va al final), así que
-  del segundo aviso de una misma sesión en adelante el motor del residente acierta el prefijo y solo
-  se pagan ~40 tokens de la respuesta. Con la sesión en reposo no se llama a nada.
+  del segundo aviso de una misma sesión en adelante se espera que el motor del residente acierte el
+  prefijo (APC) y solo se pague el decode de la respuesta (≤48 tokens por tope, `max_tokens`). La
+  ganancia real de prefijo no está medida en vivo todavía. Con la sesión en reposo no se llama a nada.
 - Trabajo terminado, ofertas opcionales o decisiones del usuario → sugerencia vacía → la píldora no
   aparece. El envío es siempre un toque del usuario.
 
 ## Qué lee y envía
 
-Lee el transcript del agente (`~/.claude*/projects/**/*.jsonl` vía `~/.paseo/config.json`) y el token
-de la cuenta dueña (`~/.config/claude-cuentas/<id>.token`, lectura sola, nunca guardado). Envía una
-sola cosa: la llamada al router en `127.0.0.1:18791`. Nada de eso llega a la app.
+Lee el transcript del agente (`~/.claude*/projects/**/*.jsonl` vía `~/.paseo/config.json`). No lee
+cuentas ni tokens. Envía una sola cosa: la llamada al router en `127.0.0.1:18791`. Nada de eso llega
+a la app.
 
 ## Instalación
 
 ```sh
 paseo plugin install ~/src/paseo-sugiere
+paseo plugin reload paseo-sugiere
 ```
+
+Sin reiniciar el daemon: con los agentes vivos no se toca el daemon (`paseo reload` no hace falta).
 
 ## Pruebas
 

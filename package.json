@@ -16,7 +16,7 @@
   ],
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "test": "node --test test/*.test.ts"
+    "test": "node --experimental-test-module-mocks --test test/*.test.ts"
   },
   "dependencies": {
     "@getpaseo/plugin": "0.11.2",
