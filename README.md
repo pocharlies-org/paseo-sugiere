@@ -34,12 +34,16 @@ a la app.
 
 ## Instalación
 
+Desde el clon, en el trunk:
+
 ```sh
-paseo plugin install ~/src/paseo-sugiere
-paseo plugin reload paseo-sugiere
+scripts/deploy.sh
 ```
 
-Sin reiniciar el daemon: con los agentes vivos no se toca el daemon (`paseo reload` no hace falta).
+Empaqueta como el plugin de cuentas: carpeta versionada `~/.local/share/paseo-sugiere/paseo-plugin/<versión>-<git sha>`
+y enlace `current`; instala (`paseo plugin install <current>`) la primera vez y recarga (`paseo plugin reload
+paseo-sugiere`) en adelante. El daemon apunta al `current`, no al clon. Comprueba antes `paseo --version` contra
+`requirements.paseo` del manifiesto: fuera de rango no despliega y lo dice. Sin reiniciar el daemon.
 
 ## Pruebas
 
