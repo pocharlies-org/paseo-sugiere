@@ -10,20 +10,20 @@ const user = (content: unknown) => line({ type: "user", message: { role: "user",
 const as = (content: unknown) => line({ type: "assistant", message: { role: "assistant", model: "claude-opus-5-5", content } });
 
 describe("the body of the suggestion call", () => {
-  it("is the transcript plus the fixed instruction last, with the resident model and no tools", () => {
+  it("is the transcript alone with the fixed instruction in system, the resident model and no tools", () => {
     const body = JSON.parse(suggestBody([user("monta el pill"), as([{ type: "text", text: "listo" }])]));
     assert.equal(body.model, "qwen38-off");
     assert.equal(body.max_tokens, 48);
     assert.deepEqual(body.tools, []);
-    const last = body.messages[body.messages.length - 1];
-    assert.equal(last.role, "user");
-    assert.ok(last.content.some((b: { text: string }) => b.text === SUGGESTION_INSTRUCTION));
+    assert.equal(body.system, SUGGESTION_INSTRUCTION);
+    assert.equal(body.messages.length, 2); // the transcript alone: the instruction never rides as a user turn
+    assert.equal(body.messages[1].role, "assistant");
   });
 
-  it("joins the instruction to a transcript that ends with the user, as one turn", () => {
+  it("leaves a transcript that ends with the user untouched (the measured misfire)", () => {
     const body = JSON.parse(suggestBody([as([{ type: "text", text: "listo" }]), user("y ahora?")]));
     assert.equal(body.messages.length, 2);
-    assert.equal(body.messages[1].content.length, 2);
+    assert.equal(body.messages[1].content.length, 1);
   });
 });
 
@@ -43,6 +43,12 @@ describe("what counts as a suggestion", () => {
 
   it("a rambling answer is not a sendable line", () => {
     assert.equal(suggestionAnswer(answer("x".repeat(241))), "");
+  });
+
+  it("an echo of the assistant's last line is nothing to suggest", () => {
+    assert.equal(suggestionAnswer(answer("listo"), "listo"), "");
+    assert.equal(suggestionAnswer(answer("[called Bash]"), "[called Bash]"), "");
+    assert.equal(suggestionAnswer(answer("sigue con el merge"), "listo"), "sigue con el merge");
   });
 });
 

@@ -3,7 +3,7 @@
 // that a finished conversation gets nothing. Nothing here touches the session: the call goes to the router with the local alias
 // `qwen38-off`, so the resident only pays the decode of the answer once its prefix cache hits (unmeasured in vivo yet).
 import type { PluginHookContext } from "@getpaseo/plugin/server";
-import { suggestBody, suggestionAnswer } from "../shared/suggest.ts";
+import { lastAssistantText, suggestBody, suggestionAnswer } from "../shared/suggest.ts";
 import { SessionError, locateSession, routerRequest } from "./session.ts";
 
 const QUIET_MS = 60_000;
@@ -50,7 +50,7 @@ async function generate(agentId: string, seq: number, context: PluginHookContext
     const lines = await locateSession(agentId, context.paseo);
     const answer = await routerRequest(suggestBody(lines));
     if (answer.status !== 200) return;
-    const text = suggestionAnswer(JSON.parse(answer.text));
+    const text = suggestionAnswer(JSON.parse(answer.text), lastAssistantText(lines));
     const entry = agents.get(agentId);
     if (entry && entry.seq === seq && text) entry.text = text; // the session moved on while the resident answered
   } catch (error) {
