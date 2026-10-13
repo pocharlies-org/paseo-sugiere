@@ -4,7 +4,10 @@
 import { readdir, readFile, stat } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import type { PaseoApi } from "@getpaseo/client";
+import type { PluginHandlerContext } from "@getpaseo/plugin/server";
+
+// The server runtime boundary forbids importing @getpaseo/client: the API type comes from the SDK's own context.
+type PaseoApi = PluginHandlerContext["paseo"];
 
 const ROUTER = { host: "127.0.0.1", port: 18791 };
 const TIMEOUT_MS = 120_000;
