@@ -1,12 +1,40 @@
-import type { PluginClientContext } from "@getpaseo/plugin/client";
+import type { PluginButtonContentProps, PluginClientContext } from "@getpaseo/plugin/client";
+import { useMemo } from "react";
+import { Pressable, Text, View } from "react-native";
 import { suggestDismiss, suggestGet } from "../shared/contract.ts";
 
 // One composer pill per agent with the message the resident suggests after its last turn. The pill is invisible while there
-// is nothing to suggest; its menu sends the text as the next user message or throws it away. The text lives in the plugin server —
-// this only polls for idle agents, so a suggestion is never asked for while a turn is running.
+// is nothing to suggest; tapping it opens a dark card with the full text and the two answers: send it as the next user
+// message, or throw it away. The text lives in the plugin server — this only polls for idle agents, so a suggestion is
+// never asked for while a turn is running.
 type Agent = { id: string; workspaceId?: string | null; status: string; archivedAt?: string | null };
 
 const POLL_MS = 10_000;
+
+function SuggestCard({ text, theme, close, send, dismiss }: PluginButtonContentProps & { text: string; send: () => void; dismiss: () => void }) {
+  const styles = useMemo(
+    () => ({
+      card: { gap: 12, padding: 14, borderRadius: 10, borderWidth: 1, borderColor: theme.colors.accent, backgroundColor: theme.colors.surface2 },
+      text: { color: theme.colors.foreground, fontSize: 14 },
+      send: { alignSelf: "flex-start" as const, padding: 10, borderRadius: 8, backgroundColor: theme.colors.accent },
+      sendText: { color: theme.colors.accentForeground, fontWeight: "600" as const },
+      dismiss: { padding: 6 },
+      dismissText: { color: theme.colors.foregroundMuted },
+    }),
+    [theme],
+  );
+  return (
+    <View style={styles.card}>
+      <Text style={styles.text}>{text}</Text>
+      <Pressable style={styles.send} onPress={send}>
+        <Text style={styles.sendText}>Enviar como siguiente mensaje</Text>
+      </Pressable>
+      <Pressable style={styles.dismiss} onPress={dismiss}>
+        <Text style={styles.dismissText}>Descartar</Text>
+      </Pressable>
+    </View>
+  );
+}
 
 export function addSuggestPill(client: PluginClientContext): () => void {
   const agents = new Map<string, Agent>();
@@ -34,34 +62,24 @@ export function addSuggestPill(client: PluginClientContext): () => void {
       label: text ? `✦ ${text}` : "✦",
       visible: text !== null,
       behavior: {
-        kind: "menu" as const,
-        items: [
-          {
-            kind: "item" as const,
-            id: "send",
-            title: text ?? "",
-            behavior: {
-              kind: "action" as const,
-              onPress: () => {
-                texts.delete(agent.id);
-                void client.paseo.agents.ref(agent.id).send(text ?? "");
-              },
-            },
-          },
-          {
-            kind: "item" as const,
-            id: "dismiss",
-            title: "Dismiss",
-            behavior: {
-              kind: "action" as const,
-              onPress: () =>
-                void client
-                  .rpc(suggestDismiss, { agentId: agent.id })
-                  .then(() => texts.set(agent.id, null))
-                  .catch(() => {}),
-            },
-          },
-        ],
+        kind: "popover" as const,
+        Content: (props: PluginButtonContentProps) => (
+          <SuggestCard
+            {...props}
+            text={text ?? ""}
+            send={() => {
+              texts.delete(agent.id);
+              void client.paseo.agents.ref(agent.id).send(text ?? "");
+              props.close();
+            }}
+            dismiss={() =>
+              void client
+                .rpc(suggestDismiss, { agentId: agent.id })
+                .then(() => texts.delete(agent.id))
+                .catch(() => {})
+            }
+          />
+        ),
       },
     };
     if (pill) pill.update(button);

@@ -60,16 +60,20 @@ async function findIn(projectsDir: string, name: string): Promise<string | null>
 /** The one call to the local router; the status stays the caller's decision. fetch is enough here: the refusal of `Sec-Fetch-*`
 belongs to the account service, and the router answers 200 with those headers (measured 13-10). */
 export async function routerRequest(body: string): Promise<{ status: number; text: string }> {
+  const controller = new AbortController(); // AbortSignal.timeout is not in react-native's globals, which the client's types pull in
+  const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
   try {
     const response = await fetch(`http://${ROUTER.host}:${ROUTER.port}/v1/messages`, {
       method: "POST",
       headers: { "content-type": "application/json", "anthropic-version": "2023-06-01", authorization: "Bearer paseo-sugiere" },
       body,
-      signal: AbortSignal.timeout(TIMEOUT_MS),
+      signal: controller.signal,
     });
     const text = await response.text();
     return { status: response.status, text: text.length > MAX_BYTES ? text.slice(0, MAX_BYTES) : text };
   } catch {
     throw new SessionError("router");
+  } finally {
+    clearTimeout(timer);
   }
 }
