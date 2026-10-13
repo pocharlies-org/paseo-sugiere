@@ -1,7 +1,7 @@
 // The next-message suggestion: after a turn ends quietly for a minute, one small call to the resident proposes what the
 // user should send next, and the composer pill shows it. Port of OpenChamber's session-assist: same 60 s quiet window, same rule
-// that a finished conversation gets nothing. Nothing here touches the session: the call goes to the router with the account's
-// bearer and the model `qwen38-off`, so it costs the resident's cache hit and ~40 tokens of decode.
+// that a finished conversation gets nothing. Nothing here touches the session: the call goes to the router with the local alias
+// `qwen38-off`, so the resident only pays the decode of the answer once its prefix cache hits (unmeasured in vivo yet).
 import type { PluginHookContext } from "@getpaseo/plugin/server";
 import { suggestBody, suggestionAnswer } from "../shared/suggest.ts";
 import { SessionError, locateSession, routerRequest } from "./session.ts";
@@ -44,11 +44,11 @@ export function dispose(): void {
   agents.clear();
 }
 
-/** Silent by design: no transcript, no account, a refused call — there is simply no suggestion, and the pill shows nothing. */
+/** Silent by design: no transcript, a missing file, a refused call — there is simply no suggestion, and the pill shows nothing. */
 async function generate(agentId: string, seq: number, context: PluginHookContext): Promise<void> {
   try {
-    const { lines, configDir } = await locateSession(agentId, context.paseo);
-    const answer = await routerRequest(suggestBody(lines), configDir);
+    const lines = await locateSession(agentId, context.paseo);
+    const answer = await routerRequest(suggestBody(lines));
     if (answer.status !== 200) return;
     const text = suggestionAnswer(JSON.parse(answer.text));
     const entry = agents.get(agentId);
