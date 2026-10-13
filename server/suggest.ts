@@ -54,6 +54,7 @@ async function generate(agentId: string, seq: number, context: PluginHookContext
     const entry = agents.get(agentId);
     if (entry && entry.seq === seq && text) entry.text = text; // the session moved on while the resident answered
   } catch (error) {
-    if (!(error instanceof SessionError)) console.warn("suggest: generation failed for one agent", error instanceof Error ? error.message : "");
+    // Silent for the user, visible in `paseo plugin logs`: which step refused (no-session, no-transcript, unreadable, router).
+    console.warn(`suggest: no generation for ${agentId}: ${error instanceof SessionError ? error.message : error instanceof Error ? error.message : "unknown"}`);
   }
 }
