@@ -52,6 +52,18 @@ describe("what counts as a suggestion", () => {
   });
 });
 
+describe("the off switch", () => {
+  it("disabling drops everything and arms nothing", () => {
+    suggest.setEnabled(false);
+    try {
+      suggest.arm("off1", { paseo: { agents: { list: async () => ({ entries: [] }) } } } as never);
+      assert.equal(suggest.get("off1"), null);
+    } finally {
+      suggest.setEnabled(true);
+    }
+  });
+});
+
 describe("the quiet window", () => {
   it("a cancelled agent has nothing, and a failed generation stays silent", async () => {
     mock.timers.enable({ apis: ["setTimeout"] });
