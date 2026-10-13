@@ -7,7 +7,6 @@ import { suggestDismiss, suggestGet } from "../shared/contract.ts";
 type Agent = { id: string; workspaceId?: string | null; status: string; archivedAt?: string | null };
 
 const POLL_MS = 10_000;
-const LABEL_MAX = 60;
 
 export function addSuggestPill(client: PluginClientContext): () => void {
   const agents = new Map<string, Agent>();
@@ -32,7 +31,7 @@ export function addSuggestPill(client: PluginClientContext): () => void {
     const button = {
       title: "Suggested next message",
       icon: "Sparkles",
-      label: text ? `✦ ${text.length > LABEL_MAX ? `${text.slice(0, LABEL_MAX - 1)}…` : text}` : "✦",
+      label: text ? `✦ ${text}` : "✦",
       visible: text !== null,
       behavior: {
         kind: "menu" as const,
