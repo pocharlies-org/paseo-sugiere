@@ -31,7 +31,9 @@ locales (`qwen38-off` responde 200 con token falso), así que aquí no se lee
 - `index.server.ts` / `index.client.tsx` — enganche a los hooks `agent.turn_ended` /
   `agent.turn_started`, a los RPCs `suggest.get` / `suggest.dismiss` y al ajuste `enabled`
   (`registerSettings`, host): al desactivar, `setEnabled(false)` tira pendientes y mostradas y
-  `arm` deja de programar generaciones.
+  `arm` deja de programar generaciones; `quietSeconds` es la ventana de silencio.
+- `client/suggest-settings.tsx` — pantalla de ajustes propia (`addSettingsScreen` + `useSettings`):
+  interruptor y ventana; el documento compartido está en `shared/settings.ts`.
 
 ## Superficie
 

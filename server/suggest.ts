@@ -6,13 +6,15 @@ import type { PluginHookContext } from "@getpaseo/plugin/server";
 import { lastAssistantText, suggestBody, suggestionAnswer } from "../shared/suggest.ts";
 import { SessionError, locateSession, routerRequest } from "./session.ts";
 
-const QUIET_MS = 60_000;
-
-// Off switch: the plugin settings screen (host scope) flips this; disabling drops every pending and shown suggestion.
+// The settings document in force: off drops every pending and shown suggestion; quiet is the silence window.
 let enabled = true;
+let quietMs = 60_000;
 export function setEnabled(value: boolean): void {
   if (enabled && !value) dispose();
   enabled = value;
+}
+export function setQuietSeconds(seconds: number): void {
+  quietMs = seconds * 1000;
 }
 
 type Entry = { timer?: ReturnType<typeof setTimeout>; seq: number; text: string | null };
@@ -29,7 +31,7 @@ export function arm(agentId: string, context: PluginHookContext): void {
   entry.timer = setTimeout(() => {
     entry.timer = undefined;
     void generate(agentId, seq, context);
-  }, QUIET_MS);
+  }, quietMs);
   agents.set(agentId, entry);
 }
 
