@@ -29,7 +29,9 @@ locales (`qwen38-off` responde 200 con token falso), así que aquí no se lee
 - `client/suggest-pill.ts` — píldora en el composer; sondea 10 s solo agentes
   `idle`; el texto se tira al salir de idle y al enviar.
 - `index.server.ts` / `index.client.tsx` — enganche a los hooks `agent.turn_ended` /
-  `agent.turn_started` y a los RPCs `suggest.get` / `suggest.dismiss`.
+  `agent.turn_started`, a los RPCs `suggest.get` / `suggest.dismiss` y al ajuste `enabled`
+  (`registerSettings`, host): al desactivar, `setEnabled(false)` tira pendientes y mostradas y
+  `arm` deja de programar generaciones.
 
 ## Superficie
 

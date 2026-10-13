@@ -8,11 +8,19 @@ import { SessionError, locateSession, routerRequest } from "./session.ts";
 
 const QUIET_MS = 60_000;
 
+// Off switch: the plugin settings screen (host scope) flips this; disabling drops every pending and shown suggestion.
+let enabled = true;
+export function setEnabled(value: boolean): void {
+  if (enabled && !value) dispose();
+  enabled = value;
+}
+
 type Entry = { timer?: ReturnType<typeof setTimeout>; seq: number; text: string | null };
 const agents = new Map<string, Entry>();
 
 /** A turn ended completed: after the quiet window, one generation, unless anything happens first. */
 export function arm(agentId: string, context: PluginHookContext): void {
+  if (!enabled) return;
   const entry = agents.get(agentId) ?? { seq: 0, text: null };
   if (entry.timer) clearTimeout(entry.timer);
   entry.seq += 1;
@@ -36,7 +44,7 @@ export function cancel(agentId: string): void {
 }
 
 export function get(agentId: string): string | null {
-  return agents.get(agentId)?.text ?? null;
+  return enabled ? (agents.get(agentId)?.text ?? null) : null;
 }
 
 export function dispose(): void {
