@@ -56,6 +56,12 @@ describe("what counts as a suggestion", () => {
     assert.equal(suggestionAnswer(answer("revisa el log?")), "");
     assert.equal(suggestionAnswer(answer("revisa el log")), "revisa el log");
   });
+
+  it("a transcript marker mimicked by the model is nothing to suggest", () => {
+    assert.equal(suggestionAnswer(answer("[called Bash]")), "");
+    assert.equal(suggestionAnswer(answer("[thinking]")), "");
+    assert.equal(suggestionAnswer(answer("[ejecuta] los tests")), "[ejecuta] los tests");
+  });
 });
 
 describe("the off switch", () => {
