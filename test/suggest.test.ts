@@ -20,6 +20,11 @@ describe("the body of the suggestion call", () => {
     assert.equal(body.messages[1].role, "assistant");
   });
 
+  it("keeps the guard that a step the USER takes outside the conversation means no suggestion (measured 14-10: «mide la longitud del cañón»)", () => {
+    assert.match(SUGGESTION_INSTRUCTION, /fuera de la conversación/);
+    assert.match(SUGGESTION_INSTRUCTION, /lo que falta es acción o decisión del usuario[\s\S]*línea vacía/);
+  });
+
   it("leaves a transcript that ends with the user untouched (the measured misfire)", () => {
     const body = JSON.parse(suggestBody([as([{ type: "text", text: "listo" }]), user("y ahora?")]));
     assert.equal(body.messages.length, 2);
