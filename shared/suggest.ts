@@ -8,14 +8,16 @@ import { transcriptMessages } from "./transcript.ts";
 export const SUGGEST_MODEL = "qwen38-off";
 export const SUGGEST_MAX_TOKENS = 48;
 
-/** Fixed. Dani 14-10: the pill shows the recommendation the assistant would give for continuing, not a message the user would send. */
+/** Fixed. Dani 14-10: the pill recommends the next step in the assistant's voice — and the recommendation must be sendable:
+if what comes next is the user's in the real world (measure, buy, approve, pay), there is no suggestion (measured 14-10: «mide la longitud del cañón» came out as a pill with an Enviar button). */
 export const SUGGESTION_INSTRUCTION = `Tarea: escribe la recomendación que el asistente daría al usuario sobre cómo continuar esta conversación, tras su último turno.
 Reglas:
 - Una sola línea, en castellano, como mucho 25 palabras, sin comillas ni prefijos.
-- Voz del asistente aconsejando el mejor siguiente paso, en imperativo («ejecuta los tests antes del merge», «pide el informe que falta a qa»).
-- NUNCA una pregunta dirigida al usuario («¿quieres que...?»): si lo recomendado es preguntar algo al usuario, formula el consejo sobre lo que el usuario debe decidir o aportar.
-- Solo si queda trabajo pendiente o un paso siguiente claro (algo prometido y no terminado, una corrección pedida, una decisión que conviene tomar ya).
-- Si el trabajo está terminado o la conversación ha parado de verdad: responde una línea vacía.
+- Voz del asistente aconsejando el mejor siguiente paso, en imperativo («ejecuta los tests antes del merge», «arregla el parseo que falló»).
+- La recomendación tiene que poder enviarse tal cual al asistente para que ÉL la ejecute en esta sesión. Nunca un paso que haga el usuario fuera de la conversación (medir algo físico, comprar, llamar, aprobar, pagar).
+- NUNCA una pregunta dirigida al usuario («¿quieres que...?»).
+- Solo si queda trabajo pendiente o un paso siguiente claro que el asistente pueda ejecutar (algo prometido y no terminado, una corrección pedida).
+- Si el trabajo está terminado, si lo que falta es acción o decisión del usuario, o si la conversación ha parado de verdad: responde una línea vacía.
 Responde únicamente esa línea. Si no hay nada que recomendar, tu respuesta es la línea vacía.`;
 
 /** The whole call body: the transcript flattened as in a side question, the fixed instruction in `system`, no tools. */
