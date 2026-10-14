@@ -4,9 +4,9 @@ import { useMemo } from "react";
 import { Pressable, Text, View } from "react-native";
 import { suggestDismiss, suggestGet } from "../shared/contract.ts";
 
-// One composer pill per agent with the message the resident suggests after its last turn. The pill is invisible while there
-// is nothing to suggest; tapping it opens a card with the full text and two answers: copy it to the clipboard to paste
-// and edit in the composer (the SDK has no composer-text API), or send it as the next user message as-is.
+// One composer pill per agent with the recommendation the resident would give for continuing, after its last turn. The pill
+// is invisible while there is nothing to suggest; tapping it opens a card with the full text and two answers: copy it to the
+// clipboard to paste and edit in the composer (the SDK has no composer-text API), or send it as the next user message as-is.
 // The text lives in the plugin server — this only polls for idle agents, so a suggestion is never asked for while a turn
 // is running.
 type Agent = { id: string; workspaceId?: string | null; status: string; archivedAt?: string | null };
