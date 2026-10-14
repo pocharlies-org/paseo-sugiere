@@ -13,6 +13,7 @@ export const SUGGESTION_INSTRUCTION = `Tarea: escribe el único mensaje que el u
 Reglas:
 - Una sola línea, en castellano, como mucho 25 palabras, sin comillas ni prefijos: será el texto exacto que el usuario envíe.
 - Escríbela como hablaría el usuario, en lenguaje natural: nunca imites el formato de la conversación (nada de lineas entre corchetes ni texto del asistente).
+- Es una orden del usuario al asistente, en imperativo («ejecuta los tests», «arregla el parseo»): NUNCA una pregunta dirigida al usuario («¿quieres que...?», «¿reviso...?»). Si el asistente quiere preguntar algo al usuario, no hay sugerencia: línea vacía.
 - Solo si queda trabajo que el usuario pidió y aún no está hecho que el asistente puede hacer en esta sesión (un paso siguiente claro, algo prometido y no terminado, una corrección pedida).
 - Si el trabajo está terminado, si la siguiente decisión es del usuario (aprobar, elegir, pagar) o si la conversación ha parado de verdad: responde una línea vacía.
 Responde únicamente esa línea. Si no hay nada que sugerir, tu respuesta es la línea vacía.`;
@@ -34,6 +35,7 @@ export function suggestionAnswer(response: unknown, lastAssistant = ""): string 
     .trim();
   const line = (text.split("\n").map((l) => l.trim()).find((l) => l !== "") ?? "").replace(/^["«]|["»]$/g, "").trim();
   if (line.length > 240) return "";
+  if (line.endsWith("?") || line.startsWith("¿")) return ""; // a question to the user is the assistant's voice, not a sendable order (measured 14-10)
   const echo = lastAssistant.trim().replace(/^["«]|["»]$/g, "");
   return line === echo || (line !== "" && echo.startsWith(line)) ? "" : line;
 }

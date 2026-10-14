@@ -5,8 +5,8 @@ import { Pressable, Text, View } from "react-native";
 import { suggestDismiss, suggestGet } from "../shared/contract.ts";
 
 // One composer pill per agent with the message the resident suggests after its last turn. The pill is invisible while there
-// is nothing to suggest; tapping it opens a card with the full text and three answers: copy it to the clipboard to paste
-// and edit in the composer (the SDK has no composer-text API), send it as the next user message as-is, or throw it away.
+// is nothing to suggest; tapping it opens a card with the full text and two answers: copy it to the clipboard to paste
+// and edit in the composer (the SDK has no composer-text API), or send it as the next user message as-is.
 // The text lives in the plugin server — this only polls for idle agents, so a suggestion is never asked for while a turn
 // is running.
 type Agent = { id: string; workspaceId?: string | null; status: string; archivedAt?: string | null };
@@ -14,7 +14,7 @@ type Agent = { id: string; workspaceId?: string | null; status: string; archived
 const POLL_MS = 10_000;
 
 // Neutral host look (SDK: foreground text, muted labels, surface backgrounds, border — no accent fills).
-function SuggestCard({ text, theme, close, copy, send, dismiss }: PluginButtonContentProps & { text: string; copy: () => void; send: () => void; dismiss: () => void }) {
+function SuggestCard({ text, theme, copy, send }: PluginButtonContentProps & { text: string; copy: () => void; send: () => void }) {
   const styles = useMemo(
     () => ({
       card: { gap: 12, padding: 14, borderRadius: 10, borderWidth: 1, borderColor: theme.colors.border, backgroundColor: theme.colors.surface1 },
@@ -22,8 +22,6 @@ function SuggestCard({ text, theme, close, copy, send, dismiss }: PluginButtonCo
       row: { flexDirection: "row" as const, gap: 8 },
       button: { paddingVertical: 8, paddingHorizontal: 12, borderRadius: 8, borderWidth: 1, borderColor: theme.colors.border, backgroundColor: theme.colors.surface2 },
       buttonText: { color: theme.colors.foreground, fontSize: 13 },
-      dismiss: { alignSelf: "flex-start" as const, padding: 4 },
-      dismissText: { color: theme.colors.foregroundMuted, fontSize: 13 },
     }),
     [theme],
   );
@@ -38,9 +36,6 @@ function SuggestCard({ text, theme, close, copy, send, dismiss }: PluginButtonCo
           <Text style={styles.buttonText}>Enviar</Text>
         </Pressable>
       </View>
-      <Pressable style={styles.dismiss} onPress={dismiss}>
-        <Text style={styles.dismissText}>Descartar</Text>
-      </Pressable>
     </View>
   );
 }
@@ -88,12 +83,6 @@ export function addSuggestPill(client: PluginClientContext): () => void {
               void client.paseo.agents.ref(agent.id).send(text ?? "");
               props.close();
             }}
-            dismiss={() =>
-              void client
-                .rpc(suggestDismiss, { agentId: agent.id })
-                .then(() => texts.delete(agent.id))
-                .catch(() => {})
-            }
           />
         ),
       },
