@@ -16,18 +16,21 @@ describe("the body of the suggestion call", () => {
     assert.equal(body.max_tokens, 48);
     assert.deepEqual(body.tools, []);
     assert.equal(body.system, SUGGESTION_INSTRUCTION);
-    assert.equal(body.messages.length, 2); // the transcript alone: the instruction never rides as a user turn
+    assert.equal(body.messages.length, 3); // transcript + the constant trigger; the instruction never rides as a user turn
     assert.equal(body.messages[1].role, "assistant");
+    assert.equal(body.messages[2].role, "user"); // the trigger: without it the model continues the assistant's last turn (measured 14-10)
   });
 
   it("keeps the guard that a step the USER takes outside the conversation means no suggestion (measured 14-10: «mide la longitud del cañón»)", () => {
     assert.match(SUGGESTION_INSTRUCTION, /fuera de la conversación/);
     assert.match(SUGGESTION_INSTRUCTION, /lo que falta es acción o decisión del usuario[\s\S]*línea vacía/);
+    assert.match(SUGGESTION_INSTRUCTION, /objetivo: lo que el usuario pidió al principio/);
+    assert.match(SUGGESTION_INSTRUCTION, /está TERMINADO: no lo continúes/);
   });
 
   it("leaves a transcript that ends with the user untouched (the measured misfire)", () => {
     const body = JSON.parse(suggestBody([as([{ type: "text", text: "listo" }]), user("y ahora?")]));
-    assert.equal(body.messages.length, 2);
+    assert.equal(body.messages.length, 3); // transcript (2) + trigger
     assert.equal(body.messages[1].content.length, 1);
   });
 
@@ -40,7 +43,7 @@ describe("the body of the suggestion call", () => {
         as([{ type: "tool_use", name: "Bash", id: "t2" }]),
       ]),
     );
-    assert.equal(body.messages.length, 2);
+    assert.equal(body.messages.length, 3); // user + assistant + trigger: the tool noise is gone
     assert.deepEqual(body.messages[1].content, [{ type: "text", text: "arreglado, pasa el test" }]);
   });
 });
