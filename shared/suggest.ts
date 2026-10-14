@@ -36,6 +36,7 @@ export function suggestionAnswer(response: unknown, lastAssistant = ""): string 
   const line = (text.split("\n").map((l) => l.trim()).find((l) => l !== "") ?? "").replace(/^["«]|["»]$/g, "").trim();
   if (line.length > 240) return "";
   if (line.endsWith("?") || line.startsWith("¿")) return ""; // a question to the user is the assistant's voice, not a sendable order (measured 14-10)
+  if (/^\[[^\]]*\]$/.test(line)) return ""; // the model mimicked a transcript marker like "[called Bash]" (measured 14-10)
   const echo = lastAssistant.trim().replace(/^["«]|["»]$/g, "");
   return line === echo || (line !== "" && echo.startsWith(line)) ? "" : line;
 }
