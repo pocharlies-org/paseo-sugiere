@@ -8,15 +8,17 @@ import { transcriptMessages } from "./transcript.ts";
 export const SUGGEST_MODEL = "qwen38-off";
 export const SUGGEST_MAX_TOKENS = 48;
 
-/** Fixed. Dani 14-10: the pill recommends the next step in the assistant's voice — and the recommendation must be sendable:
-if what comes next is the user's in the real world (measure, buy, approve, pay), there is no suggestion (measured 14-10: «mide la longitud del cañón» came out as a pill with an Enviar button). */
-export const SUGGESTION_INSTRUCTION = `Tarea: escribe la recomendación que el asistente daría al usuario sobre cómo continuar esta conversación, tras su último turno.
+/** Fixed. Dani 14-10: the pill recommends the next step toward the task's GOAL — the model was continuing the assistant's last
+turn instead of recommending (measured: «PR #14 en vigilancia…» came out). Sendable rule kept: if what comes next is the user's
+in the real world (measure, buy, approve, pay), there is no suggestion (measured 14-10: «mide la longitud del cañón»). */
+export const SUGGESTION_INSTRUCTION = `Tarea: esta conversación tiene una tarea en curso con un objetivo: lo que el usuario pidió al principio. Escribe el siguiente paso que el usuario debería pedir para avanzar hacia ese objetivo.
 Reglas:
+- El último turno del asistente está TERMINADO: no lo continúes, no lo resumas, no lo repitas. La recomendación es un paso NUEVO.
+- Ten en cuenta lo ya hecho y lo que queda: recomienda el paso siguiente que acerca al objetivo (algo prometido y no terminado, una corrección pedida, el siguiente paso natural).
 - Una sola línea, en castellano, como mucho 25 palabras, sin comillas ni prefijos.
-- Voz del asistente aconsejando el mejor siguiente paso, en imperativo («ejecuta los tests antes del merge», «arregla el parseo que falló»).
+- Voz del asistente aconsejando, en imperativo («ejecuta los tests antes del merge», «arregla el parseo que falló»).
 - La recomendación tiene que poder enviarse tal cual al asistente para que ÉL la ejecute en esta sesión. Nunca un paso que haga el usuario fuera de la conversación (medir algo físico, comprar, llamar, aprobar, pagar).
 - NUNCA una pregunta dirigida al usuario («¿quieres que...?»).
-- Solo si queda trabajo pendiente o un paso siguiente claro que el asistente pueda ejecutar (algo prometido y no terminado, una corrección pedida).
 - Si el trabajo está terminado, si lo que falta es acción o decisión del usuario, o si la conversación ha parado de verdad: responde una línea vacía.
 Responde únicamente esa línea. Si no hay nada que recomendar, tu respuesta es la línea vacía.`;
 
@@ -29,10 +31,20 @@ function conversation(messages: { role: "user" | "assistant"; content: { type: "
     .filter((m) => m.content.length);
 }
 
-/** The whole call body: the conversation (no tool noise), the fixed instruction in `system`, no tools. */
+/** Constant last user turn: without it the call ends with the assistant and the small model CONTINUES that turn instead of
+recommending (measured 14-10: «PR #14 en vigilancia…»); with it, it answers. Constant, so the cached prefix of the session holds. */
+const TRIGGER = "¿Qué debería pedirle a continuación al asistente? Responde solo con esa línea.";
+
+/** The whole call body: the conversation (no tool noise), the fixed instruction in `system`, the constant trigger last, no tools. */
 export function suggestBody(lines: string[]): string {
   const { messages } = transcriptMessages(lines);
-  return JSON.stringify({ model: SUGGEST_MODEL, max_tokens: SUGGEST_MAX_TOKENS, tools: [], system: SUGGESTION_INSTRUCTION, messages: conversation(messages) });
+  return JSON.stringify({
+    model: SUGGEST_MODEL,
+    max_tokens: SUGGEST_MAX_TOKENS,
+    tools: [],
+    system: SUGGESTION_INSTRUCTION,
+    messages: [...conversation(messages), { role: "user", content: [{ type: "text", text: TRIGGER }] }],
+  });
 }
 
 /** The one sendable line, or "" for nothing to suggest: first non-empty line, quotes trimmed, a rambling answer dropped,
