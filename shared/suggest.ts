@@ -20,10 +20,19 @@ Reglas:
 - Si el trabajo está terminado, si lo que falta es acción o decisión del usuario, o si la conversación ha parado de verdad: responde una línea vacía.
 Responde únicamente esa línea. Si no hay nada que recomendar, tu respuesta es la línea vacía.`;
 
-/** The whole call body: the transcript flattened as in a side question, the fixed instruction in `system`, no tools. */
+/** The conversation proper: tool calls and tool results stripped. Measured 14-10 — with them the tail of a working session is
+"[called Bash]" / "[tool result] …" and the small model mimics the last marker instead of recommending; without them it sees
+what the user asked and what the assistant answered, which is all a next-step recommendation needs. */
+function conversation(messages: { role: "user" | "assistant"; content: { type: "text"; text: string }[] }[]) {
+  return messages
+    .map((m) => ({ role: m.role, content: m.content.filter((b) => !/^\[(called|tool result)/.test(b.text)) }))
+    .filter((m) => m.content.length);
+}
+
+/** The whole call body: the conversation (no tool noise), the fixed instruction in `system`, no tools. */
 export function suggestBody(lines: string[]): string {
   const { messages } = transcriptMessages(lines);
-  return JSON.stringify({ model: SUGGEST_MODEL, max_tokens: SUGGEST_MAX_TOKENS, tools: [], system: SUGGESTION_INSTRUCTION, messages });
+  return JSON.stringify({ model: SUGGEST_MODEL, max_tokens: SUGGEST_MAX_TOKENS, tools: [], system: SUGGESTION_INSTRUCTION, messages: conversation(messages) });
 }
 
 /** The one sendable line, or "" for nothing to suggest: first non-empty line, quotes trimmed, a rambling answer dropped,
@@ -43,9 +52,9 @@ export function suggestionAnswer(response: unknown, lastAssistant = ""): string 
   return line === echo || (line !== "" && echo.startsWith(line)) ? "" : line;
 }
 
-/** The assistant's last flattened line: what the small model tends to echo instead of suggesting. */
+/** The assistant's last real answer (tool noise stripped, as in the call): what the small model tends to echo instead of recommending. */
 export function lastAssistantText(lines: string[]): string {
   const { messages } = transcriptMessages(lines);
-  const a = [...messages].reverse().find((m) => m.role === "assistant");
+  const a = [...conversation(messages)].reverse().find((m) => m.role === "assistant");
   return (a?.content ?? []).map((b: { text?: unknown }) => (typeof b.text === "string" ? b.text : "")).join(" ").trim();
 }
