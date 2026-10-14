@@ -30,6 +30,19 @@ describe("the body of the suggestion call", () => {
     assert.equal(body.messages.length, 2);
     assert.equal(body.messages[1].content.length, 1);
   });
+
+  it("strips tool calls and results: the model must see the conversation, not the tool noise (measured 14-10: answered «[called Bash]»)", () => {
+    const body = JSON.parse(
+      suggestBody([
+        user("arregla el parseo"),
+        as([{ type: "tool_use", name: "Bash", id: "t1" }, { type: "text", text: "arreglado, pasa el test" }]),
+        user([{ type: "tool_result", tool_use_id: "t1", content: "ok" }]),
+        as([{ type: "tool_use", name: "Bash", id: "t2" }]),
+      ]),
+    );
+    assert.equal(body.messages.length, 2);
+    assert.deepEqual(body.messages[1].content, [{ type: "text", text: "arreglado, pasa el test" }]);
+  });
 });
 
 describe("what counts as a suggestion", () => {
