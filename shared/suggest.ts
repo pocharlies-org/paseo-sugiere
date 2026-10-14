@@ -8,15 +8,15 @@ import { transcriptMessages } from "./transcript.ts";
 export const SUGGEST_MODEL = "qwen38-off";
 export const SUGGEST_MAX_TOKENS = 48;
 
-/** Fixed, in the spirit of OpenChamber's session-assist prompt: a sendable message only for work that is genuinely owed. */
-export const SUGGESTION_INSTRUCTION = `Tarea: escribe el único mensaje que el usuario debería enviar a continuación en esta conversación.
+/** Fixed. Dani 14-10: the pill shows the recommendation the assistant would give for continuing, not a message the user would send. */
+export const SUGGESTION_INSTRUCTION = `Tarea: escribe la recomendación que el asistente daría al usuario sobre cómo continuar esta conversación, tras su último turno.
 Reglas:
-- Una sola línea, en castellano, como mucho 25 palabras, sin comillas ni prefijos: será el texto exacto que el usuario envíe.
-- Escríbela como hablaría el usuario, en lenguaje natural: nunca imites el formato de la conversación (nada de lineas entre corchetes ni texto del asistente).
-- Es una orden del usuario al asistente, en imperativo («ejecuta los tests», «arregla el parseo»): NUNCA una pregunta dirigida al usuario («¿quieres que...?», «¿reviso...?»). Si el asistente quiere preguntar algo al usuario, no hay sugerencia: línea vacía.
-- Solo si queda trabajo que el usuario pidió y aún no está hecho que el asistente puede hacer en esta sesión (un paso siguiente claro, algo prometido y no terminado, una corrección pedida).
-- Si el trabajo está terminado, si la siguiente decisión es del usuario (aprobar, elegir, pagar) o si la conversación ha parado de verdad: responde una línea vacía.
-Responde únicamente esa línea. Si no hay nada que sugerir, tu respuesta es la línea vacía.`;
+- Una sola línea, en castellano, como mucho 25 palabras, sin comillas ni prefijos.
+- Voz del asistente aconsejando el mejor siguiente paso, en imperativo («ejecuta los tests antes del merge», «pide el informe que falta a qa»).
+- NUNCA una pregunta dirigida al usuario («¿quieres que...?»): si lo recomendado es preguntar algo al usuario, formula el consejo sobre lo que el usuario debe decidir o aportar.
+- Solo si queda trabajo pendiente o un paso siguiente claro (algo prometido y no terminado, una corrección pedida, una decisión que conviene tomar ya).
+- Si el trabajo está terminado o la conversación ha parado de verdad: responde una línea vacía.
+Responde únicamente esa línea. Si no hay nada que recomendar, tu respuesta es la línea vacía.`;
 
 /** The whole call body: the transcript flattened as in a side question, the fixed instruction in `system`, no tools. */
 export function suggestBody(lines: string[]): string {
