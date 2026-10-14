@@ -50,6 +50,12 @@ describe("what counts as a suggestion", () => {
     assert.equal(suggestionAnswer(answer("[called Bash]"), "[called Bash]"), "");
     assert.equal(suggestionAnswer(answer("sigue con el merge"), "listo"), "sigue con el merge");
   });
+
+  it("a question to the user is the assistant's voice, not a sendable order", () => {
+    assert.equal(suggestionAnswer(answer("¿quieres que revise el log?")), "");
+    assert.equal(suggestionAnswer(answer("revisa el log?")), "");
+    assert.equal(suggestionAnswer(answer("revisa el log")), "revisa el log");
+  });
 });
 
 describe("the off switch", () => {
