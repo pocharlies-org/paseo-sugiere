@@ -1,17 +1,19 @@
 import type { PluginButtonContentProps, PluginClientContext } from "@getpaseo/plugin/client";
+import { copyText } from "@getpaseo/plugin/client/react-native";
 import { useMemo } from "react";
 import { Pressable, Text, View } from "react-native";
 import { suggestDismiss, suggestGet } from "../shared/contract.ts";
 
 // One composer pill per agent with the message the resident suggests after its last turn. The pill is invisible while there
-// is nothing to suggest; tapping it opens a dark card with the full text and the two answers: send it as the next user
-// message, or throw it away. The text lives in the plugin server — this only polls for idle agents, so a suggestion is
-// never asked for while a turn is running.
+// is nothing to suggest; tapping it opens a dark card with the full text and the two answers: copy it to the clipboard to
+// paste and edit in the composer (the SDK has no composer-text API, so `send` would fire without a chance to edit), or
+// throw it away. The text lives in the plugin server — this only polls for idle agents, so a suggestion is never asked
+// for while a turn is running.
 type Agent = { id: string; workspaceId?: string | null; status: string; archivedAt?: string | null };
 
 const POLL_MS = 10_000;
 
-function SuggestCard({ text, theme, close, send, dismiss }: PluginButtonContentProps & { text: string; send: () => void; dismiss: () => void }) {
+function SuggestCard({ text, theme, close, copy, dismiss }: PluginButtonContentProps & { text: string; copy: () => void; dismiss: () => void }) {
   const styles = useMemo(
     () => ({
       card: { gap: 12, padding: 14, borderRadius: 10, borderWidth: 1, borderColor: theme.colors.accent, backgroundColor: theme.colors.surface2 },
@@ -26,8 +28,8 @@ function SuggestCard({ text, theme, close, send, dismiss }: PluginButtonContentP
   return (
     <View style={styles.card}>
       <Text style={styles.text}>{text}</Text>
-      <Pressable style={styles.send} onPress={send}>
-        <Text style={styles.sendText}>Enviar como siguiente mensaje</Text>
+      <Pressable style={styles.send} onPress={copy}>
+        <Text style={styles.sendText}>Copiar para editar</Text>
       </Pressable>
       <Pressable style={styles.dismiss} onPress={dismiss}>
         <Text style={styles.dismissText}>Descartar</Text>
@@ -67,11 +69,13 @@ export function addSuggestPill(client: PluginClientContext): () => void {
           <SuggestCard
             {...props}
             text={text ?? ""}
-            send={() => {
-              texts.delete(agent.id);
-              void client.paseo.agents.ref(agent.id).send(text ?? "");
-              props.close();
-            }}
+            copy={() =>
+              void copyText(text ?? "").then(() => {
+                void client.rpc(suggestDismiss, { agentId: agent.id }).catch(() => {});
+                texts.delete(agent.id);
+                props.close();
+              })
+            }
             dismiss={() =>
               void client
                 .rpc(suggestDismiss, { agentId: agent.id })
