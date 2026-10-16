@@ -9,7 +9,9 @@ export const suggestSettings = defineSettings({
   schema: z.object({
     enabled: z.boolean(),
     quietSeconds: z.number().int().min(15).max(600),
+    // Empty = the built-in SUGGESTION_INSTRUCTION. Fixed within a session, so the resident's prefix cache still holds.
+    prompt: z.string().default(""),
   }),
 });
 
-export type SuggestValues = { enabled: boolean; quietSeconds: number };
+export type SuggestValues = { enabled: boolean; quietSeconds: number; prompt: string };

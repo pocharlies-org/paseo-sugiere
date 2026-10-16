@@ -6,15 +6,20 @@ import type { PluginHookContext } from "@getpaseo/plugin/server";
 import { lastAssistantText, suggestBody, suggestionAnswer } from "../shared/suggest.ts";
 import { SessionError, locateSession, routerRequest } from "./session.ts";
 
-// The settings document in force: off drops every pending and shown suggestion; quiet is the silence window.
+// The settings document in force: off drops every pending and shown suggestion; quiet is the silence window; prompt is the
+// instruction ("" = the built-in one).
 let enabled = true;
 let quietMs = 60_000;
+let prompt = "";
 export function setEnabled(value: boolean): void {
   if (enabled && !value) dispose();
   enabled = value;
 }
 export function setQuietSeconds(seconds: number): void {
   quietMs = seconds * 1000;
+}
+export function setPrompt(value: string): void {
+  prompt = value;
 }
 
 type Entry = { timer?: ReturnType<typeof setTimeout>; seq: number; text: string | null };
@@ -58,7 +63,7 @@ export function dispose(): void {
 async function generate(agentId: string, seq: number, context: PluginHookContext): Promise<void> {
   try {
     const lines = await locateSession(agentId, context.paseo);
-    const answer = await routerRequest(suggestBody(lines));
+    const answer = await routerRequest(suggestBody(lines, prompt));
     if (answer.status !== 200) return;
     const text = suggestionAnswer(JSON.parse(answer.text), lastAssistantText(lines));
     const entry = agents.get(agentId);

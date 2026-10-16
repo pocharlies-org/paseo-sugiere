@@ -14,7 +14,7 @@ type Agent = { id: string; workspaceId?: string | null; status: string; archived
 const POLL_MS = 10_000;
 
 // Neutral host look (SDK: foreground text, muted labels, surface backgrounds, border — no accent fills).
-function SuggestCard({ text, theme, copy, send }: PluginButtonContentProps & { text: string; copy: () => void; send: () => void }) {
+function SuggestCard({ text, theme, copy, send, edit }: PluginButtonContentProps & { text: string; copy: () => void; send: () => void; edit: () => void }) {
   const styles = useMemo(
     () => ({
       card: { gap: 12, padding: 14, borderRadius: 10, borderWidth: 1, borderColor: theme.colors.border, backgroundColor: theme.colors.surface1 },
@@ -34,6 +34,9 @@ function SuggestCard({ text, theme, copy, send }: PluginButtonContentProps & { t
         </Pressable>
         <Pressable style={styles.button} onPress={send}>
           <Text style={styles.buttonText}>Enviar</Text>
+        </Pressable>
+        <Pressable style={styles.button} onPress={edit}>
+          <Text style={styles.buttonText}>Editar prompt</Text>
         </Pressable>
       </View>
     </View>
@@ -82,6 +85,10 @@ export function addSuggestPill(client: PluginClientContext): () => void {
               texts.delete(agent.id);
               void client.paseo.agents.ref(agent.id).send(text ?? "");
               props.close();
+            }}
+            edit={() => {
+              props.close();
+              client.openSettings("paseo-sugiere");
             }}
           />
         ),

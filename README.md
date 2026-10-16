@@ -26,8 +26,9 @@ se lee ninguna cuenta ni ningún token. El aplanado del transcript es una copia 
 - Trabajo terminado, ofertas opcionales o decisiones del usuario → sugerencia vacía → la píldora no
   aparece. El envío es siempre un toque del usuario.
 - Configurable: pantalla propia «Sugerencia del siguiente mensaje» en los ajustes de Paseo — interruptor
-  `enabled` (al desactivar se tiran las sugerencias pendientes y mostradas) y ventana de silencio
-  (30/60/120/300 s). El documento vive en el host (`shared/settings.ts`); el server lo obedece al vuelo.
+  `enabled` (al desactivar se tiran las sugerencias pendientes y mostradas), ventana de silencio
+  (30/60/120/300 s) y prompt editable (`prompt`; vacío = la instrucción del plugin; se llega desde la
+  píldora con «Editar prompt»). El documento vive en el host (`shared/settings.ts`); el server lo obedece al vuelo.
 
 ## Qué lee y envía
 

@@ -21,6 +21,12 @@ describe("the body of the suggestion call", () => {
     assert.equal(body.messages[2].role, "user"); // the trigger: without it the model continues the assistant's last turn (measured 14-10)
   });
 
+  it("takes the configured prompt as system, and the built-in one when it is blank (Dani 16-10: editable prompt)", () => {
+    const body = JSON.parse(suggestBody([user("monta el pill")], "recomienda en una línea, en inglés"));
+    assert.equal(body.system, "recomienda en una línea, en inglés");
+    assert.equal(JSON.parse(suggestBody([user("monta el pill")], "   ")).system, SUGGESTION_INSTRUCTION);
+  });
+
   it("keeps the guard that a step the USER takes outside the conversation means no suggestion (measured 14-10: «mide la longitud del cañón»)", () => {
     assert.match(SUGGESTION_INSTRUCTION, /fuera de la conversación/);
     assert.match(SUGGESTION_INSTRUCTION, /lo que falta es acción o decisión del usuario[\s\S]*línea vacía/);

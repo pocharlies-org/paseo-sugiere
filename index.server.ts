@@ -8,7 +8,10 @@ export default function contribute(server: PluginServerContext) {
   const settings = server.registerSettings(suggestSettings);
   const apply = (state: { status: string; values?: SuggestValues }) => {
     suggest.setEnabled(state.status === "ready" ? state.values?.enabled !== false : true);
-    if (state.status === "ready" && state.values) suggest.setQuietSeconds(state.values.quietSeconds);
+    if (state.status === "ready" && state.values) {
+      suggest.setQuietSeconds(state.values.quietSeconds);
+      suggest.setPrompt(state.values.prompt);
+    }
   };
   settings.subscribe(apply);
   void settings.read().then(apply, () => apply({ status: "invalid" }));
