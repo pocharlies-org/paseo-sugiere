@@ -31,11 +31,12 @@ locales (`qwen38-off` responde 200 con token falso), así que aquí no se lee
 - `index.server.ts` / `index.client.tsx` — enganche a los hooks `agent.turn_ended` /
   `agent.turn_started`, a los RPCs `suggest.get` / `suggest.dismiss` y al ajuste `enabled`
   (`registerSettings`, host): al desactivar, `setEnabled(false)` tira pendientes y mostradas y
-  `arm` deja de programar generaciones; `quietSeconds` es la ventana de silencio; `prompt` es la
-  instrucción (vacío = la construida en `shared/suggest.ts`).
+  `arm` deja de programar generaciones; `quietSeconds` es la ventana de silencio. El prompt editable no
+  pasa por aquí: vive en `~/.local/state/paseo-sugiere/prompt.txt` (`loadPrompt`/`savePrompt`/`getPrompt`
+  en `server/suggest.ts`), leído al arrancar y escrito por el rpc `suggest.prompt-set`.
 - `client/suggest-settings.tsx` — pantalla de ajustes propia (`addSettingsScreen` + `useSettings`):
-  interruptor, ventana y prompt (borrador local, se guarda con «Guardar prompt»); el documento
-  compartido está en `shared/settings.ts`.
+  interruptor y ventana; el documento compartido está en `shared/settings.ts`. El editor del prompt
+  NO usa `useSettings` (no resuelve en el popover de la píldora, medido 16-10): lee y escribe por rpc.
 
 ## Superficie
 

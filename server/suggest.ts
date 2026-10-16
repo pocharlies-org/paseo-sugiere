@@ -2,15 +2,16 @@
 // user should send next, and the composer pill shows it. Port of OpenChamber's session-assist: same 60 s quiet window, same rule
 // that a finished conversation gets nothing. Nothing here touches the session: the call goes to the router with the local alias
 // `qwen38-off`, so the resident only pays the decode of the answer once its prefix cache hits (unmeasured in vivo yet).
+import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { homedir } from "node:os";
+import { dirname, join } from "node:path";
 import type { PluginHookContext } from "@getpaseo/plugin/server";
 import { lastAssistantText, suggestBody, suggestionAnswer } from "../shared/suggest.ts";
 import { SessionError, locateSession, routerRequest } from "./session.ts";
 
-// The settings document in force: off drops every pending and shown suggestion; quiet is the silence window; prompt is the
-// instruction ("" = the built-in one).
+// The settings document in force: off drops every pending and shown suggestion; quiet is the silence window.
 let enabled = true;
 let quietMs = 60_000;
-let prompt = "";
 export function setEnabled(value: boolean): void {
   if (enabled && !value) dispose();
   enabled = value;
@@ -18,8 +19,21 @@ export function setEnabled(value: boolean): void {
 export function setQuietSeconds(seconds: number): void {
   quietMs = seconds * 1000;
 }
-export function setPrompt(value: string): void {
+
+// The editable instruction, in a file the plugin owns (see shared/contract.ts: the host settings document is unreachable from
+// the pill's popover). "" = the built-in SUGGESTION_INSTRUCTION.
+const PROMPT_FILE = join(homedir(), ".local", "state", "paseo-sugiere", "prompt.txt");
+let prompt = "";
+export async function loadPrompt(): Promise<void> {
+  prompt = await readFile(PROMPT_FILE, "utf8").catch(() => "");
+}
+export async function savePrompt(value: string): Promise<void> {
   prompt = value;
+  await mkdir(dirname(PROMPT_FILE), { recursive: true });
+  await writeFile(PROMPT_FILE, value);
+}
+export function getPrompt(): string {
+  return prompt;
 }
 
 type Entry = { timer?: ReturnType<typeof setTimeout>; seq: number; text: string | null };

@@ -1,5 +1,5 @@
 import type { PluginServerContext } from "@getpaseo/plugin/server";
-import { suggestDismiss, suggestGet } from "./shared/contract.ts";
+import { suggestDismiss, suggestGet, suggestPromptSet } from "./shared/contract.ts";
 import { suggestSettings, type SuggestValues } from "./shared/settings.ts";
 import * as suggest from "./server/suggest.ts";
 
@@ -8,16 +8,15 @@ export default function contribute(server: PluginServerContext) {
   const settings = server.registerSettings(suggestSettings);
   const apply = (state: { status: string; values?: SuggestValues }) => {
     suggest.setEnabled(state.status === "ready" ? state.values?.enabled !== false : true);
-    if (state.status === "ready" && state.values) {
-      suggest.setQuietSeconds(state.values.quietSeconds);
-      suggest.setPrompt(state.values.prompt);
-    }
+    if (state.status === "ready" && state.values) suggest.setQuietSeconds(state.values.quietSeconds);
   };
   settings.subscribe(apply);
   void settings.read().then(apply, () => apply({ status: "invalid" }));
+  void suggest.loadPrompt();
   server.on("agent.turn_ended", ({ agent, outcome }, context) => (outcome.kind === "completed" ? suggest.arm(agent.id, context) : suggest.cancel(agent.id)));
   server.on("agent.turn_started", ({ agent }) => suggest.cancel(agent.id));
-  server.handle(suggestGet, (input) => ({ text: suggest.get(input.agentId) }));
+  server.handle(suggestGet, (input) => ({ text: suggest.get(input.agentId), prompt: suggest.getPrompt() }));
   server.handle(suggestDismiss, (input) => (suggest.cancel(input.agentId), {}));
+  server.handle(suggestPromptSet, (input) => suggest.savePrompt(input.prompt).then(() => ({})));
   return () => suggest.dispose();
 }

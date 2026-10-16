@@ -1,10 +1,8 @@
 import type { PluginButtonContentProps, PluginClientContext } from "@getpaseo/plugin/client";
-import { useSettings } from "@getpaseo/plugin/client";
 import { copyText } from "@getpaseo/plugin/client/react-native";
 import { useMemo, useState } from "react";
 import { Pressable, Text, TextInput, View } from "react-native";
-import { suggestDismiss, suggestGet } from "../shared/contract.ts";
-import { suggestSettings } from "../shared/settings.ts";
+import { suggestDismiss, suggestGet, suggestPromptSet } from "../shared/contract.ts";
 
 // One composer pill per agent with the recommendation the resident would give for continuing, after its last turn. The pill
 // is invisible while there is nothing to suggest; tapping it opens a card with the full text and two answers: copy it to the
@@ -16,10 +14,9 @@ type Agent = { id: string; workspaceId?: string | null; status: string; archived
 const POLL_MS = 10_000;
 
 // Neutral host look (SDK: foreground text, muted labels, surface backgrounds, border — no accent fills).
-// «Editar prompt» expands the card into the instruction editor (the host settings document, same one the plugin's settings
-// screen edits) — openSettings from the popover was measured not to navigate (Dani 16-10), so the editor lives here.
-function SuggestCard({ text, theme, copy, send }: PluginButtonContentProps & { text: string; copy: () => void; send: () => void }) {
-  const settings = useSettings(suggestSettings);
+// «Editar prompt» expands the card into the instruction editor. It goes through the plugin's own rpc like the suggestion does:
+// neither openSettings navigation (Dani 16-10) nor useSettings (measured 16-10: never resolves in this popover) work here.
+function SuggestCard({ text, theme, copy, send, prompt, savePrompt }: PluginButtonContentProps & { text: string; prompt: string; copy: () => void; send: () => void; savePrompt: (prompt: string) => void }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState<string | null>(null);
   const styles = useMemo(
@@ -33,10 +30,8 @@ function SuggestCard({ text, theme, copy, send }: PluginButtonContentProps & { t
     }),
     [theme],
   );
-  const ready = settings.status === "ready";
   const save = () => {
-    if (!ready || draft === null || draft === settings.values.prompt) return setEditing(false);
-    void settings.save({ ...settings.values, prompt: draft }, settings.revision);
+    if (draft !== null && draft !== prompt) savePrompt(draft);
     setDraft(null);
     setEditing(false);
   };
@@ -45,28 +40,22 @@ function SuggestCard({ text, theme, copy, send }: PluginButtonContentProps & { t
       {editing ? (
         <>
           <Text style={styles.text}>Prompt de la sugerencia (vacío = el del plugin)</Text>
-          {!ready ? (
-            <Text style={{ color: theme.colors.foregroundMuted, fontSize: 13 }}>Cargando…</Text>
-          ) : (
-            <>
-              <TextInput
-                multiline
-                defaultValue={settings.values.prompt}
-                onChangeText={setDraft}
-                placeholder="(instrucción del plugin)"
-                placeholderTextColor={theme.colors.foregroundMuted}
-                style={styles.input}
-              />
-              <View style={styles.row}>
-                <Pressable style={styles.button} onPress={save}>
-                  <Text style={styles.buttonText}>Guardar prompt</Text>
-                </Pressable>
-                <Pressable style={styles.button} onPress={() => (setDraft(null), setEditing(false))}>
-                  <Text style={styles.buttonText}>Cancelar</Text>
-                </Pressable>
-              </View>
-            </>
-          )}
+          <TextInput
+            multiline
+            defaultValue={prompt}
+            onChangeText={setDraft}
+            placeholder="(instrucción del plugin)"
+            placeholderTextColor={theme.colors.foregroundMuted}
+            style={styles.input}
+          />
+          <View style={styles.row}>
+            <Pressable style={styles.button} onPress={save}>
+              <Text style={styles.buttonText}>Guardar prompt</Text>
+            </Pressable>
+            <Pressable style={styles.button} onPress={() => (setDraft(null), setEditing(false))}>
+              <Text style={styles.buttonText}>Cancelar</Text>
+            </Pressable>
+          </View>
         </>
       ) : (
         <>
@@ -92,6 +81,7 @@ export function addSuggestPill(client: PluginClientContext): () => void {
   const agents = new Map<string, Agent>();
   const pills = new Map<string, ReturnType<PluginClientContext["addComposerPill"]>>();
   const texts = new Map<string, string | null>();
+  let promptCache = ""; // the configured instruction, global to the plugin; refreshed with every poll and kept in step on save
   let stopped = false;
   const lifetime = new AbortController();
 
@@ -131,6 +121,11 @@ export function addSuggestPill(client: PluginClientContext): () => void {
               void client.paseo.agents.ref(agent.id).send(text ?? "");
               props.close();
             }}
+            prompt={promptCache}
+            savePrompt={(prompt) => {
+              promptCache = prompt;
+              void client.rpc(suggestPromptSet, { prompt }).catch(() => {});
+            }}
           />
         ),
       },
@@ -162,10 +157,12 @@ export function addSuggestPill(client: PluginClientContext): () => void {
     for (const agent of agents.values()) {
       if (agent.status !== "idle") continue;
       void client.rpc(suggestGet, { agentId: agent.id }).then(
-        ({ text }) => {
-          if (stopped || texts.get(agent.id) === text) return;
+        ({ text, prompt }) => {
+          if (stopped) return;
+          const changed = texts.get(agent.id) !== text;
           texts.set(agent.id, text);
-          show(agent);
+          promptCache = prompt;
+          if (changed) show(agent);
         },
         () => {},
       );
