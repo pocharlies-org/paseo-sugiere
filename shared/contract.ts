@@ -1,7 +1,7 @@
 import { defineRpc } from "@getpaseo/plugin";
 import { z } from "zod";
 
-/** The next-message suggestion of an agent, or null, plus the configured prompt: the pill reads them; `suggest.dismiss` throws one away. */
+/** The next-message suggestion of an agent, or null, plus the configured prompt: the pill reads them. */
 export const suggestGet = defineRpc({
   name: "suggest.get",
   input: z.object({ agentId: z.string().min(1).max(64) }).strict(),
@@ -12,10 +12,5 @@ document: `useSettings` was measured (16-10) never to resolve inside a composer-
 export const suggestPromptSet = defineRpc({
   name: "suggest.prompt-set",
   input: z.object({ prompt: z.string().max(4000) }).strict(),
-  output: z.object({}).strict(),
-});
-export const suggestDismiss = defineRpc({
-  name: "suggest.dismiss",
-  input: z.object({ agentId: z.string().min(1).max(64) }).strict(),
   output: z.object({}).strict(),
 });
