@@ -1,8 +1,10 @@
 import type { PluginButtonContentProps, PluginClientContext } from "@getpaseo/plugin/client";
+import { useSettings } from "@getpaseo/plugin/client";
 import { copyText } from "@getpaseo/plugin/client/react-native";
-import { useMemo } from "react";
-import { Pressable, Text, View } from "react-native";
+import { useMemo, useState } from "react";
+import { Pressable, Text, TextInput, View } from "react-native";
 import { suggestDismiss, suggestGet } from "../shared/contract.ts";
+import { suggestSettings } from "../shared/settings.ts";
 
 // One composer pill per agent with the recommendation the resident would give for continuing, after its last turn. The pill
 // is invisible while there is nothing to suggest; tapping it opens a card with the full text and two answers: copy it to the
@@ -14,31 +16,74 @@ type Agent = { id: string; workspaceId?: string | null; status: string; archived
 const POLL_MS = 10_000;
 
 // Neutral host look (SDK: foreground text, muted labels, surface backgrounds, border — no accent fills).
-function SuggestCard({ text, theme, copy, send, edit }: PluginButtonContentProps & { text: string; copy: () => void; send: () => void; edit: () => void }) {
+// «Editar prompt» expands the card into the instruction editor (the host settings document, same one the plugin's settings
+// screen edits) — openSettings from the popover was measured not to navigate (Dani 16-10), so the editor lives here.
+function SuggestCard({ text, theme, copy, send }: PluginButtonContentProps & { text: string; copy: () => void; send: () => void }) {
+  const settings = useSettings(suggestSettings);
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState<string | null>(null);
   const styles = useMemo(
     () => ({
-      card: { gap: 12, padding: 14, borderRadius: 10, borderWidth: 1, borderColor: theme.colors.border, backgroundColor: theme.colors.surface1 },
+      card: { gap: 12, padding: 14, borderRadius: 10, borderWidth: 1, borderColor: theme.colors.border, backgroundColor: theme.colors.surface1, maxWidth: 420 },
       text: { color: theme.colors.foreground, fontSize: 14 },
       row: { flexDirection: "row" as const, gap: 8 },
       button: { paddingVertical: 8, paddingHorizontal: 12, borderRadius: 8, borderWidth: 1, borderColor: theme.colors.border, backgroundColor: theme.colors.surface2 },
       buttonText: { color: theme.colors.foreground, fontSize: 13 },
+      input: { minHeight: 120, padding: 10, borderRadius: 8, borderWidth: 1, borderColor: theme.colors.border, backgroundColor: theme.colors.surface2, color: theme.colors.foreground, fontSize: 13, textAlignVertical: "top" as const },
     }),
     [theme],
   );
+  const ready = settings.status === "ready";
+  const save = () => {
+    if (!ready || draft === null || draft === settings.values.prompt) return setEditing(false);
+    void settings.save({ ...settings.values, prompt: draft }, settings.revision);
+    setDraft(null);
+    setEditing(false);
+  };
   return (
     <View style={styles.card}>
-      <Text style={styles.text}>{text}</Text>
-      <View style={styles.row}>
-        <Pressable style={styles.button} onPress={copy}>
-          <Text style={styles.buttonText}>Copiar para editar</Text>
-        </Pressable>
-        <Pressable style={styles.button} onPress={send}>
-          <Text style={styles.buttonText}>Enviar</Text>
-        </Pressable>
-        <Pressable style={styles.button} onPress={edit}>
-          <Text style={styles.buttonText}>Editar prompt</Text>
-        </Pressable>
-      </View>
+      {editing ? (
+        <>
+          <Text style={styles.text}>Prompt de la sugerencia (vacío = el del plugin)</Text>
+          {!ready ? (
+            <Text style={{ color: theme.colors.foregroundMuted, fontSize: 13 }}>Cargando…</Text>
+          ) : (
+            <>
+              <TextInput
+                multiline
+                defaultValue={settings.values.prompt}
+                onChangeText={setDraft}
+                placeholder="(instrucción del plugin)"
+                placeholderTextColor={theme.colors.foregroundMuted}
+                style={styles.input}
+              />
+              <View style={styles.row}>
+                <Pressable style={styles.button} onPress={save}>
+                  <Text style={styles.buttonText}>Guardar prompt</Text>
+                </Pressable>
+                <Pressable style={styles.button} onPress={() => (setDraft(null), setEditing(false))}>
+                  <Text style={styles.buttonText}>Cancelar</Text>
+                </Pressable>
+              </View>
+            </>
+          )}
+        </>
+      ) : (
+        <>
+          <Text style={styles.text}>{text}</Text>
+          <View style={styles.row}>
+            <Pressable style={styles.button} onPress={copy}>
+              <Text style={styles.buttonText}>Copiar para editar</Text>
+            </Pressable>
+            <Pressable style={styles.button} onPress={send}>
+              <Text style={styles.buttonText}>Enviar</Text>
+            </Pressable>
+            <Pressable style={styles.button} onPress={() => setEditing(true)}>
+              <Text style={styles.buttonText}>Editar prompt</Text>
+            </Pressable>
+          </View>
+        </>
+      )}
     </View>
   );
 }
@@ -85,10 +130,6 @@ export function addSuggestPill(client: PluginClientContext): () => void {
               texts.delete(agent.id);
               void client.paseo.agents.ref(agent.id).send(text ?? "");
               props.close();
-            }}
-            edit={() => {
-              props.close();
-              client.openSettings("paseo-sugiere");
             }}
           />
         ),
