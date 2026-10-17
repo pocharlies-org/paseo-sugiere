@@ -1,14 +1,17 @@
 import { spawn } from "node:child_process";
 import { existsSync } from "node:fs";
-import { fileURLToPath } from "node:url";
+import { homedir } from "node:os";
+import { join } from "node:path";
 import type { PluginServerContext } from "@getpaseo/plugin/server";
 import { suggestGet } from "./shared/contract.ts";
 import { suggestSettings, type SuggestValues } from "./shared/settings.ts";
 import * as suggest from "./server/suggest.ts";
 
 // What is merged to trunk is what runs: the plugin checks GitHub every 5 min and, on a new commit, deploys that tree and reloads
-// itself (scripts/autodeploy.sh — no clone, no credentials, nothing to remember after a merge).
-const AUTODEPLOY = fileURLToPath(new URL("./scripts/autodeploy.sh", import.meta.url));
+// itself (scripts/autodeploy.sh — no clone, no credentials, nothing to remember after a merge). The path is the install layout that
+// scripts/deploy.sh creates, not `import.meta.url`: the host loads the server without a usable module URL (medido 17-10: «Invalid
+// URL» at load, the plugin came down).
+const AUTODEPLOY = join(homedir(), ".local", "share", "paseo-sugiere", "paseo-plugin", "current", "scripts", "autodeploy.sh");
 
 // The quiet window opens when a turn ends completed and closes with anything new; the answer comes from the resident, never from the session.
 export default function contribute(server: PluginServerContext) {
