@@ -2,11 +2,13 @@
 # Empaqueta el plugin como el de cuentas: carpeta versionada `<version>-<git sha>` + enlace `current`, y el daemon apunta al
 # `current` (ruta estable), no a un clon. Mismo patrón que claude-cuenta-paseo.py; aquí el origen es el trunk del repo.
 set -euo pipefail
-cd "$(cd "$(dirname "$0")/.." && pwd)"
+# Origen: el árbol que se le pasa (por defecto el clon del repo). Con `DEPLOY_SHA` se despliega un árbol sin git
+# (autodeploy.sh baja el tarball del tronco), que es como el plugin se actualiza solo.
+cd "${1:-$(cd "$(dirname "$0")/.." && pwd)}"
 version=$(node -p "require('./package.json').version")
 id=$(node -p "require('./paseo-plugin.json').id")
 rango=$(node -p "require('./paseo-plugin.json').requirements.paseo")
-sha=$(git rev-parse --short=12 HEAD)
+sha="${DEPLOY_SHA:-$(git rev-parse --short=12 HEAD)}"
 destino="$HOME/.local/share/paseo-sugiere/paseo-plugin"
 carpeta="$destino/$version-$sha"
 
@@ -22,7 +24,7 @@ for(const c of r.split(/\s+/)){const m=c.match(/^(>=|<)(\d+\.\d+\.\d+)\$/);if(!m
 
 if [ ! -d "$carpeta" ]; then
   mkdir -p "$carpeta"
-  # solo lo que package.json declara en `files` (se redespliega desde el clon: el script necesita el git)
+  # solo lo que package.json declara en `files`
   node -e "
   const fs=require('fs'),path=require('path');
   for(const f of require('./package.json').files){

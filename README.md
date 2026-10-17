@@ -2,9 +2,9 @@
 
 Plugin de Paseo: al acabar un turno y pasar la sesión un minuto en silencio, el residente propone el
 mensaje que el usuario debería enviar a continuación, y lo muestra como píldora en el composer de ese
-agente. La tarjeta de la píldora es el texto ya editable en el sitio: Enter manda lo que haya en el campo (como lo sugiera el
-residente o editado por el usuario), Mayús+Enter saltos de línea; cualquier turno nuevo tira la sugerencia pendiente. Es el port
-del `session-assist` que funcionaba en el fork de OpenChamber.
+agente. La tarjeta de la píldora es el texto ya editable en el sitio, sin bordes ni caja propia y con la altura justa del texto:
+Enter manda lo que haya en el campo (como lo sugiera el residente o editado por el usuario), Mayús+Enter saltos de línea;
+cualquier turno nuevo tira la sugerencia pendiente. Es el port del `session-assist` que funcionaba en el fork de OpenChamber.
 
 Es un plugin hermano del de [claude-account-switcher](https://github.com/pocharlies-org/claude-account-switcher):
 usa el mismo router local, pero no consume el contrato `file.claude-cuentas.v1` — para un alias local
@@ -34,8 +34,9 @@ se lee ninguna cuenta ni ningún token. El aplanado del transcript es una copia 
 ## Qué lee y envía
 
 Lee el transcript del agente (`~/.claude*/projects/**/*.jsonl` vía `~/.paseo/config.json`). No lee
-cuentas ni tokens. Envía una sola cosa: la llamada al router en `127.0.0.1:18791`. Nada de eso llega
-a la app.
+cuentas ni tokens. A la red manda dos cosas: la llamada al router en `127.0.0.1:18791` y, para mantenerse al día del
+tronco, el `git ls-remote`/`git clone` de su propio repo en GitHub (con las credenciales de git del usuario). Nada de
+eso llega a la app.
 
 ## Instalación
 
@@ -49,6 +50,11 @@ Empaqueta como el plugin de cuentas: carpeta versionada `~/.local/share/paseo-su
 y enlace `current`; instala (`paseo plugin install <current>`) la primera vez y recarga (`paseo plugin reload
 paseo-sugiere`) en adelante. El daemon apunta al `current`, no al clon. Comprueba antes `paseo --version` contra
 `requirements.paseo` del manifiesto: fuera de rango no despliega y lo dice. Sin reiniciar el daemon.
+
+Después de esa primera vez no se vuelve a tocar: `scripts/autodeploy.sh` mira el tronco de GitHub y, si hay un commit que no está
+desplegado, lo baja y llama a `deploy.sh`. Lo lanza el propio server del plugin cada 5 min (y al arrancar, por si el merge cayó
+con Paseo cerrado), así que **lo que está fusionado es lo que corre**. Necesita `git` con credenciales para el repo y escribe su
+bitácora en `~/.local/state/paseo-sugiere/autodeploy.log`.
 
 ## Pruebas
 

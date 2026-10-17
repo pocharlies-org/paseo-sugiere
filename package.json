@@ -12,7 +12,8 @@
     "index.server.ts",
     "client/",
     "server/",
-    "shared/"
+    "shared/",
+    "scripts/autodeploy.sh"
   ],
   "scripts": {
     "typecheck": "tsc --noEmit",
