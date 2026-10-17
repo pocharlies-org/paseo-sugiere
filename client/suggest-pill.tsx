@@ -1,6 +1,6 @@
 import type { PluginButtonContentProps, PluginClientContext } from "@getpaseo/plugin/client";
 import { useMemo, useState } from "react";
-import { TextInput } from "react-native";
+import { Pressable, Text, TextInput, View } from "react-native";
 import { suggestGet } from "../shared/contract.ts";
 
 // One composer pill per agent with the recommendation the resident would give for continuing, after its last turn. The pill
@@ -16,7 +16,7 @@ const LINE = 18; // one row of the field; `rows` is not in the host's react-nati
 // The popover of the host is already the frame: the card adds no border, no fill and no fixed height — the field grows with the
 // text and stops at the width of the popover (Dani 17-10: «la ventana es muy grande, más minimalista»).
 // Enter sends: with `blurOnSubmit` on a multiline field react-native-web fires onSubmitEditing on Enter and swallows the newline,
-// Shift+Enter still wraps. The card is the field — no buttons (Dani 17-10).
+// Shift+Enter still wraps. The card is the field plus one small send button on its right (Dani 18-10: click + Enter was two steps).
 function SuggestCard({ text, theme, close, send }: PluginButtonContentProps & { text: string; send: (text: string) => void }) {
   const [suggestion, setSuggestion] = useState<string | null>(null); // the edited suggestion, null until the user touches the field
   const [height, setHeight] = useState(LINE); // starts at one line; the field grows with its text and never leaves dead space
@@ -24,24 +24,33 @@ function SuggestCard({ text, theme, close, send }: PluginButtonContentProps & { 
     () => ({
       // outlineWidth 0 + outlineColor transparent: el anillo de foco del host se pinta con `outline`, y así lo apagan también los
       // inputs propios de Paseo (composer, buscar del panel, revisión). Medido 17-10: sin esto, rectángulo verde alrededor (Dani: «cutre»).
-      input: { padding: 0, color: theme.colors.foreground, fontSize: 13, lineHeight: LINE, outlineWidth: 0, outlineColor: "transparent" },
+      row: { flexDirection: "row" as const, alignItems: "flex-end" as const, gap: 8 },
+      input: { flex: 1, padding: 0, color: theme.colors.foreground, fontSize: 13, lineHeight: LINE, outlineWidth: 0, outlineColor: "transparent" },
+      send: { width: 20, height: 20, borderRadius: 10, alignItems: "center" as const, justifyContent: "center" as const, backgroundColor: theme.colors.accent },
+      arrow: { color: theme.colors.accentForeground, fontSize: 13, lineHeight: 16 },
     }),
     [theme],
   );
+  const submit = () => {
+    const t = (suggestion ?? text).trim();
+    if (t) send(t);
+    close();
+  };
   return (
-    <TextInput
-      multiline
-      blurOnSubmit
-      defaultValue={text}
-      onChangeText={setSuggestion}
-      onContentSizeChange={(event) => setHeight(event.nativeEvent.contentSize.height)}
-      onSubmitEditing={() => {
-        const t = (suggestion ?? text).trim();
-        if (t) send(t);
-        close();
-      }}
-      style={[styles.input, { height }]}
-    />
+    <View style={styles.row}>
+      <TextInput
+        multiline
+        blurOnSubmit
+        defaultValue={text}
+        onChangeText={setSuggestion}
+        onContentSizeChange={(event) => setHeight(event.nativeEvent.contentSize.height)}
+        onSubmitEditing={submit}
+        style={[styles.input, { height }]}
+      />
+      <Pressable accessibilityLabel="Send" onPress={submit} style={styles.send}>
+        <Text style={styles.arrow}>↑</Text>
+      </Pressable>
+    </View>
   );
 }
 
