@@ -38,7 +38,7 @@ function SuggestCard({ text, theme, close, send }: PluginButtonContentProps & { 
         if (t) send(t);
         close();
       }}
-      style={[styles.input, height && { height }]}
+      style={[styles.input, height ? { height } : undefined]}
     />
   );
 }
