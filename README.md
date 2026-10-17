@@ -2,10 +2,9 @@
 
 Plugin de Paseo: al acabar un turno y pasar la sesión un minuto en silencio, el residente propone el
 mensaje que el usuario debería enviar a continuación, y lo muestra como píldora en el composer de ese
-agente. La tarjeta de la píldora muestra el texto ya editable en el sitio: «Enviar» manda lo que haya en el campo
-(como lo sugiera el residente o editado por el usuario) y «Editar instrucción del plugin» abre el prompt que recibe el
-residente; cualquier turno nuevo tira la sugerencia pendiente. Es el port del `session-assist` que funcionaba en el fork de
-OpenChamber.
+agente. La tarjeta de la píldora es el texto ya editable en el sitio: Enter manda lo que haya en el campo (como lo sugiera el
+residente o editado por el usuario), Mayús+Enter saltos de línea; cualquier turno nuevo tira la sugerencia pendiente. Es el port
+del `session-assist` que funcionaba en el fork de OpenChamber.
 
 Es un plugin hermano del de [claude-account-switcher](https://github.com/pocharlies-org/claude-account-switcher):
 usa el mismo router local, pero no consume el contrato `file.claude-cuentas.v1` — para un alias local
@@ -29,9 +28,8 @@ se lee ninguna cuenta ni ningún token. El aplanado del transcript es una copia 
 - Configurable: pantalla propia «Sugerencia del siguiente mensaje» en los ajustes de Paseo — interruptor
   `enabled` (al desactivar se tiran las sugerencias pendientes y mostradas) y ventana de silencio
   (30/60/120/300 s). El documento vive en el host (`shared/settings.ts`); el server lo obedece al vuelo.
-- El prompt es editable desde la píldora («Editar prompt»; vacío = la instrucción del plugin). No vive en los ajustes del
-  host porque `useSettings` no resuelve dentro del popover de la píldora (medido 16-10): va por el rpc del plugin y se guarda
-  en `~/.local/state/paseo-sugiere/prompt.txt`.
+- La instrucción que recibe el residente se cambia a mano en `~/.local/state/paseo-sugiere/prompt.txt` (vacío = la del plugin; se
+  lee con cada generación, no hace falta reiniciar). No hay editor en la píldora: la píldora es para enviar (Dani 17-10).
 
 ## Qué lee y envía
 

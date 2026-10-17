@@ -2,9 +2,9 @@
 // user should send next, and the composer pill shows it. Port of OpenChamber's session-assist: same 60 s quiet window, same rule
 // that a finished conversation gets nothing. Nothing here touches the session: the call goes to the router with the local alias
 // `qwen38-off`, so the resident only pays the decode of the answer once its prefix cache hits (unmeasured in vivo yet).
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { readFileSync } from "node:fs";
 import { homedir } from "node:os";
-import { dirname, join } from "node:path";
+import { join } from "node:path";
 import type { PluginHookContext } from "@getpaseo/plugin/server";
 import { lastAssistantText, suggestBody, suggestionAnswer } from "../shared/suggest.ts";
 import { SessionError, locateSession, routerRequest } from "./session.ts";
@@ -20,21 +20,10 @@ export function setQuietSeconds(seconds: number): void {
   quietMs = seconds * 1000;
 }
 
-// The editable instruction, in a file the plugin owns (see shared/contract.ts: the host settings document is unreachable from
-// the pill's popover). "" = the built-in SUGGESTION_INSTRUCTION.
+// The instruction the resident gets, in a file the plugin owns — the only way to change it (Dani 17-10: the in-pill editor was
+// dead weight, the pill is for sending). "" = the built-in SUGGESTION_INSTRUCTION. Read with every generation, so a hand edit
+// takes effect without restarting the host.
 const PROMPT_FILE = join(homedir(), ".local", "state", "paseo-sugiere", "prompt.txt");
-let prompt = "";
-export async function loadPrompt(): Promise<void> {
-  prompt = await readFile(PROMPT_FILE, "utf8").catch(() => "");
-}
-export async function savePrompt(value: string): Promise<void> {
-  prompt = value;
-  await mkdir(dirname(PROMPT_FILE), { recursive: true });
-  await writeFile(PROMPT_FILE, value);
-}
-export function getPrompt(): string {
-  return prompt;
-}
 
 type Entry = { timer?: ReturnType<typeof setTimeout>; seq: number; text: string | null };
 const agents = new Map<string, Entry>();
@@ -77,7 +66,13 @@ export function dispose(): void {
 async function generate(agentId: string, seq: number, context: PluginHookContext): Promise<void> {
   try {
     const lines = await locateSession(agentId, context.paseo);
-    const answer = await routerRequest(suggestBody(lines, prompt));
+    // Sync and read per generation: no override file is the normal case (built-in instruction), and the read adds no await, so the
+    // seq guard stays built on the two awaits below. A hand edit of the file takes effect on the next suggestion.
+    let instruction = "";
+    try {
+      instruction = readFileSync(PROMPT_FILE, "utf8");
+    } catch {}
+    const answer = await routerRequest(suggestBody(lines, instruction));
     if (answer.status !== 200) return;
     const text = suggestionAnswer(JSON.parse(answer.text), lastAssistantText(lines));
     const entry = agents.get(agentId);
