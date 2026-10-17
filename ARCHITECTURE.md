@@ -27,12 +27,15 @@ locales (`qwen38-off` responde 200 con token falso), así que aquí no se lee
 - `server/suggest.ts` — ventana de silencio de 60 s con `seq`: un turno nuevo mata la
   sugerencia pendiente y descarta una respuesta en vuelo.
 - `client/suggest-pill.ts` — píldora en el composer; sondea 10 s solo agentes
-  `idle`; el texto se tira al salir de idle y al enviar.
+  `idle`; el texto se tira al salir de idle y al enviar. La tarjeta es el propio campo, sin caja ni
+  bordes y con la altura del texto (el popover del host ya enmarca).
 - `index.server.ts` / `index.client.tsx` — enganche a los hooks `agent.turn_ended` /
   `agent.turn_started`, al RPC `suggest.get` y al ajuste `enabled`
   (`registerSettings`, host): al desactivar, `setEnabled(false)` tira pendientes y mostradas y
   `arm` deja de programar generaciones; `quietSeconds` es la ventana de silencio. La instrucción del residente no
   pasa por aquí: es `~/.local/state/paseo-sugiere/prompt.txt`, leído con cada generación en `server/suggest.ts`.
+  Arranca además `scripts/autodeploy.sh` cada 5 min: el plugin se redespliega solo cuando el tronco de GitHub
+  trae un commit nuevo (`deploy.sh` acepta un árbol sin git por `DEPLOY_SHA`).
 - `client/suggest-settings.tsx` — pantalla de ajustes propia (`addSettingsScreen` + `useSettings`):
   interruptor y ventana; el documento compartido está en `shared/settings.ts`.
 

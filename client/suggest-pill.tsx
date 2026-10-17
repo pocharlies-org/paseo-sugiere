@@ -1,6 +1,6 @@
 import type { PluginButtonContentProps, PluginClientContext } from "@getpaseo/plugin/client";
 import { useMemo, useState } from "react";
-import { TextInput, View } from "react-native";
+import { TextInput } from "react-native";
 import { suggestGet } from "../shared/contract.ts";
 
 // One composer pill per agent with the recommendation the resident would give for continuing, after its last turn. The pill
@@ -11,34 +11,35 @@ import { suggestGet } from "../shared/contract.ts";
 type Agent = { id: string; workspaceId?: string | null; status: string; archivedAt?: string | null };
 
 const POLL_MS = 10_000;
+const LINE = 18; // one row of the field; `rows` is not in the host's react-native types, so the height is set from here
 
-// Neutral host look (SDK: foreground text, surface backgrounds, border — no accent fills).
+// The popover of the host is already the frame: the card adds no border, no fill and no fixed height — the field grows with the
+// text and stops at the width of the popover (Dani 17-10: «la ventana es muy grande, más minimalista»).
 // Enter sends: with `blurOnSubmit` on a multiline field react-native-web fires onSubmitEditing on Enter and swallows the newline,
 // Shift+Enter still wraps. The card is the field — no buttons (Dani 17-10).
 function SuggestCard({ text, theme, close, send }: PluginButtonContentProps & { text: string; send: (text: string) => void }) {
   const [suggestion, setSuggestion] = useState<string | null>(null); // the edited suggestion, null until the user touches the field
+  const [height, setHeight] = useState(LINE); // starts at one line; the field grows with its text and never leaves dead space
   const styles = useMemo(
     () => ({
-      card: { padding: 14, borderRadius: 10, borderWidth: 1, borderColor: theme.colors.border, backgroundColor: theme.colors.surface1, maxWidth: 420 },
-      input: { minHeight: 120, padding: 10, borderRadius: 8, borderWidth: 1, borderColor: theme.colors.border, backgroundColor: theme.colors.surface2, color: theme.colors.foreground, fontSize: 13, textAlignVertical: "top" as const },
+      input: { padding: 0, color: theme.colors.foreground, fontSize: 13, lineHeight: LINE },
     }),
     [theme],
   );
   return (
-    <View style={styles.card}>
-      <TextInput
-        multiline
-        blurOnSubmit
-        defaultValue={text}
-        onChangeText={setSuggestion}
-        onSubmitEditing={() => {
-          const t = (suggestion ?? text).trim();
-          if (t) send(t);
-          close();
-        }}
-        style={styles.input}
-      />
-    </View>
+    <TextInput
+      multiline
+      blurOnSubmit
+      defaultValue={text}
+      onChangeText={setSuggestion}
+      onContentSizeChange={(event) => setHeight(event.nativeEvent.contentSize.height)}
+      onSubmitEditing={() => {
+        const t = (suggestion ?? text).trim();
+        if (t) send(t);
+        close();
+      }}
+      style={[styles.input, { height }]}
+    />
   );
 }
 
