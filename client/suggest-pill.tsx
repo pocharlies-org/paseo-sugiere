@@ -1,41 +1,43 @@
 import type { PluginButtonContentProps, PluginClientContext } from "@getpaseo/plugin/client";
-import { copyText } from "@getpaseo/plugin/client/react-native";
-import { useMemo } from "react";
-import { Pressable, Text, View } from "react-native";
-import { suggestDismiss, suggestGet } from "../shared/contract.ts";
+import { useMemo, useState } from "react";
+import { TextInput, View } from "react-native";
+import { suggestGet } from "../shared/contract.ts";
 
 // One composer pill per agent with the recommendation the resident would give for continuing, after its last turn. The pill
-// is invisible while there is nothing to suggest; tapping it opens a card with the full text and two answers: copy it to the
-// clipboard to paste and edit in the composer (the SDK has no composer-text API), or send it as the next user message as-is.
-// The text lives in the plugin server — this only polls for idle agents, so a suggestion is never asked for while a turn
-// is running.
+// is invisible while there is nothing to suggest; tapping it opens the text already editable in place, and Enter sends it as the
+// next user message (Dani 16-10: «editar» must edit the suggestion in place; 17-10: the two buttons were dead weight — the field
+// is the whole card). The instruction the resident gets is not edited here: it is the file the server reads. The text lives in
+// the plugin server — this only polls for idle agents, so a suggestion is never asked for while a turn is running.
 type Agent = { id: string; workspaceId?: string | null; status: string; archivedAt?: string | null };
 
 const POLL_MS = 10_000;
 
-// Neutral host look (SDK: foreground text, muted labels, surface backgrounds, border — no accent fills).
-function SuggestCard({ text, theme, copy, send }: PluginButtonContentProps & { text: string; copy: () => void; send: () => void }) {
+// Neutral host look (SDK: foreground text, surface backgrounds, border — no accent fills).
+// Enter sends: with `blurOnSubmit` on a multiline field react-native-web fires onSubmitEditing on Enter and swallows the newline,
+// Shift+Enter still wraps. The card is the field — no buttons (Dani 17-10).
+function SuggestCard({ text, theme, close, send }: PluginButtonContentProps & { text: string; send: (text: string) => void }) {
+  const [suggestion, setSuggestion] = useState<string | null>(null); // the edited suggestion, null until the user touches the field
   const styles = useMemo(
     () => ({
-      card: { gap: 12, padding: 14, borderRadius: 10, borderWidth: 1, borderColor: theme.colors.border, backgroundColor: theme.colors.surface1 },
-      text: { color: theme.colors.foreground, fontSize: 14 },
-      row: { flexDirection: "row" as const, gap: 8 },
-      button: { paddingVertical: 8, paddingHorizontal: 12, borderRadius: 8, borderWidth: 1, borderColor: theme.colors.border, backgroundColor: theme.colors.surface2 },
-      buttonText: { color: theme.colors.foreground, fontSize: 13 },
+      card: { padding: 14, borderRadius: 10, borderWidth: 1, borderColor: theme.colors.border, backgroundColor: theme.colors.surface1, maxWidth: 420 },
+      input: { minHeight: 120, padding: 10, borderRadius: 8, borderWidth: 1, borderColor: theme.colors.border, backgroundColor: theme.colors.surface2, color: theme.colors.foreground, fontSize: 13, textAlignVertical: "top" as const },
     }),
     [theme],
   );
   return (
     <View style={styles.card}>
-      <Text style={styles.text}>{text}</Text>
-      <View style={styles.row}>
-        <Pressable style={styles.button} onPress={copy}>
-          <Text style={styles.buttonText}>Copiar para editar</Text>
-        </Pressable>
-        <Pressable style={styles.button} onPress={send}>
-          <Text style={styles.buttonText}>Enviar</Text>
-        </Pressable>
-      </View>
+      <TextInput
+        multiline
+        blurOnSubmit
+        defaultValue={text}
+        onChangeText={setSuggestion}
+        onSubmitEditing={() => {
+          const t = (suggestion ?? text).trim();
+          if (t) send(t);
+          close();
+        }}
+        style={styles.input}
+      />
     </View>
   );
 }
@@ -71,17 +73,9 @@ export function addSuggestPill(client: PluginClientContext): () => void {
           <SuggestCard
             {...props}
             text={text ?? ""}
-            copy={() =>
-              void copyText(text ?? "").then(() => {
-                void client.rpc(suggestDismiss, { agentId: agent.id }).catch(() => {});
-                texts.delete(agent.id);
-                props.close();
-              })
-            }
-            send={() => {
+            send={(t) => {
               texts.delete(agent.id);
-              void client.paseo.agents.ref(agent.id).send(text ?? "");
-              props.close();
+              void client.paseo.agents.ref(agent.id).send(t);
             }}
           />
         ),
@@ -115,9 +109,10 @@ export function addSuggestPill(client: PluginClientContext): () => void {
       if (agent.status !== "idle") continue;
       void client.rpc(suggestGet, { agentId: agent.id }).then(
         ({ text }) => {
-          if (stopped || texts.get(agent.id) === text) return;
+          if (stopped) return;
+          const changed = texts.get(agent.id) !== text;
           texts.set(agent.id, text);
-          show(agent);
+          if (changed) show(agent);
         },
         () => {},
       );

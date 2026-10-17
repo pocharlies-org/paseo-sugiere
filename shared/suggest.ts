@@ -1,4 +1,5 @@
-// The next-message suggestion: one small call with the session's transcript and a fixed instruction, answered by the resident.
+// The next-message suggestion: one small call with the session's transcript and an instruction (built-in, or the user's from
+// settings), answered by the resident.
 // The instruction rides in `system` — as the last user turn the resident answered the conversation instead of suggesting (measured
 // 13-10). System is fixed and the transcript only grows, so consecutive suggestions of a session still share a token prefix the
 // resident's engine can cache: from the second one on, only the answer is paid for.
@@ -35,14 +36,15 @@ function conversation(messages: { role: "user" | "assistant"; content: { type: "
 recommending (measured 14-10: «PR #14 en vigilancia…»); with it, it answers. Constant, so the cached prefix of the session holds. */
 const TRIGGER = "¿Qué debería pedirle a continuación al asistente? Responde solo con esa línea.";
 
-/** The whole call body: the conversation (no tool noise), the fixed instruction in `system`, the constant trigger last, no tools. */
-export function suggestBody(lines: string[]): string {
+/** The whole call body: the conversation (no tool noise), the instruction in `system` (the configured one, or the built-in
+when it is empty), the constant trigger last, no tools. */
+export function suggestBody(lines: string[], prompt = ""): string {
   const { messages } = transcriptMessages(lines);
   return JSON.stringify({
     model: SUGGEST_MODEL,
     max_tokens: SUGGEST_MAX_TOKENS,
     tools: [],
-    system: SUGGESTION_INSTRUCTION,
+    system: prompt.trim() || SUGGESTION_INSTRUCTION,
     messages: [...conversation(messages), { role: "user", content: [{ type: "text", text: TRIGGER }] }],
   });
 }
