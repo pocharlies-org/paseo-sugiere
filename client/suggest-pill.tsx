@@ -22,7 +22,9 @@ function SuggestCard({ text, theme, close, send }: PluginButtonContentProps & { 
   const [height, setHeight] = useState(LINE); // starts at one line; the field grows with its text and never leaves dead space
   const styles = useMemo(
     () => ({
-      input: { padding: 0, color: theme.colors.foreground, fontSize: 13, lineHeight: LINE },
+      // outlineWidth 0 + outlineColor transparent: el anillo de foco del host se pinta con `outline`, y así lo apagan también los
+      // inputs propios de Paseo (composer, buscar del panel, revisión). Medido 17-10: sin esto, rectángulo verde alrededor (Dani: «cutre»).
+      input: { padding: 0, color: theme.colors.foreground, fontSize: 13, lineHeight: LINE, outlineWidth: 0, outlineColor: "transparent" },
     }),
     [theme],
   );
