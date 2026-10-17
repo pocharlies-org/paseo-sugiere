@@ -11,6 +11,7 @@ import { suggestGet } from "../shared/contract.ts";
 type Agent = { id: string; workspaceId?: string | null; status: string; archivedAt?: string | null };
 
 const POLL_MS = 10_000;
+const LINE = 18; // one row of the field; `rows` is not in the host's react-native types, so the height is set from here
 
 // The popover of the host is already the frame: the card adds no border, no fill and no fixed height — the field grows with the
 // text and stops at the width of the popover (Dani 17-10: «la ventana es muy grande, más minimalista»).
@@ -18,17 +19,16 @@ const POLL_MS = 10_000;
 // Shift+Enter still wraps. The card is the field — no buttons (Dani 17-10).
 function SuggestCard({ text, theme, close, send }: PluginButtonContentProps & { text: string; send: (text: string) => void }) {
   const [suggestion, setSuggestion] = useState<string | null>(null); // the edited suggestion, null until the user touches the field
-  const [height, setHeight] = useState<number>(); // the field is as tall as its text: one line for a short suggestion, no dead space
+  const [height, setHeight] = useState(LINE); // starts at one line; the field grows with its text and never leaves dead space
   const styles = useMemo(
     () => ({
-      input: { padding: 0, color: theme.colors.foreground, fontSize: 13, lineHeight: 18 },
+      input: { padding: 0, color: theme.colors.foreground, fontSize: 13, lineHeight: LINE },
     }),
     [theme],
   );
   return (
     <TextInput
       multiline
-      rows={1}
       blurOnSubmit
       defaultValue={text}
       onChangeText={setSuggestion}
@@ -38,7 +38,7 @@ function SuggestCard({ text, theme, close, send }: PluginButtonContentProps & { 
         if (t) send(t);
         close();
       }}
-      style={[styles.input, height ? { height } : undefined]}
+      style={[styles.input, { height }]}
     />
   );
 }
