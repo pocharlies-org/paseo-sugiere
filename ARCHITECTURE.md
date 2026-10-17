@@ -27,7 +27,7 @@ locales (`qwen38-off` responde 200 con token falso), así que aquí no se lee
 - `server/suggest.ts` — ventana de silencio de 60 s con `seq`: un turno nuevo mata la
   sugerencia pendiente y descarta una respuesta en vuelo.
 - `client/suggest-pill.ts` — píldora en el composer; sondea 10 s solo agentes
-  `idle`; el texto se tira al salir de idle y al enviar. La tarjeta es el propio campo, sin caja ni
+  `idle`; el texto se tira al salir de idle y al enviar. La tarjeta es el propio campo más un botón pequeño de enviar a su derecha, sin caja ni
   bordes y con la altura del texto (el popover del host ya enmarca).
 - `index.server.ts` / `index.client.tsx` — enganche a los hooks `agent.turn_ended` /
   `agent.turn_started`, al RPC `suggest.get` y al ajuste `enabled`

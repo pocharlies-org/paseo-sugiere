@@ -3,7 +3,7 @@
 Plugin de Paseo: al acabar un turno y pasar la sesión un minuto en silencio, el residente propone el
 mensaje que el usuario debería enviar a continuación, y lo muestra como píldora en el composer de ese
 agente. La tarjeta de la píldora es el texto ya editable en el sitio, sin bordes ni caja propia y con la altura justa del texto:
-Enter manda lo que haya en el campo (como lo sugiera el residente o editado por el usuario), Mayús+Enter saltos de línea;
+Enter, o el botón pequeño a su derecha, manda lo que haya en el campo (como lo sugiera el residente o editado por el usuario), Mayús+Enter saltos de línea;
 cualquier turno nuevo tira la sugerencia pendiente. Es el port del `session-assist` que funcionaba en el fork de OpenChamber.
 
 Es un plugin hermano del de [claude-account-switcher](https://github.com/pocharlies-org/claude-account-switcher):
