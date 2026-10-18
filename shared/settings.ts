@@ -8,7 +8,7 @@ export const suggestSettings = defineSettings({
   version: 1,
   schema: z.object({
     enabled: z.boolean(),
-    quietSeconds: z.number().int().min(15).max(600),
+    quietSeconds: z.number().int().min(0).max(600),
   }),
 });
 
