@@ -8,9 +8,11 @@ prompt, ready to edit and send with Enter.
 
 ![One tap later, the text is in the prompt](docs/media/prompt.png)
 
+*Both screenshots come from a test Paseo: the exchange is real, the suggestion in them is a fixed example text, not a model's answer.*
+
 ## How it works
 
-- When a turn ends completed and nothing happens for 60 s (15 to 600 s in the plugin's settings), one call with the
+- When a turn ends completed and nothing happens for 60 s (the settings screen offers 30 s, 1, 2 or 5 min), one call with the
   conversation goes to the model. Finished work, optional offers and decisions that are yours to make get no suggestion, so
   no pill appears. The answer is capped at 48 tokens.
 - The pill is per agent. Tapping it **appends** the text to that agent's prompt, a line below what you already typed, and
@@ -27,6 +29,9 @@ This plugin was built for one setup and is published as it runs there:
 - **A local, Anthropic-compatible endpoint at `127.0.0.1:18791`** (`POST /v1/messages`) that serves a model alias called
   `qwen38-off`. Without it no pill ever appears (`paseo plugin logs paseo-sugiere` says "the local router did not answer").
   Host, port and alias are plain constants (`ROUTER` in `server/session.ts`, `SUGGEST_MODEL` in `shared/suggest.ts`).
+- **Spanish by default.** The built-in instruction asks for the suggestion in Spanish and the settings screen is in Spanish. For
+  another language or style, put your own instruction in `~/.local/state/paseo-sugiere/prompt.txt`: it is read on every
+  suggestion, and a missing or empty file means the built-in one.
 - Paseo `>=0.11.2 <0.12.0`.
 
 ## What it reads, sends and writes
@@ -34,8 +39,10 @@ This plugin was built for one setup and is published as it runs there:
 - **Reads** the agent's transcript (`<CLAUDE_CONFIG_DIR or ~/.claude>/projects/*/<session>.jsonl`, located through the Claude
   providers in `$PASEO_HOME/config.json`), and, optionally, `~/.local/state/paseo-sugiere/prompt.txt`, a file that replaces
   the built-in instruction.
-- **Sends** the flattened transcript (every tool call reduced to one line, never its content) to `127.0.0.1:18791` and nowhere
-  else, with a placeholder bearer token. From `$PASEO_HOME/config.json` it uses only each Claude provider's `CLAUDE_CONFIG_DIR`; it reads no account token.
+- **Sends** the text of the conversation (your messages and the assistant's replies since the last compaction; past about
+  400,000 characters the oldest are left out), the instruction and one closing question to `127.0.0.1:18791` and nowhere else,
+  with a placeholder bearer token. Tool calls, tool results and thinking are removed before the call. From
+  `$PASEO_HOME/config.json` it uses only each Claude provider's `CLAUDE_CONFIG_DIR`; it reads no account token.
 - **Writes**, in the Paseo client on web and desktop, into the composer's text box: it types the text into it (`execCommand`
   `insertText`, with an `input` event as the fallback), so Paseo's own handlers store the draft as if you had typed it. It
   looks for the box of the pane the pill sits in and does nothing if it finds none or more than one.
