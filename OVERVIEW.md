@@ -39,10 +39,14 @@ This plugin was built for one setup and is published as it runs there:
 - **Writes**, in the Paseo client on web and desktop, into the composer's text box: it types the text into it (`execCommand`
   `insertText`, with an `input` event as the fallback), so Paseo's own handlers store the draft as if you had typed it. It
   looks for the box of the pane the pill sits in and does nothing if it finds none or more than one.
-- **Self-update, on the author's machine only.** `index.server.ts` runs `scripts/autodeploy.sh` at start and every five minutes, but only if
-  `~/.local/share/paseo-sugiere/paseo-plugin/current/scripts/autodeploy.sh` exists. That folder is created by
-  `scripts/deploy.sh`, which neither the registry nor `paseo plugin add` ever runs, so on an installed copy the check fails and
-  nothing runs. Where it does exist, the script compares this repository's `main` with what is deployed and redeploys it.
+- **Self-update, on the author's machine only.** `index.server.ts` spawns `scripts/autodeploy.sh` at start and every five
+  minutes, but only if `~/.local/share/paseo-sugiere/paseo-plugin/current/scripts/autodeploy.sh` exists. `scripts/deploy.sh`
+  creates that folder, and neither the registry nor `paseo plugin add` ever runs it, so on an installed copy the check fails
+  (one warning line in the plugin log) and nothing else happens. Where it does exist, the script runs `git ls-remote` against
+  `https://github.com/pocharlies-org/paseo-sugiere` and, when `main` has a commit that is not deployed yet, shallow-clones it
+  and runs that clone's `scripts/deploy.sh`: it copies the files listed in `package.json` into
+  `~/.local/share/paseo-sugiere/paseo-plugin/<version>-<sha>/`, points `current` at that folder and calls `paseo plugin
+  reload` (or `install`). It logs to `~/.local/state/paseo-sugiere/autodeploy.log` and sends no data, only the git request.
 
 ## Retirement
 
