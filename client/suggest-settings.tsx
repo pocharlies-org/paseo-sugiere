@@ -4,7 +4,7 @@ import { SettingsCard, SettingsSection, SettingsSelect, SettingsSwitch } from "@
 import { Text } from "react-native";
 import { suggestSettings, type SuggestValues } from "../shared/settings.ts";
 
-const QUIET_OPTIONS = [30, 60, 120, 300].map((s) => ({ label: `${s} segundos`, value: String(s) }));
+const QUIET_OPTIONS = [0, 30, 60, 120, 300].map((s) => ({ label: s === 0 ? "0 segundos (instantáneo)" : `${s} segundos`, value: String(s) }));
 
 // The plugin's own configuration screen: on/off and the silence window. Values live in the host settings document —
 // this screen edits it and the server obeys; nothing is kept here beyond the revision the screen displays.
