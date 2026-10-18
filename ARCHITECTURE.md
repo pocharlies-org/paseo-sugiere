@@ -26,9 +26,18 @@ locales (`qwen38-off` responde 200 con token falso), así que aquí no se lee
   el router tolera las cabeceras de navegador, medido 13-10).
 - `server/suggest.ts` — ventana de silencio de 60 s con `seq`: un turno nuevo mata la
   sugerencia pendiente y descarta una respuesta en vuelo.
-- `client/suggest-pill.ts` — píldora en el composer; sondea 10 s solo agentes
-  `idle`; el texto se tira al salir de idle y al enviar. La tarjeta es el propio campo más un botón pequeño de enviar a su derecha, sin caja ni
+- `client/suggest-pill.tsx` — píldora en el composer; sondea 10 s solo agentes
+  `idle`; el texto se tira al salir de idle, al enviar y al pasarlo al prompt. Su icono es el ancla del puente. El popover intenta
+  primero el puente y solo pinta su tarjeta si no pudo: el propio campo más un botón pequeño de enviar a su derecha, sin caja ni
   bordes y con la altura del texto (el popover del host ya enmarca).
+- `client/composer-bridge.ts` — **atajo declarado** (`shortcut:`): la SDK de Paseo (0.11.2 y 0.12.0-beta.1) no tiene API del borrador
+  del composer, así que desde el icono de la píldora sube por el DOM hasta el único `textarea[data-composer-input]` visible de su
+  panel y le añade el texto como si se tecleara (`execCommand("insertText")`, y de respaldo el setter del prototipo más un evento
+  `input`), de modo que el `onChangeText` del host sigue siendo el único que escribe el borrador. Con dos composers a la vista en el
+  primer ancestro que tiene alguno, o sin DOM (iOS/Android), o en layout compacto (el panel puede ir en un sheet sin composer propio),
+  devuelve `false` y la píldora abre su popover. Un update de Paseo que mueva `data-testid="message-input-root"` o
+  `data-composer-input` produce el mismo respaldo, nunca una escritura en otro agente. **Retirada**: se borra cuando la SDK exponga el
+  borrador (discusión getpaseo/paseo#4688), o si dos updates seguidos de Paseo lo rompen sin esa API.
 - `index.server.ts` / `index.client.tsx` — enganche a los hooks `agent.turn_ended` /
   `agent.turn_started`, al RPC `suggest.get` y al ajuste `enabled`
   (`registerSettings`, host): al desactivar, `setEnabled(false)` tira pendientes y mostradas y
