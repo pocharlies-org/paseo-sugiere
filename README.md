@@ -1,5 +1,7 @@
 # paseo-sugiere
 
+> Listing overview, requirements and what the plugin reads, sends and writes (in English): [OVERVIEW.md](OVERVIEW.md).
+
 Plugin de Paseo: al acabar un turno y pasar la sesión un minuto en silencio, el residente propone el
 mensaje que el usuario debería enviar a continuación, y lo muestra como píldora en el composer de ese
 agente. Al pulsarla, en web y escritorio el texto se añade al prompt de ese agente (una línea debajo de lo que ya hubiera, sin

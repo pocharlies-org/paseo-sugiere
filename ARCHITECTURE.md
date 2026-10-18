@@ -59,3 +59,10 @@ client. El registro `CONTRACTS.yaml` vive en claude-account-switcher, no aquí.
   plugin inactivo hasta adaptar el SDK (el `paseo-update.timer` del host puede
   traerlo; es un Task de empaquetado aparte, hallazgo 4 del architect).
 - El ahorro por KV-cache (APC) es la hipótesis de diseño, no una medición en vivo.
+
+## Publicación
+
+El repo es público y está listado en el registro de Paseo (paseo.sh/plugins): su ficha es `plugins/pocharlies-org/paseo-sugiere.json` en
+getpaseo/plugins y **fija un commit**. Fusionar aquí no cambia la ficha: las actualizaciones de un plugin por Git son manuales (PR nuevo al
+registro con el commit nuevo). El autodeploy de arriba es de esta casa y no forma parte de lo que instala el registro. `OVERVIEW.md` y las
+capturas de `docs/media/` son lo que muestra la ficha; si cambia la interfaz de la píldora, se rehacen.
