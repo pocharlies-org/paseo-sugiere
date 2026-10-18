@@ -13,7 +13,8 @@
     "client/",
     "server/",
     "shared/",
-    "scripts/autodeploy.sh"
+    "scripts/autodeploy.sh",
+    "docs/media/"
   ],
   "scripts": {
     "typecheck": "tsc --noEmit",
