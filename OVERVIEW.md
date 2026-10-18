@@ -1,4 +1,4 @@
-# paseo-sugiere — the next message, one tap away
+# Suggested next message
 
 After an agent finishes a turn and the session stays quiet for a minute, a small model reads the conversation and proposes the
 message you would most likely send next. It shows up as a pill above the composer; one tap puts the text in that agent's
@@ -21,9 +21,9 @@ prompt, ready to edit and send with Enter.
 - A new turn drops the pending suggestion. Nothing is ever sent for you: sending is always your tap or Enter.
 - Settings (plugin settings screen): on/off, and the quiet window.
 
-## Requirements — read this first
+## Requirements
 
-This plugin was built for one setup and is published as it runs there:
+This plugin was built for one setup and is published as it runs there. Read this part first:
 
 - **Claude agents only.** It finds the agent's Claude Code transcript; an agent of another provider gets no suggestion.
 - **A local, Anthropic-compatible endpoint at `127.0.0.1:18791`** (`POST /v1/messages`) that serves a model alias called
@@ -48,14 +48,15 @@ This plugin was built for one setup and is published as it runs there:
   looks for the box of the pane the pill sits in and does nothing if it finds none or more than one.
 - **Self-update, on the author's machine only.** `index.server.ts` spawns `scripts/autodeploy.sh` at start and every five
   minutes, but only if `~/.local/share/paseo-sugiere/paseo-plugin/current/scripts/autodeploy.sh` exists. `scripts/deploy.sh`
-  creates that folder, and neither the registry nor `paseo plugin add` ever runs it, so on an installed copy the check fails
+  creates that folder, and neither the registry nor Paseo's installer ever runs it, so on an installed copy the check fails
   (one warning line in the plugin log) and nothing else happens. Where it does exist, the script runs `git ls-remote` against
   `https://github.com/pocharlies-org/paseo-sugiere` and, when `main` has a commit that is not deployed yet, shallow-clones it
   and runs that clone's `scripts/deploy.sh`: it copies the files listed in `package.json` into
-  `~/.local/share/paseo-sugiere/paseo-plugin/<version>-<sha>/`, points `current` at that folder and calls `paseo plugin
-  reload` (or `install`). It logs to `~/.local/state/paseo-sugiere/autodeploy.log` and sends no data, only the git request.
+  `~/.local/share/paseo-sugiere/paseo-plugin/<version>-<sha>/`, points `current` at that folder and has the Paseo CLI reload the
+  plugin from there. It logs to `~/.local/state/paseo-sugiere/autodeploy.log` and sends no data, only the git request.
 
-## Retirement
+## Known limits
 
-The client side works by writing into Paseo's DOM because the plugin SDK has no API for the composer's draft. It is one small
-module (`client/composer-bridge.ts`), marked as a shortcut, and is deleted the day the SDK exposes the draft.
+The text reaches the prompt by writing into Paseo's own page, because the plugin SDK has no API for the composer's draft. If a
+Paseo update changes that page, the plugin falls back to the small card. The code that does it is one module
+(`client/composer-bridge.ts`), marked as a shortcut, and it is deleted the day the SDK exposes the draft.
