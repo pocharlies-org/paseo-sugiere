@@ -5,7 +5,7 @@
 import { readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import type { PluginHookContext } from "@getpaseo/plugin/server";
+import type { PluginHandlerContext, PluginHookContext } from "@getpaseo/plugin/server";
 import { lastAssistantText, suggestBody, suggestionAnswer } from "../shared/suggest.ts";
 import { SessionError, locateSession, routerRequest } from "./session.ts";
 
@@ -57,13 +57,26 @@ export function get(agentId: string): string | null {
   return enabled ? (agents.get(agentId)?.text ?? null) : null;
 }
 
+/** The user clicked the pill with nothing suggested: generate now, no quiet window. Returns what ended up shown. */
+export async function force(agentId: string, context: PluginHandlerContext): Promise<string | null> {
+  if (!enabled) return null;
+  const entry = agents.get(agentId) ?? { seq: 0, text: null };
+  if (entry.timer) clearTimeout(entry.timer);
+  entry.timer = undefined;
+  entry.seq += 1;
+  entry.text = null;
+  agents.set(agentId, entry);
+  await generate(agentId, entry.seq, context);
+  return entry.text;
+}
+
 export function dispose(): void {
   for (const [id] of agents) cancel(id);
   agents.clear();
 }
 
 /** Silent by design: no transcript, a missing file, a refused call — there is simply no suggestion, and the pill shows nothing. */
-async function generate(agentId: string, seq: number, context: PluginHookContext): Promise<void> {
+async function generate(agentId: string, seq: number, context: PluginHandlerContext): Promise<void> {
   try {
     const lines = await locateSession(agentId, context.paseo);
     // Sync and read per generation: no override file is the normal case (built-in instruction), and the read adds no await, so the
