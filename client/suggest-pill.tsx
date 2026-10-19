@@ -2,11 +2,11 @@ import type { PluginButtonContentProps, PluginButtonIconProps, PluginClientConte
 import { Icon } from "@getpaseo/plugin/client/react-native";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Pressable, Text, TextInput, View } from "react-native";
-import { suggestGet } from "../shared/contract.ts";
+import { suggestForce, suggestGet } from "../shared/contract.ts";
 import { insertSuggestion, registerPillAnchor } from "./composer-bridge.ts";
 
-// One composer pill per agent with the recommendation the resident would give for continuing, after its last turn. The pill
-// is invisible while there is nothing to suggest; tapping it puts the text in the agent's prompt (composer-bridge.ts, web and
+// One composer pill per idle agent: with a suggestion ready it opens the card, without one it is a small ✦ whose click forces a
+// generation now (Dani 19-10). Tapping a suggestion puts the text in the agent's prompt (composer-bridge.ts, web and
 // desktop; Dani 18-10) and, where that cannot be done, opens the text already editable in place, and Enter sends it as the
 // next user message (Dani 16-10: «editar» must edit the suggestion in place; 17-10: the two buttons were dead weight — the field
 // is the whole card). The instruction the resident gets is not edited here: it is the file the server reads. The text lives in
@@ -118,29 +118,46 @@ export function addSuggestPill(client: PluginClientContext): () => void {
     const text = agent.status === "idle" ? (texts.get(agent.id) ?? null) : null;
     const pill = pills.get(agent.id);
     const button = {
-      title: "Suggested next message",
+      title: text ? "Suggested next message" : "Suggest now",
       icon: SuggestIcon,
       label: text ? `✦ ${text}` : "✦",
-      visible: text !== null,
-      behavior: {
-        kind: "popover" as const,
-        Content: (props: PluginButtonContentProps) => (
-          <SuggestCard
-            {...props}
-            text={text ?? ""}
-            agentId={agent.id}
-            onInserted={() => {
-              consumed.set(agent.id, text ?? "");
-              texts.set(agent.id, null);
-              show(agents.get(agent.id) ?? agent); // hides the pill
-            }}
-            send={(t) => {
-              texts.delete(agent.id);
-              void client.paseo.agents.ref(agent.id).send(t);
-            }}
-          />
-        ),
-      },
+      // Idle agents always carry the pill: with a suggestion it opens the card, without one it is the small ✦ that forces a
+      // generation on click (Dani 19-10). Hidden while a turn runs — a suggestion is never asked for mid-turn.
+      visible: agent.status === "idle",
+      behavior: text
+        ? {
+            kind: "popover" as const,
+            Content: (props: PluginButtonContentProps) => (
+              <SuggestCard
+                {...props}
+                text={text}
+                agentId={agent.id}
+                onInserted={() => {
+                  consumed.set(agent.id, text);
+                  texts.set(agent.id, null);
+                  show(agents.get(agent.id) ?? agent); // back to the plain ✦
+                }}
+                send={(t) => {
+                  texts.delete(agent.id);
+                  void client.paseo.agents.ref(agent.id).send(t);
+                }}
+              />
+            ),
+          }
+        : {
+            kind: "action" as const,
+            onPress: async () => {
+              const { text: forced } = await client.rpc(suggestForce, { agentId: agent.id });
+              if (stopped || !forced) return; // silent failure, like the quiet window
+              if (insertSuggestion(agent.id, forced)) {
+                consumed.set(agent.id, forced);
+                texts.set(agent.id, null);
+              } else {
+                texts.set(agent.id, forced); // the bridge could not: the next click opens the card
+              }
+              show(agents.get(agent.id) ?? agent);
+            },
+          },
     };
     if (pill) pill.update(button);
     else pills.set(agent.id, client.addComposerPill({ id: "suggest", workspaceId: agent.workspaceId, agentId: agent.id, button }));
