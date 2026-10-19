@@ -36,8 +36,9 @@ describe("an answer that lands after the quiet window moved on", () => {
 });
 
 describe("force: the pill click with nothing suggested (Dani 19-10)", () => {
-  it("generates now, without the quiet window, and returns the text", async () => {
-    assert.equal(await suggest.force("f1", {} as never), "sigue con el merge");
+  it("returns at once (the RPC must not wait for the router) and the answer lands after", async () => {
+    assert.equal(suggest.force("f1", {} as never), true);
+    await flush();
     assert.equal(suggest.get("f1"), "sigue con el merge");
   });
 
@@ -45,7 +46,8 @@ describe("force: the pill click with nothing suggested (Dani 19-10)", () => {
     mock.timers.enable({ apis: ["setTimeout"] });
     try {
       suggest.arm("f2", {} as never);
-      assert.equal(await suggest.force("f2", {} as never), "sigue con el merge");
+      assert.equal(suggest.force("f2", {} as never), true);
+      await flush();
       mock.timers.tick(61_000); // the armed timer was cleared by force: nothing re-fires
       await flush();
       assert.equal(suggest.get("f2"), "sigue con el merge");
