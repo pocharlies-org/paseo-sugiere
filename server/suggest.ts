@@ -25,16 +25,20 @@ export function setQuietSeconds(seconds: number): void {
 // takes effect without restarting the host.
 const PROMPT_FILE = join(homedir(), ".local", "state", "paseo-sugiere", "prompt.txt");
 
-type Entry = { timer?: ReturnType<typeof setTimeout>; seq: number; text: string | null };
+// pending/error describe only the last FORCE (the pill spins on pending and shows error once); the quiet window stays silent by design.
+type Entry = { timer?: ReturnType<typeof setTimeout>; seq: number; text: string | null; pending: boolean; error: string | null };
 const agents = new Map<string, Entry>();
+const fresh = (): Entry => ({ seq: 0, text: null, pending: false, error: null });
 
 /** A turn ended completed: after the quiet window, one generation, unless anything happens first. */
 export function arm(agentId: string, context: PluginHookContext): void {
   if (!enabled) return;
-  const entry = agents.get(agentId) ?? { seq: 0, text: null };
+  const entry = agents.get(agentId) ?? fresh();
   if (entry.timer) clearTimeout(entry.timer);
   entry.seq += 1;
   entry.text = null;
+  entry.pending = false;
+  entry.error = null;
   const seq = entry.seq;
   entry.timer = setTimeout(() => {
     entry.timer = undefined;
@@ -51,10 +55,18 @@ export function cancel(agentId: string): void {
   entry.timer = undefined;
   entry.seq += 1;
   entry.text = null;
+  entry.pending = false;
+  entry.error = null;
 }
 
 export function get(agentId: string): string | null {
   return enabled ? (agents.get(agentId)?.text ?? null) : null;
+}
+
+/** The state of the last force for the pill: spin while pending, show the error once when it failed. */
+export function state(agentId: string): { pending: boolean; error: string | null } {
+  const entry = enabled ? agents.get(agentId) : undefined;
+  return { pending: entry?.pending ?? false, error: entry?.error ?? null };
 }
 
 /** The user clicked the pill with nothing suggested: generate now, no quiet window. Never waits for the answer: the
@@ -62,13 +74,15 @@ export function get(agentId: string): string | null {
 export function force(agentId: string, context: PluginHandlerContext): boolean {
   console.log(`suggest: force pedido por la pill para ${agentId} (enabled=${enabled})`);
   if (!enabled) return false;
-  const entry = agents.get(agentId) ?? { seq: 0, text: null };
+  const entry = agents.get(agentId) ?? fresh();
   if (entry.timer) clearTimeout(entry.timer);
   entry.timer = undefined;
   entry.seq += 1;
   entry.text = null;
+  entry.pending = true;
+  entry.error = null;
   agents.set(agentId, entry);
-  void generate(agentId, entry.seq, context);
+  void generate(agentId, entry.seq, context, true);
   return true;
 }
 
@@ -78,7 +92,14 @@ export function dispose(): void {
 }
 
 /** Silent by design: no transcript, a missing file, a refused call — there is simply no suggestion, and the pill shows nothing. */
-async function generate(agentId: string, seq: number, context: PluginHandlerContext): Promise<void> {
+async function generate(agentId: string, seq: number, context: PluginHandlerContext, forced = false): Promise<void> {
+  const settle = (error: string | null): Entry | undefined => {
+    const entry = agents.get(agentId);
+    if (!entry || entry.seq !== seq) return entry; // the session moved on: the entry belongs to a newer generation
+    entry.pending = false;
+    entry.error = forced ? error : null;
+    return entry;
+  };
   try {
     const lines = await locateSession(agentId, context.paseo);
     // Sync and read per generation: no override file is the normal case (built-in instruction), and the read adds no await, so the
@@ -90,19 +111,23 @@ async function generate(agentId: string, seq: number, context: PluginHandlerCont
     const answer = await routerRequest(suggestBody(lines, instruction));
     if (answer.status !== 200) {
       console.warn(`suggest: el router respondió ${answer.status} para ${agentId}: ${answer.text.slice(0, 200)}`);
+      settle("el router no respondió bien");
       return;
     }
     const text = suggestionAnswer(JSON.parse(answer.text), lastAssistantText(lines));
     if (!text) console.log(`suggest: respuesta vacía (nada que sugerir) para ${agentId}`);
-    const entry = agents.get(agentId);
+    const entry = settle(text ? null : "nada que sugerir");
     if (entry && entry.seq === seq && text) {
       console.log(`suggest: generada para ${agentId}: ${JSON.stringify(text.slice(0, 60))}`);
-      entry.text = text; // the session moved on while the resident answered
-    } else if (entry && entry.seq !== seq) {
+      entry.text = text;
+    } else if (forced && entry && !entry.pending && !entry.text) {
       console.log(`suggest: respuesta descartada para ${agentId} (la sesión se movió)`);
+      entry.error = "la sesión se movió mientras se generaba"; // only if no newer generation is in flight to settle itself
     }
   } catch (error) {
-    // Silent for the user, visible in `paseo plugin logs`: which step refused (no-session, no-transcript, unreadable, router).
-    console.warn(`suggest: no generation for ${agentId}: ${error instanceof SessionError ? error.message : error instanceof Error ? error.message : "unknown"}`);
+    // Silent for the quiet window, visible in `paseo plugin logs`: which step refused (no-session, no-transcript, unreadable, router).
+    const message = error instanceof SessionError ? error.message : error instanceof Error ? error.message : "unknown";
+    console.warn(`suggest: no generation for ${agentId}: ${message}`);
+    settle(message);
   }
 }

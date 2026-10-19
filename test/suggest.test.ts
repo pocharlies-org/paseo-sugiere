@@ -103,6 +103,16 @@ describe("the off switch", () => {
   });
 });
 
+describe("the state of a force (Dani 19-10: spinner while it runs, clear error if it does not)", () => {
+  it("pends from the click and settles with a readable error when the session cannot be read", async () => {
+    const broken = { paseo: { agents: { list: async () => { throw new Error("no daemon"); } } } } as any;
+    suggest.force("f1", broken);
+    assert.deepEqual(suggest.state("f1"), { pending: true, error: null });
+    await new Promise((r) => setImmediate(r));
+    assert.deepEqual(suggest.state("f1"), { pending: false, error: "the session could not be read on this machine" });
+  });
+});
+
 describe("the quiet window", () => {
   it("a cancelled agent has nothing, and a failed generation stays silent", async () => {
     mock.timers.enable({ apis: ["setTimeout"] });
