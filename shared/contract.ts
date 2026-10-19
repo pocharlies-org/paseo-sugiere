@@ -1,11 +1,11 @@
 import { defineRpc } from "@getpaseo/plugin";
 import { z } from "zod";
 
-/** The next-message suggestion of an agent, or null: the pill reads it. */
+/** The next-message suggestion of an agent, plus the state of the last force: the pill spins on `pending` and shows `error` once. */
 export const suggestGet = defineRpc({
   name: "suggest.get",
   input: z.object({ agentId: z.string().min(1).max(64) }).strict(),
-  output: z.object({ text: z.string().nullable() }),
+  output: z.object({ text: z.string().nullable(), pending: z.boolean(), error: z.string().nullable() }),
 });
 
 /** Start the suggestion now, without the quiet window: the pill's force click (Dani 19-10). Returns immediately — the answer

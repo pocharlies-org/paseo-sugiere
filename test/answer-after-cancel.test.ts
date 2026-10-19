@@ -38,8 +38,10 @@ describe("an answer that lands after the quiet window moved on", () => {
 describe("force: the pill click with nothing suggested (Dani 19-10)", () => {
   it("returns at once (the RPC must not wait for the router) and the answer lands after", async () => {
     assert.equal(suggest.force("f1", {} as never), true);
+    assert.deepEqual(suggest.state("f1"), { pending: true, error: null }); // the pill spins from the click
     await flush();
     assert.equal(suggest.get("f1"), "sigue con el merge");
+    assert.deepEqual(suggest.state("f1"), { pending: false, error: null }); // settled clean: no error to show
   });
 
   it("kills the pending quiet window: the forced answer is the only one that can land", async () => {

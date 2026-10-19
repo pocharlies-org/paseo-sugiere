@@ -92,11 +92,19 @@ function SuggestIcon(props: PluginButtonIconProps) {
   );
 }
 
+// The error of a failed force, shown once (Dani 19-10: «un error claro si no va»): opening it clears it, so the next click forces again.
+function SuggestError({ theme, message, onSeen }: PluginButtonContentProps & { message: string; onSeen: () => void }) {
+  useEffect(() => onSeen(), []);
+  return <Text style={{ color: theme.colors.foreground, fontSize: 13, maxWidth: 280 }}>{message}</Text>;
+}
+
 export function addSuggestPill(client: PluginClientContext): () => void {
   const agents = new Map<string, Agent>();
   const pills = new Map<string, ReturnType<PluginClientContext["addComposerPill"]>>();
   const texts = new Map<string, string | null>();
   const consumed = new Map<string, string>(); // the suggestion already put in the prompt: the poll must not bring it back until the next turn
+  const pendingFor = new Map<string, boolean>(); // a force in flight: the pill spins (✦…) and is disabled until it settles
+  const errors = new Map<string, string>(); // the last force's failure, shown once by the popover
   let stopped = false;
   const lifetime = new AbortController();
 
@@ -106,6 +114,8 @@ export function addSuggestPill(client: PluginClientContext): () => void {
     agents.delete(id);
     texts.delete(id);
     consumed.delete(id);
+    pendingFor.delete(id);
+    errors.delete(id);
   };
   const show = (agent: Agent) => {
     if (stopped) return;
@@ -114,16 +124,22 @@ export function addSuggestPill(client: PluginClientContext): () => void {
     if (agent.status !== "idle") {
       texts.delete(agent.id); // a returning idle must not resurrect the previous suggestion
       consumed.delete(agent.id);
+      pendingFor.delete(agent.id);
+      errors.delete(agent.id);
     }
     const text = agent.status === "idle" ? (texts.get(agent.id) ?? null) : null;
+    const pending = pendingFor.get(agent.id) ?? false;
+    const error = errors.get(agent.id) ?? null;
     const pill = pills.get(agent.id);
     const button = {
-      title: text ? "Suggested next message" : "Suggest now",
+      title: text ? "Suggested next message" : pending ? "Generating…" : error ? "Last suggestion failed" : "Suggest now",
       icon: SuggestIcon,
-      label: text ? `✦ ${text}` : "✦",
+      label: text ? `✦ ${text}` : pending ? "✦…" : error ? "✦ !" : "✦",
       // Idle agents always carry the pill: with a suggestion it opens the card, without one it is the small ✦ that forces a
-      // generation on click (Dani 19-10). Hidden while a turn runs — a suggestion is never asked for mid-turn.
+      // generation on click (Dani 19-10), spinning while it resolves and showing the failure once if it does not.
+      // Hidden while a turn runs — a suggestion is never asked for mid-turn.
       visible: agent.status === "idle",
+      disabled: pending,
       behavior: text
         ? {
             kind: "popover" as const,
@@ -144,36 +160,62 @@ export function addSuggestPill(client: PluginClientContext): () => void {
               />
             ),
           }
-        : {
-            kind: "action" as const,
-            onPress: async () => {
-              const { started } = await client.rpc(suggestForce, { agentId: agent.id }).catch((error) => {
-                console.error("suggest: el rpc force falló", error);
-                return { started: false };
-              });
-              if (stopped || !started) return; // off switch
-              // The click cannot wait for the answer: the generation outlives the host's 60 s RPC timeout (measured 19-10).
-              // Fast-poll until it lands, then insert it like the card does; the seq guard server-side drops a stale answer.
-              const id = setInterval(() => {
-                if (stopped || agents.get(agent.id)?.status !== "idle") return clearInterval(id);
-                void client.rpc(suggestGet, { agentId: agent.id }).then(
-                  ({ text: forced }) => {
-                    if (!forced) return;
+        : error
+          ? {
+              kind: "popover" as const,
+              Content: (props: PluginButtonContentProps) => (
+                <SuggestError {...props} message={error} onSeen={() => { errors.delete(agent.id); show(agents.get(agent.id) ?? agent); }} />
+              ),
+            }
+          : {
+              kind: "action" as const,
+              onPress: async () => {
+                const { started } = await client.rpc(suggestForce, { agentId: agent.id }).catch((error) => {
+                  console.error("suggest: el rpc force falló", error);
+                  return { started: false };
+                });
+                if (stopped || !started) return; // off switch
+                // The click cannot wait for the answer: the generation outlives the host's 60 s RPC timeout (measured 19-10).
+                // Fast-poll until it settles: text inserts like the card, error shows once; the pill spins meanwhile (Dani 19-10).
+                pendingFor.set(agent.id, true);
+                errors.delete(agent.id);
+                show(agents.get(agent.id) ?? agent);
+                const deadline = Date.now() + 130_000; // the router's own cap (120 s)
+                const id = setInterval(() => {
+                  const current = agents.get(agent.id);
+                  if (stopped || !current || current.status !== "idle") {
                     clearInterval(id);
-                    if (insertSuggestion(agent.id, forced)) {
-                      consumed.set(agent.id, forced);
-                      texts.set(agent.id, null);
-                    } else {
-                      texts.set(agent.id, forced); // the bridge could not: the next click opens the card
-                    }
-                    show(agents.get(agent.id) ?? agent);
-                  },
-                  () => {},
-                );
-              }, 2000);
-              setTimeout(() => clearInterval(id), 130_000); // the router's own cap (120 s); after that the pill stays ✦
+                    pendingFor.delete(agent.id);
+                    if (current) show(current);
+                    return;
+                  }
+                  if (Date.now() > deadline) {
+                    clearInterval(id);
+                    pendingFor.delete(agent.id);
+                    errors.set(agent.id, "el residente no respondió a tiempo");
+                    show(current);
+                    return;
+                  }
+                  void client.rpc(suggestGet, { agentId: agent.id }).then(
+                    ({ text: forced, error: failed }) => {
+                      if (!forced && !failed) return; // still generating: keep spinning
+                      clearInterval(id);
+                      pendingFor.delete(agent.id);
+                      if (failed) {
+                        errors.set(agent.id, failed);
+                      } else if (insertSuggestion(agent.id, forced!)) {
+                        consumed.set(agent.id, forced!);
+                        texts.set(agent.id, null);
+                      } else {
+                        texts.set(agent.id, forced!); // the bridge could not: the next click opens the card
+                      }
+                      show(agents.get(agent.id) ?? current);
+                    },
+                    () => {},
+                  );
+                }, 2000);
+              },
             },
-          },
     };
     if (pill) pill.update(button);
     else pills.set(agent.id, client.addComposerPill({ id: "suggest", workspaceId: agent.workspaceId, agentId: agent.id, button }));
