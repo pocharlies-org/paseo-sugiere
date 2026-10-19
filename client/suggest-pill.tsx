@@ -147,7 +147,10 @@ export function addSuggestPill(client: PluginClientContext): () => void {
         : {
             kind: "action" as const,
             onPress: async () => {
-              const { started } = await client.rpc(suggestForce, { agentId: agent.id });
+              const { started } = await client.rpc(suggestForce, { agentId: agent.id }).catch((error) => {
+                console.error("suggest: el rpc force falló", error);
+                return { started: false };
+              });
               if (stopped || !started) return; // off switch
               // The click cannot wait for the answer: the generation outlives the host's 60 s RPC timeout (measured 19-10).
               // Fast-poll until it lands, then insert it like the card does; the seq guard server-side drops a stale answer.

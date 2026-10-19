@@ -60,6 +60,7 @@ export function get(agentId: string): string | null {
 /** The user clicked the pill with nothing suggested: generate now, no quiet window. Never waits for the answer: the
  * generation can take longer than the host's 60 s RPC timeout (measured 19-10: «Plugin RPC timed out» on every slow router). */
 export function force(agentId: string, context: PluginHandlerContext): boolean {
+  console.log(`suggest: force pedido por la pill para ${agentId} (enabled=${enabled})`);
   if (!enabled) return false;
   const entry = agents.get(agentId) ?? { seq: 0, text: null };
   if (entry.timer) clearTimeout(entry.timer);
@@ -87,10 +88,19 @@ async function generate(agentId: string, seq: number, context: PluginHandlerCont
       instruction = readFileSync(PROMPT_FILE, "utf8");
     } catch {}
     const answer = await routerRequest(suggestBody(lines, instruction));
-    if (answer.status !== 200) return;
+    if (answer.status !== 200) {
+      console.warn(`suggest: el router respondió ${answer.status} para ${agentId}: ${answer.text.slice(0, 200)}`);
+      return;
+    }
     const text = suggestionAnswer(JSON.parse(answer.text), lastAssistantText(lines));
+    if (!text) console.log(`suggest: respuesta vacía (nada que sugerir) para ${agentId}`);
     const entry = agents.get(agentId);
-    if (entry && entry.seq === seq && text) entry.text = text; // the session moved on while the resident answered
+    if (entry && entry.seq === seq && text) {
+      console.log(`suggest: generada para ${agentId}: ${JSON.stringify(text.slice(0, 60))}`);
+      entry.text = text; // the session moved on while the resident answered
+    } else if (entry && entry.seq !== seq) {
+      console.log(`suggest: respuesta descartada para ${agentId} (la sesión se movió)`);
+    }
   } catch (error) {
     // Silent for the user, visible in `paseo plugin logs`: which step refused (no-session, no-transcript, unreadable, router).
     console.warn(`suggest: no generation for ${agentId}: ${error instanceof SessionError ? error.message : error instanceof Error ? error.message : "unknown"}`);
