@@ -57,17 +57,18 @@ export function get(agentId: string): string | null {
   return enabled ? (agents.get(agentId)?.text ?? null) : null;
 }
 
-/** The user clicked the pill with nothing suggested: generate now, no quiet window. Returns what ended up shown. */
-export async function force(agentId: string, context: PluginHandlerContext): Promise<string | null> {
-  if (!enabled) return null;
+/** The user clicked the pill with nothing suggested: generate now, no quiet window. Never waits for the answer: the
+ * generation can take longer than the host's 60 s RPC timeout (measured 19-10: «Plugin RPC timed out» on every slow router). */
+export function force(agentId: string, context: PluginHandlerContext): boolean {
+  if (!enabled) return false;
   const entry = agents.get(agentId) ?? { seq: 0, text: null };
   if (entry.timer) clearTimeout(entry.timer);
   entry.timer = undefined;
   entry.seq += 1;
   entry.text = null;
   agents.set(agentId, entry);
-  await generate(agentId, entry.seq, context);
-  return entry.text;
+  void generate(agentId, entry.seq, context);
+  return true;
 }
 
 export function dispose(): void {

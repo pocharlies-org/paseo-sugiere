@@ -25,7 +25,7 @@ export default function contribute(server: PluginServerContext) {
   server.on("agent.turn_ended", ({ agent, outcome }, context) => (outcome.kind === "completed" ? suggest.arm(agent.id, context) : suggest.cancel(agent.id)));
   server.on("agent.turn_started", ({ agent }) => suggest.cancel(agent.id));
   server.handle(suggestGet, (input) => ({ text: suggest.get(input.agentId) }));
-  server.handle(suggestForce, async (input, context) => ({ text: await suggest.force(input.agentId, context) }));
+  server.handle(suggestForce, (input, context) => ({ started: suggest.force(input.agentId, context) }));
   const check = () => spawn("bash", [AUTODEPLOY], { detached: true, stdio: "ignore" }).unref();
   let autodeploy: ReturnType<typeof setInterval> | undefined;
   if (existsSync(AUTODEPLOY)) {

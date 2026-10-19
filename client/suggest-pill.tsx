@@ -147,15 +147,28 @@ export function addSuggestPill(client: PluginClientContext): () => void {
         : {
             kind: "action" as const,
             onPress: async () => {
-              const { text: forced } = await client.rpc(suggestForce, { agentId: agent.id });
-              if (stopped || !forced) return; // silent failure, like the quiet window
-              if (insertSuggestion(agent.id, forced)) {
-                consumed.set(agent.id, forced);
-                texts.set(agent.id, null);
-              } else {
-                texts.set(agent.id, forced); // the bridge could not: the next click opens the card
-              }
-              show(agents.get(agent.id) ?? agent);
+              const { started } = await client.rpc(suggestForce, { agentId: agent.id });
+              if (stopped || !started) return; // off switch
+              // The click cannot wait for the answer: the generation outlives the host's 60 s RPC timeout (measured 19-10).
+              // Fast-poll until it lands, then insert it like the card does; the seq guard server-side drops a stale answer.
+              const id = setInterval(() => {
+                if (stopped || agents.get(agent.id)?.status !== "idle") return clearInterval(id);
+                void client.rpc(suggestGet, { agentId: agent.id }).then(
+                  ({ text: forced }) => {
+                    if (!forced) return;
+                    clearInterval(id);
+                    if (insertSuggestion(agent.id, forced)) {
+                      consumed.set(agent.id, forced);
+                      texts.set(agent.id, null);
+                    } else {
+                      texts.set(agent.id, forced); // the bridge could not: the next click opens the card
+                    }
+                    show(agents.get(agent.id) ?? agent);
+                  },
+                  () => {},
+                );
+              }, 2000);
+              setTimeout(() => clearInterval(id), 130_000); // the router's own cap (120 s); after that the pill stays ✦
             },
           },
     };
