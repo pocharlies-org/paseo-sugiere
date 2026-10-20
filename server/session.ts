@@ -1,6 +1,6 @@
-// Finding the agent's transcript and the one call to the local router. The suggestion goes to a local alias (`qwen38-off`): the router
-// discards the bearer for those (measured 13-10: 200 with a dummy token), so this plugin reads no account and no token of
-// ~/.config/claude-cuentas — it is not a consumer of that contract.
+// Finding the agent's transcript and the one call to the model door. The suggestion goes to a local alias (`qwen38-off`, the resident
+// pool). The house retired the loopback claude-router (18791, unit stopped and deleted 20-10): the door is now LiteLLM, whose url and key live in
+// ~/.config/claude-local/env (`export NOMBRE=valor`, one per line) — the same file company_env.py reads. The key goes in the header, never in argv.
 import { readdir, readFile, stat } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
@@ -9,7 +9,6 @@ import type { PluginHandlerContext } from "@getpaseo/plugin/server";
 // The server runtime boundary forbids importing @getpaseo/client: the API type comes from the SDK's own context.
 type PaseoApi = PluginHandlerContext["paseo"];
 
-const ROUTER = { host: "127.0.0.1", port: 18791 };
 const TIMEOUT_MS = 120_000;
 const MAX_BYTES = 4 * 1024 * 1024;
 
@@ -17,7 +16,7 @@ const FAILURE_TEXT = {
   "no-session": "this agent has no Claude session",
   "no-transcript": "the session's transcript is not on this machine",
   unreadable: "the session could not be read on this machine",
-  router: "the local router did not answer",
+  router: "the model door (LiteLLM) did not answer",
 } as const;
 
 export class SessionError extends Error {
@@ -57,15 +56,32 @@ async function findIn(projectsDir: string, name: string): Promise<string | null>
   return null;
 }
 
-/** The one call to the local router; the status stays the caller's decision. fetch is enough here: the refusal of `Sec-Fetch-*`
-belongs to the account service, and the router answers 200 with those headers (measured 13-10). */
+/** The LiteLLM door of this machine: `{ url, token }` from `~/.config/claude-local/env`, `{}` if the file is missing or incomplete
+(the same shape `company_env.litellm_env` returns). Read on every call: a rotation lands in the file and is picked up without a reload. */
+export async function litellmDoor(): Promise<{ url: string; token: string }> {
+  const path = process.env.CLAUDE_LOCAL_ENV || join(homedir(), ".config", "claude-local", "env");
+  const text = await readFile(path, "utf8").catch(() => "");
+  const value = (key: string) =>
+    text
+      .split("\n")
+      .map((ln) => ln.trim().replace(/^export\s+/, "").split("="))
+      .find(([k]) => k === key)?.slice(1).join("=").trim().replace(/^["']|["']$/g, "") ?? "";
+  const url = value("ANTHROPIC_BASE_URL");
+  const token = value("ANTHROPIC_AUTH_TOKEN");
+  return url && token ? { url, token } : { url: "", token: "" };
+}
+
+/** The one call to the model door; the status stays the caller's decision. The key travels in the `authorization` header (the house
+contract, `company_env.litellm_env`): the door in the env file is https LiteLLM or loopback, and this plugin trusts that file. */
 export async function routerRequest(body: string): Promise<{ status: number; text: string }> {
+  const { url, token } = await litellmDoor();
+  if (!url || !token) throw new SessionError("router");
   const controller = new AbortController(); // AbortSignal.timeout is not in react-native's globals, which the client's types pull in
   const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
   try {
-    const response = await fetch(`http://${ROUTER.host}:${ROUTER.port}/v1/messages`, {
+    const response = await fetch(`${url.replace(/\/+$/, "")}/v1/messages`, {
       method: "POST",
-      headers: { "content-type": "application/json", "anthropic-version": "2023-06-01", authorization: "Bearer paseo-sugiere" },
+      headers: { "content-type": "application/json", "anthropic-version": "2023-06-01", authorization: `Bearer ${token}` },
       body,
       signal: controller.signal,
     });

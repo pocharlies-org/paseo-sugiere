@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
+import { rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { describe, it, mock } from "node:test";
 import { SUGGESTION_INSTRUCTION, suggestBody, suggestionAnswer } from "../shared/suggest.ts";
+import { litellmDoor } from "../server/session.ts";
 import * as suggest from "../server/suggest.ts";
 
 // The two decisions that decide what the user sees — the body of the one call, and what counts as a suggestion — plus
@@ -88,6 +92,24 @@ describe("what counts as a suggestion", () => {
     assert.equal(suggestionAnswer(answer("[called Bash]")), "");
     assert.equal(suggestionAnswer(answer("[thinking]")), "");
     assert.equal(suggestionAnswer(answer("[ejecuta] los tests")), "[ejecuta] los tests");
+  });
+});
+
+describe("the model door of this machine (LiteLLM, not the retired loopback router)", () => {
+  it("reads url and token from the env file and refuses a partial one", async () => {
+    const f = join(tmpdir(), `litellm-env-${process.pid}`);
+    process.env.CLAUDE_LOCAL_ENV = f;
+    try {
+      writeFileSync(f, 'export ANTHROPIC_BASE_URL="https://litellm.example.test"\nexport OTHER=x\nexport ANTHROPIC_AUTH_TOKEN=\'sk-a=b\'\n');
+      assert.deepEqual(await litellmDoor(), { url: "https://litellm.example.test", token: "sk-a=b" }); // the key may hold `=`
+      writeFileSync(f, "export ANTHROPIC_BASE_URL=https://x\n"); // token missing
+      assert.deepEqual(await litellmDoor(), { url: "", token: "" });
+      writeFileSync(f, ""); // file empty
+      assert.deepEqual(await litellmDoor(), { url: "", token: "" });
+    } finally {
+      delete process.env.CLAUDE_LOCAL_ENV;
+      rmSync(f, { force: true });
+    }
   });
 });
 
