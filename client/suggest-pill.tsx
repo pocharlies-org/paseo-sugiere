@@ -16,11 +16,13 @@ type Agent = { id: string; workspaceId?: string | null; status: string; archived
 const POLL_MS = 10_000;
 const LINE = 18; // one row of the field; `rows` is not in the host's react-native types, so the height is set from here
 
-// The popover of the host is already the frame: the card adds no border, no fill and no fixed height — the field grows with the
-// text and stops at the width of the popover (Dani 17-10: «la ventana es muy grande, más minimalista»).
-// Enter sends: with `blurOnSubmit` on a multiline field react-native-web fires onSubmitEditing on Enter and swallows the newline,
-// Shift+Enter still wraps. The card is the field plus one small send button on its right (Dani 18-10: click + Enter was two steps).
-// It is the fallback: on mount it first tries the prompt, draws nothing while it decides, and shows up only if the bridge could not.
+// The popover of the host is already the frame: the card adds no border and no fill (Dani 17-10: «la ventana es muy grande, más
+// minimalista»). The field is a FIXED two lines: on mobile the card is a bottom sheet with dynamic sizing, and a field that resizes
+// itself when the keyboard opens makes that sheet re-measure and collapse (Dani 20-10: tapping the text closed the window). The text
+// scrolls inside the field instead of growing it. Enter sends: with `blurOnSubmit` on a multiline field react-native-web fires
+// onSubmitEditing on Enter and swallows the newline, Shift+Enter still wraps. The card is the field plus one small send button on its
+// right (Dani 18-10: click + Enter was two steps). It is the fallback: on mount it first tries the prompt, draws nothing while it
+// decides, and shows up only if the bridge could not.
 function SuggestCard({
   text,
   theme,
@@ -39,13 +41,12 @@ function SuggestCard({
     }
   }, []);
   const [suggestion, setSuggestion] = useState<string | null>(null); // the edited suggestion, null until the user touches the field
-  const [height, setHeight] = useState(LINE); // starts at one line; the field grows with its text and never leaves dead space
   const styles = useMemo(
     () => ({
       // outlineWidth 0 + outlineColor transparent: el anillo de foco del host se pinta con `outline`, y así lo apagan también los
       // inputs propios de Paseo (composer, buscar del panel, revisión). Medido 17-10: sin esto, rectángulo verde alrededor (Dani: «cutre»).
       row: { flexDirection: "row" as const, alignItems: "flex-end" as const, gap: 8 },
-      input: { flex: 1, padding: 0, color: theme.colors.foreground, fontSize: 13, lineHeight: LINE, outlineWidth: 0, outlineColor: "transparent" },
+      input: { flex: 1, height: LINE * 2, padding: 0, color: theme.colors.foreground, fontSize: 13, lineHeight: LINE, outlineWidth: 0, outlineColor: "transparent" },
       send: { width: 20, height: 20, borderRadius: 10, alignItems: "center" as const, justifyContent: "center" as const, backgroundColor: theme.colors.accent },
       arrow: { color: theme.colors.accentForeground, fontSize: 13, lineHeight: 16 },
     }),
@@ -59,15 +60,7 @@ function SuggestCard({
   if (inserted !== false) return null;
   return (
     <View style={styles.row}>
-      <TextInput
-        multiline
-        blurOnSubmit
-        defaultValue={text}
-        onChangeText={setSuggestion}
-        onContentSizeChange={(event) => setHeight(event.nativeEvent.contentSize.height)}
-        onSubmitEditing={submit}
-        style={[styles.input, { height }]}
-      />
+      <TextInput multiline blurOnSubmit defaultValue={text} onChangeText={setSuggestion} onSubmitEditing={submit} style={styles.input} />
       <Pressable accessibilityLabel="Send" onPress={submit} style={styles.send}>
         <Text style={styles.arrow}>↑</Text>
       </Pressable>
