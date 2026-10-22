@@ -1,5 +1,4 @@
-// Finding the agent's transcript and the one call to the model door. The suggestion goes to a local alias (`qwen38-off`, the resident
-// pool). The house retired the loopback claude-router (18791, unit stopped and deleted 20-10): the door is now LiteLLM, whose url and key live in
+// Finding the agent's transcript and the one call to the model door. The suggestion goes with the session's own model. The house retired the loopback claude-router (18791, unit stopped and deleted 20-10): the door is now LiteLLM, whose url and key live in
 // ~/.config/claude-local/env (`export NOMBRE=valor`, one per line) — the same file company_env.py reads. The key goes in the header, never in argv.
 import { readdir, readFile, stat } from "node:fs/promises";
 import { homedir } from "node:os";

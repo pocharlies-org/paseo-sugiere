@@ -26,9 +26,12 @@ prompt, ready to edit and send with Enter.
 This plugin was built for one setup and is published as it runs there. Read this part first:
 
 - **Claude agents only.** It finds the agent's Claude Code transcript; an agent of another provider gets no suggestion.
-- **A local, Anthropic-compatible endpoint at `127.0.0.1:18791`** (`POST /v1/messages`) that serves a model alias called
-  `qwen38-off`. Without it no pill ever appears (`paseo plugin logs paseo-sugiere` says "the local router did not answer").
-  Host, port and alias are plain constants (`ROUTER` in `server/session.ts`, `SUGGEST_MODEL` in `shared/suggest.ts`).
+- **An Anthropic-compatible endpoint (LiteLLM) that serves the session's own model.** The plugin takes its url and key from
+  `~/.config/claude-local/env` (`ANTHROPIC_BASE_URL`, `ANTHROPIC_AUTH_TOKEN`) and calls `POST /v1/messages` with the model the
+  session is running (the `message.model` of the last assistant message in the transcript). There is no fixed or fallback model:
+  a session with no real model yet gets no call. Without the endpoint no pill ever appears (`paseo plugin logs paseo-sugiere`
+  says "the model door (LiteLLM) did not answer").
+- **Cost.** Each suggestion sends the conversation (up to ~100k tokens) to the session's model, without sharing the session's cache.
 - **Spanish by default.** The built-in instruction asks for the suggestion in Spanish and the settings screen is in Spanish. For
   another language or style, put your own instruction in `~/.local/state/paseo-sugiere/prompt.txt`: it is read on every
   suggestion, and a missing or empty file means the built-in one.
@@ -40,9 +43,9 @@ This plugin was built for one setup and is published as it runs there. Read this
   providers in `$PASEO_HOME/config.json`), and, optionally, `~/.local/state/paseo-sugiere/prompt.txt`, a file that replaces
   the built-in instruction.
 - **Sends** the text of the conversation (your messages and the assistant's replies since the last compaction; past about
-  400,000 characters the oldest are left out), the instruction and one closing question to `127.0.0.1:18791` and nowhere else,
-  with a placeholder bearer token. Tool calls, tool results and thinking are removed before the call. From
-  `$PASEO_HOME/config.json` it uses only each Claude provider's `CLAUDE_CONFIG_DIR`; it reads no account token.
+  400,000 characters the oldest are left out), the instruction and one closing question to that endpoint and nowhere else,
+  with the key from `~/.config/claude-local/env`. Tool calls, tool results and thinking are removed before the call. From
+  `$PASEO_HOME/config.json` it uses only each Claude provider's `CLAUDE_CONFIG_DIR`; it reads no account token (only the LiteLLM url and key from the env file above).
 - **Writes**, in the Paseo client on web and desktop, into the composer's text box: it types the text into it (`execCommand`
   `insertText`, with an `input` event as the fallback), so Paseo's own handlers store the draft as if you had typed it. It
   looks for the box of the pane the pill sits in and does nothing if it finds none or more than one.

@@ -23,7 +23,7 @@ export function SuggestSettings({ theme }: PluginSurfaceProps) {
         <SettingsCard>
           <SettingsSwitch
             label="Sugerir el siguiente mensaje"
-            hint="Al acabar un turno y pasar la sesión en silencio, el residente propone qué enviar a continuación"
+            hint="Al acabar un turno y pasar la sesión en silencio, se propone qué enviar a continuación"
             value={values.enabled}
             disabled={busy}
             onValueChange={(enabled) => change({ enabled })}

@@ -25,7 +25,7 @@ function blocks(content: unknown): Block[] {
   return out;
 }
 
-/** The messages of the transcript since its last compaction, and the model the session was using. */
+/** The messages of the transcript since its last compaction, and the last real model the session used (null if none: no assistant yet, or only synthetic ones). */
 export function transcriptMessages(lines: string[]): { messages: Message[]; model: string | null } {
   const start = lines.findLastIndex((l) => l.includes('"compact_boundary"')) + 1;
   const messages: Message[] = [];
@@ -41,7 +41,9 @@ export function transcriptMessages(lines: string[]): { messages: Message[]; mode
     if (role !== "user" && role !== "assistant") continue;
     const content = blocks(entry.message.content);
     if (!content.length) continue;
-    if (role === "assistant" && typeof entry.message.model === "string") model = entry.message.model;
+    // "<synthetic>" is what Claude Code writes on messages it made up itself (errors, interruptions): not a model anyone can call.
+    const used = entry.message.model;
+    if (role === "assistant" && typeof used === "string" && used.trim() && used !== "<synthetic>") model = used;
     const last = messages[messages.length - 1];
     if (last?.role === role) last.content.push(...content);
     else messages.push({ role, content });

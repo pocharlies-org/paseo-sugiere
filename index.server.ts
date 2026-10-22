@@ -13,7 +13,7 @@ import * as suggest from "./server/suggest.ts";
 // URL» at load, the plugin came down).
 const AUTODEPLOY = join(homedir(), ".local", "share", "paseo-sugiere", "paseo-plugin", "current", "scripts", "autodeploy.sh");
 
-// The quiet window opens when a turn ends completed and closes with anything new; the answer comes from the resident, never from the session.
+// The quiet window opens when a turn ends completed and closes with anything new; the answer comes from a separate call with the session's model, never from the session itself.
 export default function contribute(server: PluginServerContext) {
   const settings = server.registerSettings(suggestSettings);
   const apply = (state: { status: string; values?: SuggestValues }) => {
