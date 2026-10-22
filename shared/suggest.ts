@@ -5,7 +5,9 @@
 // Cost: every suggestion sends the whole conversation (up to ~100k tokens) to the session's model and does not share the session's own cache.
 import { transcriptMessages } from "./transcript.ts";
 
-export const SUGGEST_MAX_TOKENS = 48;
+/** 22-10: Opus 5.5 behind LiteLLM returns a thinking block before the text, and it spends the budget: with 48 the suggestion came out cut
+off in 4 of 6 calls (measured). 256 leaves room for the thinking and the line; a rambling answer is still dropped by `suggestionAnswer` (>240 chars). */
+export const SUGGEST_MAX_TOKENS = 256;
 
 /** Fixed. Dani 14-10: the pill recommends the next step toward the task's GOAL — the model was continuing the assistant's last
 turn instead of recommending (measured: «PR #14 en vigilancia…» came out). Sendable rule kept: if what comes next is the user's

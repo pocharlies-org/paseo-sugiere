@@ -14,7 +14,7 @@ prompt, ready to edit and send with Enter.
 
 - When a turn ends completed and nothing happens for 60 s (the settings screen offers 30 s, 1, 2 or 5 min), one call with the
   conversation goes to the model. Finished work, optional offers and decisions that are yours to make get no suggestion, so
-  no pill appears. The answer is capped at 48 tokens.
+  no pill appears. The answer is capped at 256 tokens (the model may spend part of it thinking before the line).
 - The pill is per agent. Tapping it **appends** the text to that agent's prompt, a line below what you already typed, and
   never replaces it; **Ctrl+Z** takes it back. Where it cannot reach the prompt (phones, narrow layouts, or a prompt it cannot
   tell apart from another pane's), the pill opens a small editable card instead, with a send button.

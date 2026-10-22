@@ -23,7 +23,7 @@ no consume su contrato `file.claude-cuentas.v1`: la llamada va a LiteLLM con la 
   clave de `~/.config/claude-local/env`. Si la sesión aún no tiene un modelo real no se llama a nada y no hay modelo de respaldo: el
   force de la píldora muestra «la sesión aún no tiene modelo». El transcript se aplanaba igual que en las preguntas laterales: los tool calls dejan una
   línea, nunca su contenido.
-- El prompt es apéndice-estable (el transcript solo crece; la instrucción fija va en `system`) y la respuesta se corta en 48 tokens
+- El prompt es apéndice-estable (el transcript solo crece; la instrucción fija va en `system`) y la respuesta se corta en 256 tokens
   (`max_tokens`). **Coste**: cada sugerencia envía la conversación (hasta ~100k tokens) al modelo de la sesión, sin compartir la caché
   de la propia sesión. Con la sesión en reposo no se llama a nada.
 - Trabajo terminado, ofertas opcionales o decisiones del usuario → sugerencia vacía → la píldora no
