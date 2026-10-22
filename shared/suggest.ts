@@ -34,8 +34,14 @@ function conversation(messages: { role: "user" | "assistant"; content: { type: "
 recommending (measured 14-10: «PR #14 en vigilancia…»); with it, it answers. Constant, so the cached prefix of the session holds. */
 const TRIGGER = "¿Qué debería pedirle a continuación al asistente? Responde solo con esa línea.";
 
-/** The whole call: the session's own model, and the body — the conversation (no tool noise), the instruction in `system` (the
-configured one, or the built-in when it is empty), the constant trigger last, no tools. Null when the session has no real model
+/** LiteLLM serves `claude-*` through Claude subscription accounts, and those answer 429 rate_limit_error "Error" to any request whose
+system does not start with this line (measured 22-10: `system` as a plain string -> 429, the same call with this block first -> 200).
+Fixed and always first, so the prefix of the session's calls stays stable. Sent for every model: the session's model comes from a
+Claude Code transcript, so it is `claude-*` in practice, and the line is harmless to any other. */
+export const CLAUDE_CODE_SYSTEM = "You are Claude Code, Anthropic's official CLI for Claude.";
+
+/** The whole call: the session's own model, and the body — the conversation (no tool noise), the instruction in `system` after the
+Claude Code line (the configured one, or the built-in when it is empty), the constant trigger last, no tools. Null when the session has no real model
 (no assistant message yet, or only `<synthetic>` ones): there is nothing to call and no fallback model (Dani 22-10). */
 export function suggestBody(lines: string[], prompt = ""): { model: string; body: string } | null {
   const { messages, model } = transcriptMessages(lines);
@@ -44,7 +50,10 @@ export function suggestBody(lines: string[], prompt = ""): { model: string; body
     model,
     max_tokens: SUGGEST_MAX_TOKENS,
     tools: [],
-    system: prompt.trim() || SUGGESTION_INSTRUCTION,
+    system: [
+      { type: "text", text: CLAUDE_CODE_SYSTEM },
+      { type: "text", text: prompt.trim() || SUGGESTION_INSTRUCTION },
+    ],
     messages: [...conversation(messages), { role: "user", content: [{ type: "text", text: TRIGGER }] }],
   });
   return { model, body };

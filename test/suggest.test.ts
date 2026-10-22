@@ -3,7 +3,7 @@ import { rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, it, mock } from "node:test";
-import { SUGGESTION_INSTRUCTION, suggestBody, suggestionAnswer } from "../shared/suggest.ts";
+import { CLAUDE_CODE_SYSTEM, SUGGESTION_INSTRUCTION, suggestBody, suggestionAnswer } from "../shared/suggest.ts";
 import { litellmDoor } from "../server/session.ts";
 import * as suggest from "../server/suggest.ts";
 
@@ -19,7 +19,11 @@ describe("the body of the suggestion call", () => {
     assert.equal(body.model, "claude-opus-5-5");
     assert.equal(body.max_tokens, 48);
     assert.deepEqual(body.tools, []);
-    assert.equal(body.system, SUGGESTION_INSTRUCTION);
+    assert.equal(CLAUDE_CODE_SYSTEM, "You are Claude Code, Anthropic's official CLI for Claude.");
+    assert.deepEqual(body.system, [
+      { type: "text", text: "You are Claude Code, Anthropic's official CLI for Claude." }, // without it LiteLLM's subscription accounts answer 429 (measured 22-10)
+      { type: "text", text: SUGGESTION_INSTRUCTION },
+    ]);
     assert.equal(body.messages.length, 3); // transcript + the constant trigger; the instruction never rides as a user turn
     assert.equal(body.messages[1].role, "assistant");
     assert.equal(body.messages[2].role, "user"); // the trigger: without it the model continues the assistant's last turn (measured 14-10)
@@ -47,8 +51,10 @@ describe("the body of the suggestion call", () => {
 
   it("takes the configured prompt as system, and the built-in one when it is blank (Dani 16-10: editable prompt)", () => {
     const body = JSON.parse(suggestBody([user("monta el pill"), as([{ type: "text", text: "listo" }])], "recomienda en una línea, en inglés")!.body);
-    assert.equal(body.system, "recomienda en una línea, en inglés");
-    assert.equal(JSON.parse(suggestBody([user("monta el pill"), as([{ type: "text", text: "listo" }])], "   ")!.body).system, SUGGESTION_INSTRUCTION);
+    assert.equal(body.system[0].text, CLAUDE_CODE_SYSTEM);
+    assert.equal(body.system.length, 2);
+    assert.equal(body.system[1].text, "recomienda en una línea, en inglés");
+    assert.equal(JSON.parse(suggestBody([user("monta el pill"), as([{ type: "text", text: "listo" }])], "   ")!.body).system[1].text, SUGGESTION_INSTRUCTION);
   });
 
   it("keeps the guard that a step the USER takes outside the conversation means no suggestion (measured 14-10: «mide la longitud del cañón»)", () => {
