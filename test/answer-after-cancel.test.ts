@@ -3,7 +3,10 @@ import { describe, it, mock } from "node:test";
 
 // The seq guard of server/suggest.ts: an answer from the router that lands after the session moved on must not show.
 // This file mocks the session module before importing suggest, so it lives apart from the rest of the tests (own process).
-const TRANSCRIPT = ['{"type":"user","message":{"role":"user","content":"hola"}}'];
+const TRANSCRIPT = [
+  '{"type":"user","message":{"role":"user","content":"hola"}}',
+  '{"type":"assistant","message":{"role":"assistant","model":"claude-opus-5-5","content":"hola, dime"}}', // a session with no real model gets no call
+];
 mock.module(new URL("../server/session.ts", import.meta.url).href, {
   namedExports: {
     SessionError: class extends Error {},

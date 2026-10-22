@@ -9,7 +9,7 @@ import { insertSuggestion, registerPillAnchor } from "./composer-bridge.ts";
 // generation now (Dani 19-10). Tapping a suggestion puts the text in the agent's prompt (composer-bridge.ts, web and
 // desktop; Dani 18-10) and, where that cannot be done, opens the text already editable in place, and Enter sends it as the
 // next user message (Dani 16-10: «editar» must edit the suggestion in place; 17-10: the two buttons were dead weight — the field
-// is the whole card). The instruction the resident gets is not edited here: it is the file the server reads. The text lives in
+// is the whole card). The instruction the model gets is not edited here: it is the file the server reads. The text lives in
 // the plugin server — this only polls for idle agents, so a suggestion is never asked for while a turn is running.
 type Agent = { id: string; workspaceId?: string | null; status: string; archivedAt?: string | null };
 
@@ -185,7 +185,7 @@ export function addSuggestPill(client: PluginClientContext): () => void {
                   if (Date.now() > deadline) {
                     clearInterval(id);
                     pendingFor.delete(agent.id);
-                    errors.set(agent.id, "el residente no respondió a tiempo");
+                    errors.set(agent.id, "el modelo no respondió a tiempo");
                     show(current);
                     return;
                   }

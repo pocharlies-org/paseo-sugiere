@@ -3,7 +3,7 @@ import { rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, it, mock } from "node:test";
-import { SUGGESTION_INSTRUCTION, suggestBody, suggestionAnswer } from "../shared/suggest.ts";
+import { CLAUDE_CODE_SYSTEM, SUGGESTION_INSTRUCTION, suggestBody, suggestionAnswer } from "../shared/suggest.ts";
 import { litellmDoor } from "../server/session.ts";
 import * as suggest from "../server/suggest.ts";
 
@@ -11,24 +11,50 @@ import * as suggest from "../server/suggest.ts";
 // the bookkeeping of the quiet window. The transport is `server/session.ts`: the same router call the account plugin's side questions make.
 const line = (o: object) => JSON.stringify(o);
 const user = (content: unknown) => line({ type: "user", message: { role: "user", content } });
-const as = (content: unknown) => line({ type: "assistant", message: { role: "assistant", model: "claude-opus-5-5", content } });
+const as = (content: unknown, model = "claude-opus-5-5") => line({ type: "assistant", message: { role: "assistant", model, content } });
 
 describe("the body of the suggestion call", () => {
-  it("is the transcript alone with the fixed instruction in system, the resident model and no tools", () => {
-    const body = JSON.parse(suggestBody([user("monta el pill"), as([{ type: "text", text: "listo" }])]));
-    assert.equal(body.model, "qwen38-off");
-    assert.equal(body.max_tokens, 48);
+  it("is the transcript alone with the fixed instruction in system, the session's model and no tools", () => {
+    const body = JSON.parse(suggestBody([user("monta el pill"), as([{ type: "text", text: "listo" }])])!.body);
+    assert.equal(body.model, "claude-opus-5-5");
+    assert.equal(body.max_tokens, 256); // room for the thinking block that precedes the text (measured 22-10: 48 cut 4 of 6)
     assert.deepEqual(body.tools, []);
-    assert.equal(body.system, SUGGESTION_INSTRUCTION);
+    assert.equal(CLAUDE_CODE_SYSTEM, "You are Claude Code, Anthropic's official CLI for Claude.");
+    assert.deepEqual(body.system, [
+      { type: "text", text: "You are Claude Code, Anthropic's official CLI for Claude." }, // without it LiteLLM's subscription accounts answer 429 (measured 22-10)
+      { type: "text", text: SUGGESTION_INSTRUCTION },
+    ]);
     assert.equal(body.messages.length, 3); // transcript + the constant trigger; the instruction never rides as a user turn
     assert.equal(body.messages[1].role, "assistant");
     assert.equal(body.messages[2].role, "user"); // the trigger: without it the model continues the assistant's last turn (measured 14-10)
   });
 
+  it("uses the model of the LAST assistant message (the session may have switched model)", () => {
+    const lines = [user("a"), as([{ type: "text", text: "uno" }], "claude-sonnet-5-5"), user("b"), as([{ type: "text", text: "dos" }], "claude-opus-5-5")];
+    assert.equal(suggestBody(lines)!.model, "claude-opus-5-5");
+    assert.equal(JSON.parse(suggestBody(lines)!.body).model, "claude-opus-5-5");
+    assert.equal(suggestBody([...lines.slice(0, 2), user("b")])!.model, "claude-sonnet-5-5");
+  });
+
+  it('skips "<synthetic>" (Claude Code writes it on messages it made up) and keeps the last real model', () => {
+    const lines = [user("a"), as([{ type: "text", text: "uno" }]), user("b"), as([{ type: "text", text: "No response requested." }], "<synthetic>")];
+    assert.equal(suggestBody(lines)!.model, "claude-opus-5-5");
+  });
+
+  it("with no assistant, or only synthetic ones, there is no body and so no call, and no fallback model", () => {
+    assert.equal(suggestBody([user("hola")]), null);
+    assert.equal(suggestBody([]), null);
+    assert.equal(suggestBody([user("hola"), as([{ type: "text", text: "x" }], "<synthetic>")]), null);
+    assert.equal(suggestBody([user("hola"), as([{ type: "text", text: "x" }], "")]), null);
+    assert.equal(suggestBody([user("hola"), line({ type: "assistant", message: { role: "assistant", content: "x" } })]), null); // no model field at all
+  });
+
   it("takes the configured prompt as system, and the built-in one when it is blank (Dani 16-10: editable prompt)", () => {
-    const body = JSON.parse(suggestBody([user("monta el pill")], "recomienda en una línea, en inglés"));
-    assert.equal(body.system, "recomienda en una línea, en inglés");
-    assert.equal(JSON.parse(suggestBody([user("monta el pill")], "   ")).system, SUGGESTION_INSTRUCTION);
+    const body = JSON.parse(suggestBody([user("monta el pill"), as([{ type: "text", text: "listo" }])], "recomienda en una línea, en inglés")!.body);
+    assert.equal(body.system[0].text, CLAUDE_CODE_SYSTEM);
+    assert.equal(body.system.length, 2);
+    assert.equal(body.system[1].text, "recomienda en una línea, en inglés");
+    assert.equal(JSON.parse(suggestBody([user("monta el pill"), as([{ type: "text", text: "listo" }])], "   ")!.body).system[1].text, SUGGESTION_INSTRUCTION);
   });
 
   it("keeps the guard that a step the USER takes outside the conversation means no suggestion (measured 14-10: «mide la longitud del cañón»)", () => {
@@ -39,7 +65,7 @@ describe("the body of the suggestion call", () => {
   });
 
   it("leaves a transcript that ends with the user untouched (the measured misfire)", () => {
-    const body = JSON.parse(suggestBody([as([{ type: "text", text: "listo" }]), user("y ahora?")]));
+    const body = JSON.parse(suggestBody([as([{ type: "text", text: "listo" }]), user("y ahora?")])!.body);
     assert.equal(body.messages.length, 3); // transcript (2) + trigger
     assert.equal(body.messages[1].content.length, 1);
   });
@@ -51,7 +77,7 @@ describe("the body of the suggestion call", () => {
         as([{ type: "tool_use", name: "Bash", id: "t1" }, { type: "text", text: "arreglado, pasa el test" }]),
         user([{ type: "tool_result", tool_use_id: "t1", content: "ok" }]),
         as([{ type: "tool_use", name: "Bash", id: "t2" }]),
-      ]),
+      ])!.body,
     );
     assert.equal(body.messages.length, 3); // user + assistant + trigger: the tool noise is gone
     assert.deepEqual(body.messages[1].content, [{ type: "text", text: "arreglado, pasa el test" }]);

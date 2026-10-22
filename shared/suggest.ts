@@ -1,13 +1,13 @@
 // The next-message suggestion: one small call with the session's transcript and an instruction (built-in, or the user's from
-// settings), answered by the resident.
-// The instruction rides in `system` — as the last user turn the resident answered the conversation instead of suggesting (measured
-// 13-10). System is fixed and the transcript only grows, so consecutive suggestions of a session still share a token prefix the
-// resident's engine can cache: from the second one on, only the answer is paid for.
+// settings), answered by the SAME model the session is running (Dani 22-10), not a fixed one. A session with no real model yet gets no call.
+// The instruction rides in `system` — as the last user turn the model answered the conversation instead of suggesting (measured
+// 13-10). System is fixed and the transcript only grows, so consecutive suggestions of a session keep a stable token prefix.
+// Cost: every suggestion sends the whole conversation (up to ~100k tokens) to the session's model and does not share the session's own cache.
 import { transcriptMessages } from "./transcript.ts";
 
-/** The model that answers: the resident without reasoning, so the answer is plain text and costs nothing. */
-export const SUGGEST_MODEL = "qwen38-off";
-export const SUGGEST_MAX_TOKENS = 48;
+/** 22-10: Opus 5.5 behind LiteLLM returns a thinking block before the text, and it spends the budget: with 48 the suggestion came out cut
+off in 4 of 6 calls (measured). 256 leaves room for the thinking and the line; a rambling answer is still dropped by `suggestionAnswer` (>240 chars). */
+export const SUGGEST_MAX_TOKENS = 256;
 
 /** Fixed. Dani 14-10: the pill recommends the next step toward the task's GOAL — the model was continuing the assistant's last
 turn instead of recommending (measured: «PR #14 en vigilancia…» came out). Sendable rule kept: if what comes next is the user's
@@ -36,21 +36,33 @@ function conversation(messages: { role: "user" | "assistant"; content: { type: "
 recommending (measured 14-10: «PR #14 en vigilancia…»); with it, it answers. Constant, so the cached prefix of the session holds. */
 const TRIGGER = "¿Qué debería pedirle a continuación al asistente? Responde solo con esa línea.";
 
-/** The whole call body: the conversation (no tool noise), the instruction in `system` (the configured one, or the built-in
-when it is empty), the constant trigger last, no tools. */
-export function suggestBody(lines: string[], prompt = ""): string {
-  const { messages } = transcriptMessages(lines);
-  return JSON.stringify({
-    model: SUGGEST_MODEL,
+/** LiteLLM serves `claude-*` through Claude subscription accounts, and those answer 429 rate_limit_error "Error" to any request whose
+system does not start with this line (measured 22-10: `system` as a plain string -> 429, the same call with this block first -> 200).
+Fixed and always first, so the prefix of the session's calls stays stable. Sent for every model: the session's model comes from a
+Claude Code transcript, so it is `claude-*` in practice, and the line is harmless to any other. */
+export const CLAUDE_CODE_SYSTEM = "You are Claude Code, Anthropic's official CLI for Claude.";
+
+/** The whole call: the session's own model, and the body — the conversation (no tool noise), the instruction in `system` after the
+Claude Code line (the configured one, or the built-in when it is empty), the constant trigger last, no tools. Null when the session has no real model
+(no assistant message yet, or only `<synthetic>` ones): there is nothing to call and no fallback model (Dani 22-10). */
+export function suggestBody(lines: string[], prompt = ""): { model: string; body: string } | null {
+  const { messages, model } = transcriptMessages(lines);
+  if (!model) return null;
+  const body = JSON.stringify({
+    model,
     max_tokens: SUGGEST_MAX_TOKENS,
     tools: [],
-    system: prompt.trim() || SUGGESTION_INSTRUCTION,
+    system: [
+      { type: "text", text: CLAUDE_CODE_SYSTEM },
+      { type: "text", text: prompt.trim() || SUGGESTION_INSTRUCTION },
+    ],
     messages: [...conversation(messages), { role: "user", content: [{ type: "text", text: TRIGGER }] }],
   });
+  return { model, body };
 }
 
 /** The one sendable line, or "" for nothing to suggest: first non-empty line, quotes trimmed, a rambling answer dropped,
-and an answer that merely echoes the assistant's last line (the measured misfire of the small model) dropped too. */
+and an answer that merely echoes the assistant's last line (the measured misfire of the model) dropped too. */
 export function suggestionAnswer(response: unknown, lastAssistant = ""): string {
   const parts = Array.isArray((response as { content?: unknown })?.content) ? ((response as { content: unknown[] }).content as any[]) : [];
   const text = parts
@@ -66,7 +78,7 @@ export function suggestionAnswer(response: unknown, lastAssistant = ""): string 
   return line === echo || (line !== "" && echo.startsWith(line)) ? "" : line;
 }
 
-/** The assistant's last real answer (tool noise stripped, as in the call): what the small model tends to echo instead of recommending. */
+/** The assistant's last real answer (tool noise stripped, as in the call): what the model tends to echo instead of recommending. */
 export function lastAssistantText(lines: string[]): string {
   const { messages } = transcriptMessages(lines);
   const a = [...conversation(messages)].reverse().find((m) => m.role === "assistant");

@@ -1,7 +1,7 @@
-// The next-message suggestion: after a turn ends quietly for a minute, one small call to the resident proposes what the
-// user should send next, and the composer pill shows it. Port of OpenChamber's session-assist: same 60 s quiet window, same rule
-// that a finished conversation gets nothing. Nothing here touches the session: the call goes to the router with the local alias
-// `qwen38-off`, so the resident only pays the decode of the answer once its prefix cache hits (unmeasured in vivo yet).
+// The next-message suggestion: after a turn ends quietly for a minute, one small call proposes what the user should send next,
+// and the composer pill shows it. Port of OpenChamber's session-assist: same 60 s quiet window, same rule that a finished
+// conversation gets nothing. Nothing here touches the session: the call goes to LiteLLM with the session's own model (Dani 22-10),
+// without sharing the session's cache — each suggestion pays for the conversation (up to ~100k tokens).
 import { readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
@@ -20,7 +20,7 @@ export function setQuietSeconds(seconds: number): void {
   quietMs = seconds * 1000;
 }
 
-// The instruction the resident gets, in a file the plugin owns — the only way to change it (Dani 17-10: the in-pill editor was
+// The instruction the model gets, in a file the plugin owns — the only way to change it (Dani 17-10: the in-pill editor was
 // dead weight, the pill is for sending). "" = the built-in SUGGESTION_INSTRUCTION. Read with every generation, so a hand edit
 // takes effect without restarting the host.
 const PROMPT_FILE = join(homedir(), ".local", "state", "paseo-sugiere", "prompt.txt");
@@ -108,9 +108,11 @@ async function generate(agentId: string, seq: number, context: PluginHandlerCont
     try {
       instruction = readFileSync(PROMPT_FILE, "utf8");
     } catch {}
-    const answer = await routerRequest(suggestBody(lines, instruction));
+    const call = suggestBody(lines, instruction);
+    if (!call) throw new Error("la sesión aún no tiene modelo"); // no real model, no call, no fallback: logged and shown by the catch below
+    const answer = await routerRequest(call.body);
     if (answer.status !== 200) {
-      console.warn(`suggest: el router respondió ${answer.status} para ${agentId}: ${answer.text.slice(0, 200)}`);
+      console.warn(`suggest: el router respondió ${answer.status} para ${agentId} con ${call.model}: ${answer.text.slice(0, 200)}`);
       settle("el router no respondió bien");
       return;
     }
@@ -118,7 +120,7 @@ async function generate(agentId: string, seq: number, context: PluginHandlerCont
     if (!text) console.log(`suggest: respuesta vacía (nada que sugerir) para ${agentId}`);
     const entry = settle(text ? null : "nada que sugerir");
     if (entry && entry.seq === seq && text) {
-      console.log(`suggest: generada para ${agentId}: ${JSON.stringify(text.slice(0, 60))}`);
+      console.log(`suggest: generada para ${agentId} con ${call.model}: ${JSON.stringify(text.slice(0, 60))}`);
       entry.text = text;
     } else if (forced && entry && !entry.pending && !entry.text) {
       console.log(`suggest: respuesta descartada para ${agentId} (la sesión se movió)`);

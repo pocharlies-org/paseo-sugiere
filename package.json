@@ -3,7 +3,7 @@
   "private": true,
   "version": "0.1.0",
   "type": "module",
-  "description": "Plugin de Paseo: sugiere el siguiente mensaje del usuario al acabar cada turno, con el residente y el kv cache de la sesion.",
+  "description": "Plugin de Paseo: sugiere el siguiente mensaje del usuario al acabar cada turno, con el mismo modelo que la sesion.",
   "license": "MIT",
   "files": [
     "paseo-plugin.json",
