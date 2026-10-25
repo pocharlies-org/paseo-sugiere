@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { describe, it, mock } from "node:test";
+import { before, describe, it, mock } from "node:test";
 
 // The seq guard of server/suggest.ts: an answer from the router that lands after the session moved on must not show.
 // This file mocks the session module before importing suggest, so it lives apart from the rest of the tests (own process).
@@ -18,6 +18,7 @@ const suggest = await import("../server/suggest.ts");
 const flush = () => new Promise((resolve) => setImmediate(resolve));
 
 describe("an answer that lands after the quiet window moved on", () => {
+  before(() => suggest.setAuto(true)); // the quiet window only fires with auto (default off, Dani 25-10)
   it("is dropped when a turn started meanwhile", async () => {
     mock.timers.enable({ apis: ["setTimeout"] });
     suggest.arm("a1", {} as never);

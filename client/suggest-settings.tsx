@@ -12,7 +12,7 @@ export function SuggestSettings({ theme }: PluginSurfaceProps) {
   const state = useSettings(suggestSettings);
   if (state.status === "loading") return <Text style={{ color: theme.colors.foregroundMuted }}>Cargando…</Text>;
   if (state.status === "error") return <Text style={{ color: theme.colors.statusDanger }}>No se pudieron leer los ajustes</Text>;
-  const values: SuggestValues = state.status === "ready" ? state.values : { enabled: true, quietSeconds: 60 };
+  const values: SuggestValues = state.status === "ready" ? state.values : { enabled: true, auto: false, quietSeconds: 60 };
   const revision = state.status === "ready" ? state.revision : "0";
   const busy = state.saving;
   const change = (patch: Partial<SuggestValues>) => void state.save({ ...values, ...patch }, revision);
@@ -28,12 +28,19 @@ export function SuggestSettings({ theme }: PluginSurfaceProps) {
             disabled={busy}
             onValueChange={(enabled) => change({ enabled })}
           />
+          <SettingsSwitch
+            label="Sugerir automáticamente"
+            hint="Cada sugerencia automática reenvía toda la conversación al modelo (cuesta tokens). Apagado: la ✦ sugiere solo cuando la pulsas."
+            value={values.auto}
+            disabled={busy || !values.enabled}
+            onValueChange={(auto) => change({ auto })}
+          />
           <SettingsSelect
             label="Silencio antes de sugerir"
             hint="Cuánto debe estar la sesión sin moverse tras el último turno"
             value={String(values.quietSeconds)}
             options={QUIET_OPTIONS}
-            disabled={busy || !values.enabled}
+            disabled={busy || !values.enabled || !values.auto}
             onValueChange={(quietSeconds) => change({ quietSeconds: Number(quietSeconds) })}
           />
         </SettingsCard>

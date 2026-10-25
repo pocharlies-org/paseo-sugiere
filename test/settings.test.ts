@@ -6,7 +6,7 @@ import { suggestSettings } from "../shared/settings.ts";
 // save from the settings screen always conflicts («El host no aceptó el cambio»).
 describe("the settings document", () => {
   it("parses an empty document into the defaults", () => {
-    assert.deepEqual(suggestSettings.schema.parse({}), { enabled: true, quietSeconds: 60 });
+    assert.deepEqual(suggestSettings.schema.parse({}), { enabled: true, auto: false, quietSeconds: 60 }); // auto off: no automatic calls (Dani 25-10)
   });
   it("takes 0 seconds and refuses anything over 600", () => {
     assert.equal(suggestSettings.schema.parse({ enabled: true, quietSeconds: 0 }).quietSeconds, 0);

@@ -9,12 +9,17 @@ import type { PluginHandlerContext, PluginHookContext } from "@getpaseo/plugin/s
 import { lastAssistantText, suggestBody, suggestionAnswer } from "../shared/suggest.ts";
 import { SessionError, locateSession, routerRequest } from "./session.ts";
 
-// The settings document in force: off drops every pending and shown suggestion; quiet is the silence window.
+// The settings document in force: off drops every pending and shown suggestion; auto gates only the quiet window (the pill's
+// force works without it); quiet is the silence window.
 let enabled = true;
+let auto = false;
 let quietMs = 60_000;
 export function setEnabled(value: boolean): void {
   if (enabled && !value) dispose();
   enabled = value;
+}
+export function setAuto(value: boolean): void {
+  auto = value;
 }
 export function setQuietSeconds(seconds: number): void {
   quietMs = seconds * 1000;
@@ -30,9 +35,10 @@ type Entry = { timer?: ReturnType<typeof setTimeout>; seq: number; text: string 
 const agents = new Map<string, Entry>();
 const fresh = (): Entry => ({ seq: 0, text: null, pending: false, error: null });
 
-/** A turn ended completed: after the quiet window, one generation, unless anything happens first. */
+/** A turn ended completed: after the quiet window, one generation, unless anything happens first. Only with `auto` —
+off by default (Dani 25-10): each automatic suggestion pays the whole transcript of its session; without auto the user's click forces it. */
 export function arm(agentId: string, context: PluginHookContext): void {
-  if (!enabled) return;
+  if (!enabled || !auto) return;
   const entry = agents.get(agentId) ?? fresh();
   if (entry.timer) clearTimeout(entry.timer);
   entry.seq += 1;
