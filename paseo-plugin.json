@@ -3,5 +3,5 @@
   "name": "Suggested next message",
   "description": "After a turn ends quietly for a minute, a small local model proposes the message you would send next, as a pill above the composer; one tap puts it in the prompt.",
   "media": ["docs/media/pill.png", "docs/media/prompt.png"],
-  "requirements": { "paseo": ">=0.11.2 <0.13.0" }
+  "requirements": { "paseo": ">=0.11.2 <0.14.0" }
 }
