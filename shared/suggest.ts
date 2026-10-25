@@ -5,8 +5,9 @@
 // Cost: every suggestion sends the whole conversation (up to ~100k tokens) to the session's model and does not share the session's own cache.
 import { transcriptMessages } from "./transcript.ts";
 
-/** 22-10: Opus 5.5 behind LiteLLM returns a thinking block before the text, and it spends the budget: with 48 the suggestion came out cut
-off in 4 of 6 calls (measured). 256 leaves room for the thinking and the line; a rambling answer is still dropped by `suggestionAnswer` (>240 chars). */
+/** Headroom for the one line; a rambling answer is still dropped by `suggestionAnswer` (>240 chars). The thinking is off below
+(`reasoning_effort: none`), so this is not a thinking budget — 22-10 raised 48 to 256 because the thinking ate it (measured: alibaba and
+the resident returned only a thinking block, no text: «respuesta vacía» on every suggestion of a thinking session, Dani 25-10). */
 export const SUGGEST_MAX_TOKENS = 256;
 
 /** Fixed. Dani 14-10: the pill recommends the next step toward the task's GOAL — the model was continuing the assistant's last
@@ -51,6 +52,9 @@ export function suggestBody(lines: string[], prompt = ""): { model: string; body
   const body = JSON.stringify({
     model,
     max_tokens: SUGGEST_MAX_TOKENS,
+    // LiteLLM translates this to `enable_thinking: false` for any alias (manifest, correo-clasificador note 22-10). Without it every
+    // session on a thinking model gets a thinking block instead of a suggestion: the answer arrives empty.
+    reasoning_effort: "none",
     tools: [],
     system: [
       { type: "text", text: CLAUDE_CODE_SYSTEM },
