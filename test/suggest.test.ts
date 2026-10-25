@@ -17,7 +17,8 @@ describe("the body of the suggestion call", () => {
   it("is the transcript alone with the fixed instruction in system, the session's model and no tools", () => {
     const body = JSON.parse(suggestBody([user("monta el pill"), as([{ type: "text", text: "listo" }])])!.body);
     assert.equal(body.model, "claude-opus-5-5");
-    assert.equal(body.max_tokens, 256); // room for the thinking block that precedes the text (measured 22-10: 48 cut 4 of 6)
+    assert.equal(body.max_tokens, 256);
+    assert.equal(body.reasoning_effort, "none"); // without it a thinking session returns only a thinking block and the suggestion is empty (Dani 25-10)
     assert.deepEqual(body.tools, []);
     assert.equal(CLAUDE_CODE_SYSTEM, "You are Claude Code, Anthropic's official CLI for Claude.");
     assert.deepEqual(body.system, [
