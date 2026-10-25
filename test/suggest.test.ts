@@ -163,10 +163,27 @@ describe("the state of a force (Dani 19-10: spinner while it runs, clear error i
 });
 
 describe("the quiet window", () => {
+  it("does not fire without auto: the click of the pill is the only call (Dani 25-10)", async () => {
+    mock.timers.enable({ apis: ["setTimeout"] });
+    try {
+      const broken = { paseo: { agents: { list: async () => { throw new Error("no daemon"); } } } } as any;
+      suggest.setAuto(false); // the default: no automatic generation
+      suggest.arm("a0", broken);
+      mock.timers.tick(61_000);
+      await new Promise((r) => setImmediate(r));
+      assert.equal(suggest.get("a0"), null);
+      assert.equal(suggest.state("a0").error, null); // nothing was armed, so nothing failed
+    } finally {
+      suggest.dispose();
+      mock.timers.reset();
+    }
+  });
+
   it("a cancelled agent has nothing, and a failed generation stays silent", async () => {
     mock.timers.enable({ apis: ["setTimeout"] });
     try {
       const broken = { paseo: { agents: { list: async () => { throw new Error("no daemon"); } } } } as any;
+      suggest.setAuto(true); // the window only runs with auto on
       suggest.arm("a1", broken);
       suggest.cancel("a1");
       mock.timers.tick(61_000);

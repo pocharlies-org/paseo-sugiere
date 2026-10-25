@@ -10,8 +10,11 @@ export const suggestSettings = defineSettings({
   // `invalid` — the screen then sends revision "0" while the store holds "missing" and the first save always conflicts.
   schema: z.object({
     enabled: z.boolean().default(true),
+    // Auto is off by default (Dani 25-10): every automatic suggestion re-sends the whole transcript of its session (~100k tokens
+    // measured 173 calls in one day). With auto off the ✦ stays in the composer and suggests only when the user clicks it.
+    auto: z.boolean().default(false),
     quietSeconds: z.number().int().min(0).max(600).default(60),
   }),
 });
 
-export type SuggestValues = { enabled: boolean; quietSeconds: number };
+export type SuggestValues = { enabled: boolean; auto: boolean; quietSeconds: number };
