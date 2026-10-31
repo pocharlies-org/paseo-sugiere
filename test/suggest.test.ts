@@ -17,7 +17,7 @@ describe("the body of the suggestion call", () => {
   it("is the transcript alone with the fixed instruction in system, the session's model and no tools", () => {
     const body = JSON.parse(suggestBody([user("monta el pill"), as([{ type: "text", text: "listo" }])])!.body);
     assert.equal(body.model, "claude-opus-5-5");
-    assert.equal(body.max_tokens, 256);
+    assert.equal(body.max_tokens, 512);
     assert.equal(body.reasoning_effort, "none"); // without it a thinking session returns only a thinking block and the suggestion is empty (Dani 25-10)
     assert.deepEqual(body.tools, []);
     assert.equal(CLAUDE_CODE_SYSTEM, "You are Claude Code, Anthropic's official CLI for Claude.");
@@ -28,6 +28,12 @@ describe("the body of the suggestion call", () => {
     assert.equal(body.messages.length, 3); // transcript + the constant trigger; the instruction never rides as a user turn
     assert.equal(body.messages[1].role, "assistant");
     assert.equal(body.messages[2].role, "user"); // the trigger: without it the model continues the assistant's last turn (measured 14-10)
+  });
+
+  it("asks the gpt models with reasoning minimal: the ChatGPT backend rejects none (measured 31-10: 400 «Unsupported value: 'none'»)", () => {
+    const body = JSON.parse(suggestBody([user("hola"), as([{ type: "text", text: "hola" }], "gpt-6-astra")])!.body);
+    assert.equal(body.model, "gpt-6-astra");
+    assert.equal(body.reasoning_effort, "minimal");
   });
 
   it("uses the model of the LAST assistant message (the session may have switched model)", () => {
@@ -88,9 +94,10 @@ describe("the body of the suggestion call", () => {
 describe("what counts as a suggestion", () => {
   const answer = (text: string) => ({ content: [{ type: "text", text }] });
 
-  it("is the first non-empty line, with quotes trimmed", () => {
+  it("joins the non-empty lines into one sendable text, with quotes trimmed", () => {
     assert.equal(suggestionAnswer(answer("«Lanza el watcher de la PR.»")), "Lanza el watcher de la PR.");
     assert.equal(suggestionAnswer(answer("\n\nsigue con el merge\n")), "sigue con el merge");
+    assert.equal(suggestionAnswer(answer("ejecuta los tests antes del merge\ny deja el log limpio")), "ejecuta los tests antes del merge y deja el log limpio");
   });
 
   it("an empty answer is a successful nothing-to-suggest", () => {
@@ -99,8 +106,8 @@ describe("what counts as a suggestion", () => {
     assert.equal(suggestionAnswer(null), "");
   });
 
-  it("a rambling answer is not a sendable line", () => {
-    assert.equal(suggestionAnswer(answer("x".repeat(241))), "");
+  it("a long answer is a suggestion too: no length cap since Dani 31-10", () => {
+    assert.equal(suggestionAnswer(answer("x".repeat(241))), "x".repeat(241));
   });
 
   it("an echo of the assistant's last line is nothing to suggest", () => {
