@@ -7,7 +7,7 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import type { PluginHandlerContext, PluginHookContext } from "@getpaseo/plugin/server";
 import { lastAssistantText, suggestBody, suggestionAnswer } from "../shared/suggest.ts";
-import { SessionError, locateSession, routerRequest } from "./session.ts";
+import { SessionError, locateSession, nativeSuggestion, routerRequest } from "./session.ts";
 
 // The settings document in force: off drops every pending and shown suggestion; auto gates only the quiet window (the pill's
 // force works without it); quiet is the silence window.
@@ -107,6 +107,17 @@ async function generate(agentId: string, seq: number, context: PluginHandlerCont
     return entry;
   };
   try {
+    // The daemon's native suggestion  first: it is the CLI's own fork, which hits the session's cached prefix and
+    // costs only the decode. Without the patched daemon there is no file and the call below is the normal path.
+    const native = await nativeSuggestion(agentId, context.paseo);
+    if (native) {
+      const entry = settle(null);
+      if (entry && entry.seq === seq) {
+        console.log(`suggest: nativa  para ${agentId}: ${JSON.stringify(native.slice(0, 60))}`);
+        entry.text = native;
+      }
+      return;
+    }
     const lines = await locateSession(agentId, context.paseo);
     // Sync and read per generation: no override file is the normal case (built-in instruction), and the read adds no await, so the
     // seq guard stays built on the two awaits below. A hand edit of the file takes effect on the next suggestion.

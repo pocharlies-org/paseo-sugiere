@@ -9,6 +9,7 @@ mock.module(new URL("../server/session.ts", import.meta.url).href, {
   namedExports: {
     SessionError: class extends Error {},
     locateSession: async () => transcript,
+    nativeSuggestion: async () => null, // sin fichero nativo : la llamada al router es el camino normal
     routerRequest: async (body: string) => {
       calls += 1;
       return { status: 200, text: JSON.stringify({ model: JSON.parse(body).model, content: [{ type: "text", text: "sigue con el merge" }] }) };
