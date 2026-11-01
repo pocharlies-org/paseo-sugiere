@@ -18,7 +18,7 @@ test("suggestion card uses the sheet-aware input, edits before sending and has a
     react: {
       useState(initial: unknown) {
         const index = cursor++;
-        if (!(index in states)) states[index] = initial;
+        if (!(index in states)) states[index] = typeof initial === "function" ? (initial as () => unknown)() : initial; // React runs lazy initializers
         return [states[index], (value: unknown) => { states[index] = value; }];
       },
       useEffect(effect: () => void) { if (!states.length || states[0] === null) effects.push(effect); },
@@ -65,7 +65,8 @@ test("suggestion card uses the sheet-aware input, edits before sending and has a
     assert.equal(render(), null);
     effects.splice(0).forEach((effect) => effect());
     let card = render();
-    const [input, send] = card.props.children;
+    const [input, hint, send] = card.props.children;
+    assert.equal(hint, null, "a short suggestion needs no scroll hint");
     assert.equal(input.type, "SheetAwareInput");
     assert.equal(closed, false);
     assert.equal(card.props.style.flexDirection, compact ? "column" : "row");
@@ -74,12 +75,17 @@ test("suggestion card uses the sheet-aware input, edits before sending and has a
       assert.ok(send.props.style.minWidth >= 44);
       assert.equal(send.props.style.alignSelf, "flex-start");
       assert.ok(input.props.style.fontSize >= 16);
+      assert.ok(input.props.style.height >= 4 * 22, "mobile field shows at least four rows");
+      assert.equal(input.props.style.borderWidth, 1, "mobile field is framed so its edge reads as a scrollable box");
     }
     input.props.onChangeText("Edited suggestion");
     card = render();
-    card.props.children[1].props.onPress();
+    card.props.children[2].props.onPress();
     assert.equal(sent.at(-1), "Edited suggestion");
     assert.equal(closed, true);
   }
   stop();
+  assert.equal(exports.textRows("corta"), 1);
+  assert.equal(exports.textRows("a".repeat(68) + "\nb"), 3);
+  assert.ok(exports.textRows("palabra ".repeat(60)) > 10, "a long suggestion overflows ten rows and gets the hint");
 });
