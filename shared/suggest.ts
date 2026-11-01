@@ -5,10 +5,9 @@
 // Cost: every suggestion sends the whole conversation (up to ~100k tokens) to the session's model and does not share the session's own cache.
 import { transcriptMessages } from "./transcript.ts";
 
-/** The suggestion has no length cap (Dani 31-10: «puede ser lo más largo que quieras»), so this is a real budget: thinking is off
-below (`reasoning_effort`), but gpt models answer with `minimal`, which still thinks. 22-10 raised 48 to 256 because the thinking ate
-it (measured: alibaba and the resident returned only a thinking block, no text: «respuesta vacía», Dani 25-10); 31-10 raised it to 512. */
-export const SUGGEST_MAX_TOKENS = 512;
+/** Sin límite práctico de salida (Dani 01-11: «cortarlo es improductivo» — 512 recortaba). El API exige un entero: omitirlo o
+null da 400/500 en Anthropic y ChatGPT (medido; null solo lo acepta vLLM), así que va el máximo que los tres backends aceptan. */
+export const SUGGEST_MAX_TOKENS = 32_000;
 
 /** Fixed. Dani 14-10: the pill recommends the next step toward the task's GOAL — the model was continuing the assistant's last
 turn instead of recommending (measured: «PR #14 en vigilancia…» came out). Sendable rule kept: if what comes next is the user's
