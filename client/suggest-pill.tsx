@@ -15,9 +15,16 @@ type Agent = { id: string; workspaceId?: string | null; status: string; archived
 
 const POLL_MS = 10_000;
 const LINE = 18; // one row of the field; `rows` is not in the host's react-native types, so the height is set from here
+const MOBILE_LINE = 22;
+// Mobile field: sized ONCE from the text when the card opens (4 to 10 rows), never while editing — see SuggestCard.
+// shortcut: rows are estimated at ~34 characters per row of an iPhone-width sheet; measure the width if wrapping looks off.
+export function textRows(text: string): number {
+  return text.split("\n").reduce((sum, line) => sum + Math.max(1, Math.ceil(line.length / 34)), 0);
+}
 
 // The popover of the host is already the frame: the card adds no border and no fill (Dani 17-10: «la ventana es muy grande, más
-// minimalista»). The field is a FIXED two lines: on mobile the card is a bottom sheet with dynamic sizing, and a field that resizes
+// minimalista»). On mobile the field has a FIXED height chosen when the card opens (Dani 01-11: a long text in two lines did not
+// look scrollable): up to ten rows, framed so its edge shows that more text continues below, plus a hint when it overflows. Fixed: on mobile the card is a bottom sheet with dynamic sizing, and a field that resizes
 // itself when the keyboard opens makes that sheet re-measure and collapse (Dani 20-10: tapping the text closed the window). The text
 // scrolls inside the field instead of growing it. Enter sends: with `blurOnSubmit` on a multiline field react-native-web fires
 // onSubmitEditing on Enter and swallows the newline, Shift+Enter still wraps. Compact layouts put a touch-sized send button below
@@ -42,16 +49,21 @@ function SuggestCard({
     }
   }, []);
   const [suggestion, setSuggestion] = useState<string | null>(null); // the edited suggestion, null until the user touches the field
+  const [rows] = useState(() => Math.min(10, Math.max(4, textRows(text))));
+  const overflows = compact && textRows(text) > 10;
   const styles = useMemo(
     () => ({
       // outlineWidth 0 + outlineColor transparent: el anillo de foco del host se pinta con `outline`, y así lo apagan también los
       // inputs propios de Paseo (composer, buscar del panel, revisión). Medido 17-10: sin esto, rectángulo verde alrededor (Dani: «cutre»).
       row: { flexDirection: compact ? "column" as const : "row" as const, alignItems: compact ? "stretch" as const : "flex-end" as const, gap: 8 },
-      input: { flex: compact ? undefined : 1, height: (compact ? 22 : LINE) * 2, padding: 0, color: theme.colors.foreground, fontSize: compact ? 16 : 13, lineHeight: compact ? 22 : LINE, outlineWidth: 0, outlineColor: "transparent" },
+      input: compact
+        ? { height: rows * MOBILE_LINE + 20, paddingHorizontal: 12, paddingVertical: 10, borderWidth: 1, borderColor: theme.colors.border, borderRadius: 8, color: theme.colors.foreground, fontSize: 16, lineHeight: MOBILE_LINE, outlineWidth: 0, outlineColor: "transparent" }
+        : { flex: 1, height: LINE * 2, padding: 0, color: theme.colors.foreground, fontSize: 13, lineHeight: LINE, outlineWidth: 0, outlineColor: "transparent" },
+      hint: { color: theme.colors.foregroundMuted, fontSize: 13 },
       send: { minWidth: compact ? 44 : 20, height: compact ? 44 : 20, paddingHorizontal: compact ? 16 : 0, ...(compact ? { alignSelf: "flex-start" as const } : {}), borderRadius: 10, alignItems: "center" as const, justifyContent: "center" as const, backgroundColor: theme.colors.accent },
       arrow: { color: theme.colors.accentForeground, fontSize: 13, lineHeight: 16 },
     }),
-    [theme, compact],
+    [theme, compact, rows],
   );
   const submit = () => {
     const t = (suggestion ?? text).trim();
@@ -62,6 +74,7 @@ function SuggestCard({
   return (
     <View style={styles.row}>
       <TextInput accessibilityLabel="Suggested next message" multiline blurOnSubmit defaultValue={text} onChangeText={setSuggestion} onSubmitEditing={submit} style={styles.input} />
+      {overflows ? <Text style={styles.hint}>Desliza dentro del texto para ver el resto</Text> : null}
       <Pressable accessibilityRole="button" accessibilityLabel="Send" onPress={submit} style={styles.send}>
         <Text style={styles.arrow}>{compact ? "Send ↑" : "↑"}</Text>
       </Pressable>
