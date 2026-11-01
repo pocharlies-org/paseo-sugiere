@@ -1,6 +1,6 @@
 // Finding the agent's transcript and the one call to the model door. The suggestion goes with the session's own model. The house retired the loopback claude-router (18791, unit stopped and deleted 20-10): the door is now LiteLLM, whose url and key live in
 // ~/.config/claude-local/env (`export NOMBRE=valor`, one per line) — the same file company_env.py reads. The key goes in the header, never in argv.
-import { readdir, readFile, stat } from "node:fs/promises";
+import { readdir, readFile, rm, stat } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import type { PluginHandlerContext } from "@getpaseo/plugin/server";
@@ -44,6 +44,28 @@ export async function locateSession(agentId: string, paseo: PaseoApi): Promise<s
   } catch (error) {
     if (error instanceof SessionError) throw error;
     throw new SessionError("unreadable");
+  }
+}
+
+/** The native suggestion of the session : the patched Paseo daemon writes the `prompt_suggestion` the CLI forks
+from the session's own cached prefix to `$PASEO_HOME/suggest/<claude-session-id>.json`. Consumed on read (one suggestion
+per turn) and only while fresh (15 min): a stale file belongs to a turn the user already answered. Null on anything else —
+the caller then makes its own call as before. */
+export async function nativeSuggestion(agentId: string, paseo: PaseoApi): Promise<string | null> {
+  try {
+    const { entries } = await paseo.agents.list({ page: { limit: 200 } });
+    const sessionId = (entries.find(({ agent }) => agent.id === agentId)?.agent as { persistence?: { sessionId?: string } } | undefined)?.persistence?.sessionId;
+    if (!sessionId) return null;
+    const home = process.env.PASEO_HOME || join(homedir(), ".paseo");
+    const file = join(home, "suggest", `${sessionId}.json`);
+    const raw = await readFile(file, "utf8").catch(() => "");
+    if (!raw) return null;
+    await rm(file, { force: true }).catch(() => {});
+    const { text, at } = JSON.parse(raw) as { text?: unknown; at?: unknown };
+    if (typeof text !== "string" || typeof at !== "number" || Date.now() - at > 15 * 60_000) return null;
+    return text.trim() || null;
+  } catch {
+    return null;
   }
 }
 
