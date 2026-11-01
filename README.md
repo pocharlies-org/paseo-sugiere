@@ -6,9 +6,10 @@ Plugin de Paseo: al acabar un turno y pasar la sesión un minuto en silencio, el
 mensaje que el usuario debería enviar a continuación, y lo muestra como píldora en el composer de ese
 agente. Al pulsarla, en web y escritorio el texto se añade al prompt de ese agente (una línea debajo de lo que ya hubiera, sin
 reemplazarlo) para revisarlo y enviarlo con el Enter normal. Donde eso no se puede (móvil, layout compacto, prompt no localizable o
-ambiguo) sale la tarjeta: el texto ya editable en el sitio, sin bordes ni caja propia y con la altura justa del texto; Enter, o el
-botón pequeño a su derecha, manda lo que haya en el campo (como lo sugiera el modelo o editado por el usuario), Mayús+Enter
-saltos de línea. Cualquier turno nuevo tira la sugerencia pendiente. Es el port del `session-assist` que funcionaba en el fork de OpenChamber.
+ambiguo) sale la tarjeta: el texto ya editable en el sitio, sin bordes ni caja propia, en un campo de dos líneas con scroll.
+En móvil usa la entrada de Paseo integrada con el teclado de la hoja y un botón «Send ↑» de al menos 44 puntos debajo del texto,
+alineado a la izquierda; en escritorio mantiene la flecha a la derecha. Enter o el botón manda lo que haya en el campo
+(como lo sugiera el modelo o editado por el usuario); Mayús+Enter inserta saltos de línea. Cualquier turno nuevo tira la sugerencia pendiente. Es el port del `session-assist` que funcionaba en el fork de OpenChamber.
 
 Es un plugin hermano del de [claude-account-switcher](https://github.com/pocharlies-org/claude-account-switcher):
 no consume su contrato `file.claude-cuentas.v1`: la llamada va a LiteLLM con la url y la clave de

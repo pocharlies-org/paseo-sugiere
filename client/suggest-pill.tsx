@@ -1,7 +1,7 @@
 import type { PluginButtonContentProps, PluginButtonIconProps, PluginClientContext } from "@getpaseo/plugin/client";
-import { Icon } from "@getpaseo/plugin/client/react-native";
+import { Icon, TextInput } from "@getpaseo/plugin/client/react-native";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Pressable, Text, TextInput, View } from "react-native";
+import { Pressable, Text, View } from "react-native";
 import { suggestForce, suggestGet } from "../shared/contract.ts";
 import { insertSuggestion, registerPillAnchor } from "./composer-bridge.ts";
 
@@ -20,9 +20,9 @@ const LINE = 18; // one row of the field; `rows` is not in the host's react-nati
 // minimalista»). The field is a FIXED two lines: on mobile the card is a bottom sheet with dynamic sizing, and a field that resizes
 // itself when the keyboard opens makes that sheet re-measure and collapse (Dani 20-10: tapping the text closed the window). The text
 // scrolls inside the field instead of growing it. Enter sends: with `blurOnSubmit` on a multiline field react-native-web fires
-// onSubmitEditing on Enter and swallows the newline, Shift+Enter still wraps. The card is the field plus one small send button on its
-// right (Dani 18-10: click + Enter was two steps). It is the fallback: on mount it first tries the prompt, draws nothing while it
-// decides, and shows up only if the bridge could not.
+// onSubmitEditing on Enter and swallows the newline, Shift+Enter still wraps. Compact layouts put a touch-sized send button below
+// the field. The host TextInput registers focus with the sheet so opening the keyboard does not hide it. On mount it first tries
+// the prompt, draws nothing while it decides, and shows up only if the bridge could not.
 function SuggestCard({
   text,
   theme,
@@ -30,6 +30,7 @@ function SuggestCard({
   send,
   agentId,
   onInserted,
+  layout: { compact },
 }: PluginButtonContentProps & { text: string; send: (text: string) => void; agentId: string; onInserted: () => void }) {
   const [inserted, setInserted] = useState<boolean | null>(null); // null while the bridge decides
   useEffect(() => {
@@ -45,12 +46,12 @@ function SuggestCard({
     () => ({
       // outlineWidth 0 + outlineColor transparent: el anillo de foco del host se pinta con `outline`, y así lo apagan también los
       // inputs propios de Paseo (composer, buscar del panel, revisión). Medido 17-10: sin esto, rectángulo verde alrededor (Dani: «cutre»).
-      row: { flexDirection: "row" as const, alignItems: "flex-end" as const, gap: 8 },
-      input: { flex: 1, height: LINE * 2, padding: 0, color: theme.colors.foreground, fontSize: 13, lineHeight: LINE, outlineWidth: 0, outlineColor: "transparent" },
-      send: { width: 20, height: 20, borderRadius: 10, alignItems: "center" as const, justifyContent: "center" as const, backgroundColor: theme.colors.accent },
+      row: { flexDirection: compact ? "column" as const : "row" as const, alignItems: compact ? "stretch" as const : "flex-end" as const, gap: 8 },
+      input: { flex: compact ? undefined : 1, height: (compact ? 22 : LINE) * 2, padding: 0, color: theme.colors.foreground, fontSize: compact ? 16 : 13, lineHeight: compact ? 22 : LINE, outlineWidth: 0, outlineColor: "transparent" },
+      send: { minWidth: compact ? 44 : 20, height: compact ? 44 : 20, paddingHorizontal: compact ? 16 : 0, ...(compact ? { alignSelf: "flex-start" as const } : {}), borderRadius: 10, alignItems: "center" as const, justifyContent: "center" as const, backgroundColor: theme.colors.accent },
       arrow: { color: theme.colors.accentForeground, fontSize: 13, lineHeight: 16 },
     }),
-    [theme],
+    [theme, compact],
   );
   const submit = () => {
     const t = (suggestion ?? text).trim();
@@ -60,9 +61,9 @@ function SuggestCard({
   if (inserted !== false) return null;
   return (
     <View style={styles.row}>
-      <TextInput multiline blurOnSubmit defaultValue={text} onChangeText={setSuggestion} onSubmitEditing={submit} style={styles.input} />
-      <Pressable accessibilityLabel="Send" onPress={submit} style={styles.send}>
-        <Text style={styles.arrow}>↑</Text>
+      <TextInput accessibilityLabel="Suggested next message" multiline blurOnSubmit defaultValue={text} onChangeText={setSuggestion} onSubmitEditing={submit} style={styles.input} />
+      <Pressable accessibilityRole="button" accessibilityLabel="Send" onPress={submit} style={styles.send}>
+        <Text style={styles.arrow}>{compact ? "Send ↑" : "↑"}</Text>
       </Pressable>
     </View>
   );
