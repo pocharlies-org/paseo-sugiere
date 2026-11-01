@@ -37,7 +37,11 @@ if [ "$(readlink "$actual" 2>/dev/null || true)" != "$version-$sha" ]; then
   ln -s "$version-$sha" "$actual.tmp.$$" && mv -T "$actual.tmp.$$" "$actual"
   echo "current -> $version-$sha"
 fi
-if paseo plugin ls --no-headers 2>/dev/null | awk '{print $1}' | grep -qx "$id"; then
+fuente=$(paseo plugin ls --json | node -e "let s='';process.stdin.on('data',x=>s+=x).on('end',()=>{const p=JSON.parse(s).find(p=>p.id===process.argv[1]);process.stdout.write(p?p.source:'')})" "$id")
+if [ "$fuente" = git ]; then
+  # Un reload solo recarga el checkout que ya tiene el host: hay que moverlo al commit del tronco.
+  paseo plugin update "$id" --ref "${DEPLOY_REF:-$(git rev-parse HEAD)}" >/dev/null
+elif [ -n "$fuente" ]; then
   paseo plugin reload "$id"
 else
   paseo plugin install "$actual"
