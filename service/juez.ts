@@ -70,7 +70,12 @@ export async function residente(state: string): Promise<{ choice: string; riesgo
   const m = salida.match(/\{[\s\S]*\}/);
   if (!m) throw new Error(`el residente no dio JSON: ${salida.slice(0, 120)}`);
   const out = JSON.parse(m[0]);
-  return { choice: String(out.veredicto ?? "").toLowerCase(), riesgo: String(out.riesgo ?? "").toLowerCase(),
+  // El residente escribe a veces «SEGUIR», o «seguir (…»: se compara por prefijo y lo que no sea uno de los dos
+  // veredictos no aprueba (y se queda en el log para saber por qué).
+  const crudo = String(out.veredicto ?? "").toLowerCase().trim();
+  const choice = crudo.startsWith("seguir") ? "seguir" : crudo.startsWith("detener") ? "detener" : crudo;
+  if (choice !== "seguir" && choice !== "detener") console.warn(JSON.stringify({ residente: "veredicto ilegible", crudo }));
+  return { choice, riesgo: String(out.riesgo ?? "").toLowerCase(),
     p: Number(out.p ?? 0), motivo: String(out.motivo ?? "").slice(0, 200) };
 }
 

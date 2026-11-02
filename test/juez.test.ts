@@ -46,6 +46,12 @@ describe("la puerta", () => {
     assert.equal(v.riesgo, "bajo");
   });
 
+  it("un veredicto del residente con mayúsculas o cola se lee igual", async () => {
+    mock.method(globalThis, "fetch", async (url: any) =>
+      String(url).includes("ollaya") ? jev("seguir", 0.1) : residente({ veredicto: "SEGUIR (claro)", riesgo: "ninguno", p: 0 }));
+    assert.equal((await dictaminar("abre el PR contra deploy/prod", ctx)).ok, true);
+  });
+
   it("dinero no escala ni se aprueba, venga de donde venga", async () => {
     const f = mock.method(globalThis, "fetch", async (url: any) =>
       String(url).includes("ollaya") ? jev("seguir", 0.99, "dinero") : residente({ veredicto: "seguir", riesgo: "ninguno", p: 0.99 }));
