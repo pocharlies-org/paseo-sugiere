@@ -84,7 +84,7 @@ function SuggestCard({
 }
 
 // The host reports `layout.compact` to components only, never to the pill registration (Dani 02-11: «en el móvil acaban
-// amontonados»): the icon, the pill's only component, hands it over here and the label is blanked from there.
+// amontonados»): the icon, the pill's only component, hands it over here and the label drops the text from there.
 const compactFor = new Map<string, boolean>();
 const compactReported = new Map<string, (compact: boolean) => void>();
 
@@ -155,13 +155,13 @@ export function addSuggestPill(client: PluginClientContext): () => void {
       const current = agents.get(agent.id);
       if (current) show(current);
     });
-    // The icon is already a Sparkles, so the label carries no ✦ of its own (el doble ✦ se veía descentrado), and on a
-    // compact layout it carries nothing at all — the row has no room; the text and the state stay in the popover the pill opens.
+    // The suggestion's text goes without a ✦ of its own (the icon is already a Sparkles). The host refuses an empty label
+    // («Plugin button needs label», so no pill at all: Dani 02-11, «no sale el botón»): idle and compact fall back to the ✦.
     const compact = compactFor.get(agent.id) ?? false;
     const button = {
       title: text ? "Suggested next message" : pending ? "Generating…" : error ? "Last suggestion failed" : "Suggest now",
       icon: SuggestIcon,
-      label: compact ? "" : text ? text : pending ? "…" : error ? "!" : "",
+      label: !compact && text ? text : pending ? "…" : error ? "!" : "✦",
       // Idle agents always carry the pill: with a suggestion it opens the card, without one it is the small ✦ that forces a
       // generation on click (Dani 19-10), spinning while it resolves and showing the failure once if it does not.
       // Hidden while a turn runs — a suggestion is never asked for mid-turn.
