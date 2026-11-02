@@ -89,3 +89,56 @@ test("suggestion card uses the sheet-aware input, edits before sending and has a
   assert.equal(exports.textRows("a".repeat(68) + "\nb"), 3);
   assert.ok(exports.textRows("palabra ".repeat(60)) > 10, "a long suggestion overflows ten rows and gets the hint");
 });
+
+// A generation that finishes while the user is in another window must not put its text in that window's prompt: it waits on the
+// pill of its own window until that button is pressed (Dani 02-11). The bridge here answers `true` — a working bridge — to prove
+// the pill does not use it on its own.
+test("a forced suggestion stays on the pill until its button is pressed", async () => {
+  const source = readFileSync(new URL("../client/suggest-pill.tsx", import.meta.url), "utf8");
+  const { outputText } = ts.transpileModule(source, {
+    compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX },
+  });
+  const jsx = (type: unknown, props: unknown) => ({ type, props });
+  const inserted: string[] = [];
+  const modules: Record<string, unknown> = {
+    "react/jsx-runtime": { jsx, jsxs: jsx },
+    react: { useState: (i: unknown) => [typeof i === "function" ? (i as () => unknown)() : i, () => {}], useEffect: () => {}, useMemo: (f: () => unknown) => f(), useRef: () => ({ current: null }) },
+    "react-native": { View: "View", Text: "Text", Pressable: "Pressable" },
+    "@getpaseo/plugin/client/react-native": { Icon: "Icon", TextInput: "Input" },
+    "../shared/contract.ts": { suggestGet: "get", suggestForce: "force" },
+    "./composer-bridge.ts": {
+      insertSuggestion: (agentId: string, text: string) => { inserted.push(`${agentId} ${text}`); return true; },
+      registerPillAnchor: () => () => {},
+    },
+  };
+  let tick: () => void = () => {};
+  const exports: any = {};
+  new Function("require", "exports", "setInterval", "clearInterval", outputText)(
+    (name: string) => { assert.ok(name in modules, name); return modules[name]; },
+    exports,
+    (callback: () => void) => { tick = callback; return 1; },
+    () => {},
+  );
+  let button: any;
+  const stop = exports.addSuggestPill({
+    addComposerPill: ({ button: next }: any) => { button = next; return { update: (n: unknown) => { button = n; }, remove() {} }; },
+    rpc: async () => ({ started: true, text: "Forzada" }),
+    paseo: {
+      agents: {
+        list: async () => ({ subscription: { subscribe: ({ snapshot }: any) => snapshot({ entries: [{ agent: { id: "a", workspaceId: "w", status: "idle" } }] }) } }),
+        ref: () => ({ send: () => {} }),
+      },
+    },
+  });
+  const settled = () => new Promise<void>((resolve) => setImmediate(resolve));
+  await settled();
+  assert.equal(button.behavior.kind, "action", "an idle agent with no suggestion yet shows the plain ✦");
+  await button.behavior.onPress();
+  await settled();
+  assert.deepEqual(inserted, [], "the click only asks for a generation");
+  tick(); // the resident answers
+  await settled();
+  assert.deepEqual(inserted, [], "the answer is not written into any prompt by itself");
+  assert.equal(button.label, "✦ Forzada", "it waits on the pill of its own window");
+  stop();
+});

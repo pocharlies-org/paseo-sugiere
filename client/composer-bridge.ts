@@ -16,15 +16,19 @@ export function registerPillAnchor(agentId: string, node: Element): () => void {
   };
 }
 
-const visibleComposers = (root: Element) =>
-  Array.from(root.querySelectorAll<HTMLTextAreaElement>(COMPOSER)).filter((box) => box.getClientRects().length > 0);
+const composersUnder = (root: Element) => Array.from(root.querySelectorAll<HTMLTextAreaElement>(COMPOSER));
 
-// The composer of the pane the pill sits in: climb from the pill until an ancestor holds a visible composer, and take it only if it
-// is the only one there. Two panes side by side meet at an ancestor with two, which is ambiguous: no insertion, never the wrong agent.
+// The composer of the pane the pill sits in: the first ancestor that holds any composer, taken only when it holds exactly one and that
+// one is displayed. Stopping at the first ancestor holding a VISIBLE composer let the climb walk over the pane whose composer was
+// hidden — the window the user left — and land on the single visible composer of the window now on screen, writing there (Dani 02-11:
+// «si he cambiado de ventana lo injecta en la ventana que no toca»). A hidden composer of its own means the pill's window is not the
+// one in front: nothing is written and the suggestion stays on its button until it is pressed. Two composers in the first ancestor
+// (panes side by side) remain as ambiguous as they were.
 function composerFor(anchor: Element): HTMLTextAreaElement | null {
+  if (anchor.getClientRects().length === 0) return null; // the pill itself is off screen: its window is not the one in front
   for (let el = anchor.parentElement; el && el !== document.body; el = el.parentElement) {
-    const found = visibleComposers(el);
-    if (found.length) return found.length === 1 ? found[0]! : null;
+    const found = composersUnder(el);
+    if (found.length) return found.length === 1 && found[0]!.getClientRects().length > 0 ? found[0]! : null;
   }
   return null;
 }

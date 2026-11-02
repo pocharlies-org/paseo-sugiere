@@ -6,7 +6,8 @@ import { suggestForce, suggestGet } from "../shared/contract.ts";
 import { insertSuggestion, registerPillAnchor } from "./composer-bridge.ts";
 
 // One composer pill per idle agent: with a suggestion ready it opens the card, without one it is a small ✦ whose click forces a
-// generation now (Dani 19-10). Tapping a suggestion puts the text in the agent's prompt (composer-bridge.ts, web and
+// generation now (Dani 19-10). Nothing reaches the prompt without a press: a generation that finishes while another window is in
+// front stays on this pill (Dani 02-11). Tapping a suggestion puts the text in the agent's prompt (composer-bridge.ts, web and
 // desktop; Dani 18-10) and, where that cannot be done, opens the text already editable in place, and Enter sends it as the
 // next user message (Dani 16-10: «editar» must edit the suggestion in place; 17-10: the two buttons were dead weight — the field
 // is the whole card). The instruction the model gets is not edited here: it is the file the server reads. The text lives in
@@ -183,7 +184,7 @@ export function addSuggestPill(client: PluginClientContext): () => void {
                 });
                 if (stopped || !started) return; // off switch
                 // The click cannot wait for the answer: the generation outlives the host's 60 s RPC timeout (measured 19-10).
-                // Fast-poll until it settles: text inserts like the card, error shows once; the pill spins meanwhile (Dani 19-10).
+                // Fast-poll until it settles: the text waits on the pill until its button is pressed, error shows once; the pill spins meanwhile (Dani 19-10, 02-11).
                 pendingFor.set(agent.id, true);
                 errors.delete(agent.id);
                 show(agents.get(agent.id) ?? agent);
@@ -210,11 +211,8 @@ export function addSuggestPill(client: PluginClientContext): () => void {
                       pendingFor.delete(agent.id);
                       if (failed) {
                         errors.set(agent.id, failed);
-                      } else if (insertSuggestion(agent.id, forced!)) {
-                        consumed.set(agent.id, forced!);
-                        texts.set(agent.id, null);
                       } else {
-                        texts.set(agent.id, forced!); // the bridge could not: the next click opens the card
+                        texts.set(agent.id, forced!); // it waits on this pill's button: injecting it here would write into whichever window is in front (Dani 02-11)
                       }
                       show(agents.get(agent.id) ?? current);
                     },

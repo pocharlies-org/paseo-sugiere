@@ -4,7 +4,9 @@
 
 Plugin de Paseo: al acabar un turno y pasar la sesión un minuto en silencio, el mismo modelo de la sesión propone el
 mensaje que el usuario debería enviar a continuación, y lo muestra como píldora en el composer de ese
-agente. Al pulsarla, en web y escritorio el texto se añade al prompt de ese agente (una línea debajo de lo que ya hubiera, sin
+agente. Nada entra en el prompt sin pulsar: la sugerencia espera en la píldora de su ventana, y el puente escribe solo en el composer de
+esa ventana — si no está delante (pestaña o ventana cambiada) no escribe en ninguna otra y la píldora la guarda hasta que la pulses
+(Dani 02-11). Al pulsarla, en web y escritorio el texto se añade al prompt de ese agente (una línea debajo de lo que ya hubiera, sin
 reemplazarlo) para revisarlo y enviarlo con el Enter normal. Donde eso no se puede (móvil, layout compacto, prompt no localizable o
 ambiguo) sale la tarjeta: el texto ya editable en el sitio, sin bordes ni caja propia, en un campo de dos líneas con scroll.
 En móvil usa la entrada de Paseo integrada con el teclado de la hoja y un botón «Send ↑» de al menos 44 puntos debajo del texto,

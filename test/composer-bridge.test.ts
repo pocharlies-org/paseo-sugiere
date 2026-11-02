@@ -8,10 +8,14 @@ import { insertSuggestion, registerPillAnchor } from "../client/composer-bridge.
 class El {
   parentElement: El | null = null;
   children: El[] = [];
+  visible = true; // on screen: an element of a hidden tab or window has no client rects, and the bridge asks that of pill and composer alike
   add<T extends El>(child: T): T {
     child.parentElement = this;
     this.children.push(child);
     return child;
+  }
+  getClientRects() {
+    return this.visible ? [{}] : [];
   }
   querySelectorAll(): Box[] {
     return this.children.flatMap((child) => (child instanceof Box ? [child] : child.querySelectorAll()));
@@ -21,7 +25,6 @@ class El {
 class Box extends El {
   static focused: Box | null = null;
   #value = "";
-  visible = true;
   stubborn = false; // a box that drops every write
   caret = -1;
   scrollTop = 0;
@@ -38,9 +41,6 @@ class Box extends El {
   }
   setSelectionRange(start: number) {
     this.caret = start;
-  }
-  getClientRects() {
-    return this.visible ? [{}] : [];
   }
   dispatchEvent(event: { type: string }) {
     this.events.push(event.type);
@@ -88,7 +88,7 @@ const pane = (parent: El, agentId: string) => {
   const icon = surface.add(new El()).add(new El());
   const box = surface.add(new Box());
   offs.push(registerPillAnchor(agentId, icon as unknown as Element));
-  return { surface, box };
+  return { surface, icon, box };
 };
 
 describe("the composer bridge", () => {
@@ -120,11 +120,20 @@ describe("the composer bridge", () => {
     assert.equal(left.box.value, "para a");
   });
 
-  it("does not count a composer that is not displayed (an inactive tab)", () => {
-    const { surface, box } = pane(body, "a");
-    surface.add(new Box()).visible = false;
-    assert.equal(insertSuggestion("a", "hola"), true);
-    assert.equal(box.value, "hola");
+  it("writes nothing when its own pane's composer is not displayed: the window in front is another one (Dani 02-11)", () => {
+    const split = body.add(new El());
+    const left = pane(split, "a");
+    const right = pane(split, "b");
+    left.box.visible = false; // agent A's tab is behind: its own composer is not on screen, the other pane's is
+    assert.equal(insertSuggestion("a", "hola"), false);
+    assert.equal(left.box.value + right.box.value, "");
+  });
+
+  it("writes nothing when the pill itself is off screen", () => {
+    const { icon, box } = pane(body, "a");
+    icon.visible = false;
+    assert.equal(insertSuggestion("a", "hola"), false);
+    assert.equal(box.value, "");
   });
 
   it("refuses when the first ancestor holding a composer holds two: nothing is written", () => {

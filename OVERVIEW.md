@@ -15,9 +15,12 @@ prompt, ready to edit and send with Enter.
 - When a turn ends completed and nothing happens for 60 s (the settings screen offers 30 s, 1, 2 or 5 min), one call with the
   conversation goes to the model. Finished work, optional offers and decisions that are yours to make get no suggestion, so
   no pill appears. The answer is capped at 256 tokens (the model may spend part of it thinking before the line).
-- The pill is per agent. Tapping it **appends** the text to that agent's prompt, a line below what you already typed, and
-  never replaces it; **Ctrl+Z** takes it back. Where it cannot reach the prompt (phones, narrow layouts, or a prompt it cannot
-  tell apart from another pane's), the pill opens a small editable card instead, with a send button.
+- The pill is per agent. Nothing enters the prompt on its own — a finished generation waits on its pill until you press it. Tapping
+  the pill **appends** the text to that agent's prompt, a line below what you already typed, and
+  never replaces it; **Ctrl+Z** takes it back. It writes only into the composer of the window the pill sits in: when that window is
+  not the one in front it writes nothing rather than into the one you are looking at. Where it cannot reach the prompt (phones,
+  narrow layouts, or a prompt it cannot tell apart from another pane's), the pill opens a small editable card instead, with a send
+  button.
 - A new turn drops the pending suggestion. Nothing is ever sent for you: sending is always your tap or Enter.
 - Settings (plugin settings screen): on/off, and the quiet window.
 
@@ -48,7 +51,8 @@ This plugin was built for one setup and is published as it runs there. Read this
   `$PASEO_HOME/config.json` it uses only each Claude provider's `CLAUDE_CONFIG_DIR`; it reads no account token (only the LiteLLM url and key from the env file above).
 - **Writes**, in the Paseo client on web and desktop, into the composer's text box: it types the text into it (`execCommand`
   `insertText`, with an `input` event as the fallback), so Paseo's own handlers store the draft as if you had typed it. It
-  looks for the box of the pane the pill sits in and does nothing if it finds none or more than one.
+  looks for the box of the pane the pill sits in and does nothing if that pane holds more than one, if its own box is not displayed
+  (the window is behind), or if the pill itself is off screen.
 - **Self-update, on the author's machine only.** `index.server.ts` spawns `scripts/autodeploy.sh` at start and every five
   minutes, but only if `~/.local/share/paseo-sugiere/paseo-plugin/current/scripts/autodeploy.sh` exists. `scripts/deploy.sh`
   creates that folder, and neither the registry nor Paseo's installer ever runs it, so on an installed copy the check fails
