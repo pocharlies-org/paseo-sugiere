@@ -83,11 +83,19 @@ function SuggestCard({
   );
 }
 
+// The host reports `layout.compact` to components only, never to the pill registration (Dani 02-11: «en el móvil acaban
+// amontonados»): the icon, the pill's only component, hands it over here and the label is blanked from there.
+const compactFor = new Map<string, boolean>();
+const compactReported = new Map<string, (compact: boolean) => void>();
+
 // The pill's icon is also the anchor of the composer bridge: the popover's content is portaled to body, the icon sits in the pane.
 function SuggestIcon(props: PluginButtonIconProps) {
   const node = useRef<View>(null);
   const agentId = props.context === "agent" ? props.agentId : null;
   const { compact } = props.layout;
+  useEffect(() => {
+    if (agentId) compactReported.get(agentId)?.(compact);
+  }, [agentId, compact]);
   useEffect(() => {
     // A compact layout can host the agent in a sheet with no composer of its own, where the climb could meet another agent's.
     if (!agentId || compact || !node.current) return;
@@ -111,7 +119,7 @@ export function addSuggestPill(client: PluginClientContext): () => void {
   const pills = new Map<string, ReturnType<PluginClientContext["addComposerPill"]>>();
   const texts = new Map<string, string | null>();
   const consumed = new Map<string, string>(); // the suggestion already put in the prompt: the poll must not bring it back until the next turn
-  const pendingFor = new Map<string, boolean>(); // a force in flight: the pill spins (✦…) and is disabled until it settles
+  const pendingFor = new Map<string, boolean>(); // a force in flight: the pill shows «…» and is disabled until it settles
   const errors = new Map<string, string>(); // the last force's failure, shown once by the popover
   let stopped = false;
   const lifetime = new AbortController();
@@ -124,6 +132,8 @@ export function addSuggestPill(client: PluginClientContext): () => void {
     consumed.delete(id);
     pendingFor.delete(id);
     errors.delete(id);
+    compactFor.delete(id);
+    compactReported.delete(id);
   };
   const show = (agent: Agent) => {
     if (stopped) return;
@@ -139,10 +149,19 @@ export function addSuggestPill(client: PluginClientContext): () => void {
     const pending = pendingFor.get(agent.id) ?? false;
     const error = errors.get(agent.id) ?? null;
     const pill = pills.get(agent.id);
+    compactReported.set(agent.id, (next) => {
+      if (compactFor.get(agent.id) === next) return;
+      compactFor.set(agent.id, next);
+      const current = agents.get(agent.id);
+      if (current) show(current);
+    });
+    // The icon is already a Sparkles, so the label carries no ✦ of its own (el doble ✦ se veía descentrado), and on a
+    // compact layout it carries nothing at all — the row has no room; the text and the state stay in the popover the pill opens.
+    const compact = compactFor.get(agent.id) ?? false;
     const button = {
       title: text ? "Suggested next message" : pending ? "Generating…" : error ? "Last suggestion failed" : "Suggest now",
       icon: SuggestIcon,
-      label: text ? `✦ ${text}` : pending ? "✦…" : error ? "✦ !" : "✦",
+      label: compact ? "" : text ? text : pending ? "…" : error ? "!" : "",
       // Idle agents always carry the pill: with a suggestion it opens the card, without one it is the small ✦ that forces a
       // generation on click (Dani 19-10), spinning while it resolves and showing the failure once if it does not.
       // Hidden while a turn runs — a suggestion is never asked for mid-turn.
