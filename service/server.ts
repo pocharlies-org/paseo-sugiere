@@ -65,7 +65,7 @@ async function clasificarCuerpo(body: Cuerpo) {
   if (typeof texto !== "string" || !texto.trim()) return [422, { error: "falta texto" }];
   const r = await clasificar(texto);
   console.log(JSON.stringify({ modo: MODO, clasificador: "sombra", decide: false, etiqueta: r.etiqueta,
-    p: Number(r.p.toFixed(3)), ms: r.ms, motivo: r.motivo }));
+    p: r.p === null ? null : Number(r.p.toFixed(3)), ms: r.ms, motivo: r.motivo }));
   return [200, { ...r, decide: false }];
 }
 
