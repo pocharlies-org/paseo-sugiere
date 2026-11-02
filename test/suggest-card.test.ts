@@ -139,6 +139,6 @@ test("a forced suggestion stays on the pill until its button is pressed", async 
   tick(); // the resident answers
   await settled();
   assert.deepEqual(inserted, [], "the answer is not written into any prompt by itself");
-  assert.equal(button.label, "✦ Forzada", "it waits on the pill of its own window");
+  assert.equal(button.label, "Forzada", "it waits on the pill of its own window (the icon is already a Sparkles)");
   stop();
 });
