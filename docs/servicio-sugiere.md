@@ -38,19 +38,18 @@ Entrada:
 |---|---|---|
 | `sid` | string | no vacío; solo para trazas |
 | `turno` | string | no vacío; solo para trazas y para que el llamante case la respuesta |
-| `transcript` | string | 1..200 000 caracteres, ya aplanado por el llamante (los tool calls, una línea; nunca su contenido). Por encima, se recorta por la cola antes de enviar |
-| `contexto` | objeto | opcional; `kind` obligatorio si viene. `key`/`rol` solo si es de compañía |
+| `transcript` | string | 1..32 MiB (un `.jsonl` de sesión real pasa de 6): el `.jsonl` de la sesión tal cual. El servicio lo aplana con `shared/transcript.ts` (tool calls, una línea; nunca su contenido), así que el llamante solo lee un fichero |
+| `contexto` | objeto | opcional; `kind` obligatorio si viene. `key`/`rol` solo si es de compañía. `instruccion` sustituye a la de fábrica, para editar el prompt desde el ConfigMap sin reiniciar |
 
 Salida (`200`):
 
 ```json
-{"sugerencia": "Abre el PR contra deploy/prod y espera CI", "modelo": "qwen38-off", "ms": 812}
+{"sugerencia": "Abre el PR contra deploy/prod y espera CI", "modelo": "claude-opus-5-5", "ms": 812}
 ```
 
 - `sugerencia` vacía es una respuesta **válida**: el turno ha terminado o no hay nada que proponer (la
   píldora no aparece; el supervisor no la usa). No es un error.
-- Alias residente `qwen38-off` (sin thinking) y `max_tokens ≤ 48`, como hoy. El prefijo estable se
-  mantiene: la instrucción fija va al final y el transcript delante.
+- El modelo es **el de la sesión** (Dani 22-10), no un alias fijo: `shared/suggest.ts` lo saca del transcript y LiteLLM lo enruta. `max_tokens` 32 000 (el máximo que aceptan los tres backends) y `reasoning_effort: none`, que LiteLLM traduce a `enable_thinking: false`. Sin modelo real en la sesión no hay llamada y `sugerencia` sale vacía.
 - Sin caché: cada transcript es distinto.
 - Códigos: `422` cuerpo inválido · `503` el residente no contesta → el llamante se queda como está
   (píldora que no sale; `RETOMA` en la compañía).
@@ -91,9 +90,12 @@ Códigos: `422` cuerpo inválido o falta `contexto.cwd` · `200` en todo lo dem�
 y el residente fallan o se agotan, responde `{"ok": false, "riesgo": "alto", "motivo": "puerta no
 disponible"}` y el llamante cae a `RETOMA`.
 
-Presupuesto: Jev ≤ 5 s, residente ≤ 15 s, tope duro 25 s; el cliente espera 30 s (el plugin, 35 s por
-su RPC de 60 s). Caché: `sha256(sid|turno|sugerencia)` → veredicto de modelo, 24 h, LRU 1000. Las
-reglas duras **no** se cachean: se evalúan siempre y ganan al veredicto cacheado.
+Presupuesto, medido en el clúster (01-11): Jev `kev:4b` en CPU tarda ~38 s con las dos preguntas (12 s
+con una) y el residente ~18 s; el servicio espera 60 s a cada uno (con menos, Jev nunca contesta y todo
+escala). Por eso el veredicto es asíncrono: un llamante síncrono con presupuesto de 30 s no lo puede
+esperar entero y debe tratar el silencio como fail-closed. Caché: `sha256(sid|turno|sugerencia)` →
+veredicto de modelo, 24 h, LRU 1000. Las reglas duras **no** se cachean: se evalúan siempre y ganan al
+veredicto cacheado.
 
 ## 4. Reglas duras (lista cerrada)
 
@@ -153,10 +155,14 @@ Umbral y escalado, idénticos a `decidir()`:
 | Paso | Condición | Qué pasa |
 |---|---|---|
 | 1 | Jev `seguir` con `p ≥ 0,90` y `riesgo ≠ dinero` | `ok:true`, `riesgo` el suyo, `motivo:"rúbrica <p> (kev:4b)"` |
-| 2 | Jev `p < 0,90`, falla o no contesta en 5 s | escala al residente (`qwen38-flash-next` por LiteLLM, `x-claude-class: company`), misma rúbrica en JSON |
-| 3 | residente `p ≥ 0,90` y `riesgo ≠ dinero` | `ok:true`, `motivo:"rúbrica <p> (<modelo>)"` |
-| 4 | residente `p < 0,90` o falla | `ok:false`, `riesgo:"alto"`, `motivo:"rúbrica <p> (<modelo>)"` |
+| 2 | Jev `p < 0,90`, falla o no contesta en 60 s | escala al residente (`qwen38-flash-next` por LiteLLM), misma rúbrica en JSON |
+| 3 | residente `seguir` y `riesgo ≠ dinero` | `ok:true`, `riesgo` el suyo, `motivo:"rúbrica <p> (residente)"` |
+| 4 | residente `detener`, JSON inválido, falla o no contesta en 60 s | `ok:false`, `riesgo:"alto"`, `motivo:"rúbrica <p> (residente)"` |
 | — | cualquiera de los dos dice `riesgo:"dinero"` | `ok:false`, `riesgo:"dinero"`, **sin escalar**: dinero no se negocia con un modelo |
+
+El 0,90 se aplica a Jev, que devuelve probabilidades por opción. El residente escribe `p: 0.0` cuando
+se le pide una (medido el 01-11), así que su campo `p` se registra pero no se compara: decide su
+`veredicto`, igual que en `company_revalidar.decidir()`.
 
 ## 6. Veredicto → qué hace cada cliente
 
@@ -164,7 +170,7 @@ Umbral y escalado, idénticos a `decidir()`:
 |---|---|---|---|---|
 | Sugerencia buena | `true` | `ninguno` | `mensaje` al dueño con la sugerencia, prefijada `[SUPERVISOR]` | píldora normal; enviar sigue siendo el toque de Dani |
 | Buena con riesgo bajo | `true` | `bajo` | igual | igual |
-| D1/D2/D4/D9/D10, o rúbrica < 0,90 | `false` | `alto` | `RETOMA` de hoy; el motivo va al historial del ticket, no a Dani | sin píldora; motivo en `paseo plugin logs` |
+| D1/D2/D4/D9/D10, o el modelo dice `detener` | `false` | `alto` | `RETOMA` de hoy; el motivo va al historial del ticket, no a Dani | sin píldora; motivo en `paseo plugin logs` |
 | D3/D5/D6/D7/D8, o rúbrica `dinero` | `false` | `dinero` | `PARA DANI` con `preguntar()`; **no se autoenvía nunca** | sin píldora; la sugerencia se guarda junto a la pregunta |
 | Vacía (D0) | `false` | `bajo` | `RETOMA` | sin píldora |
 | Servicio caído o timeout | — | — | `RETOMA` | sin píldora |
