@@ -81,19 +81,36 @@ export async function residente(state: string): Promise<{ choice: string; riesgo
     p: Number(out.p ?? 0), motivo: String(out.motivo ?? "").slice(0, 200) };
 }
 
+const VOTOS = Number(process.env.SUGIERE_VOTOS || "3");
+
+/** El residente no es reproducible: 17 % de flips medidos con temp 0 y el mismo texto (batch-invariance del motor).
+ * Se pide `VOTOS` veces y manda la mayoría; menos de dos respuestas legibles no son dictamen y se escala. */
+async function residenteMayoria(state: string): Promise<{ choice: string; riesgo: string; p: number; motivo: string }> {
+  const votos = (await Promise.all([...Array(VOTOS)].map(() => residente(state).catch(() => null))))
+    .filter((v): v is Awaited<ReturnType<typeof residente>> => v !== null);
+  const seguir = votos.filter((v) => v.choice === "seguir").length;
+  const detener = votos.filter((v) => v.choice === "detener").length;
+  if (seguir + detener < 2) throw new Error(`residente ilegible: ${votos.length}/${VOTOS} respuestas`);
+  const choice = seguir > detener ? "seguir" : "detener";   // empate: no aprueba
+  // El riesgo de la mayoría manda, y si discrepan gana el más grave: un voto que vio dinero no se diluye.
+  const delMismo = votos.filter((v) => v.choice === choice).map((v) => v.riesgo);
+  const riesgo = delMismo.sort((a, b) => RIESGOS.indexOf(b as Riesgo) - RIESGOS.indexOf(a as Riesgo))[0];
+  return { choice, riesgo, p: 0, motivo: `mayoría ${seguir}-${detener} de ${VOTOS}` };
+}
+
 /** El dictamen completo. No envía nada: devuelve lo que el llamante debe hacer. */
 export async function dictaminar(sugerencia: string, contexto: Record<string, unknown>): Promise<Veredicto> {
   const regla = evaluarReglas(sugerencia, String(contexto.cwd || ""));
   if (regla) return { ok: false, riesgo: regla.riesgo, motivo: `${regla.id}: ${regla.motivo}`, via: "reglas" };
   const state = estadoJev(contexto, sugerencia);
-  const decidir = (r: { choice: string; riesgo: string; p: number }, modelo: string, via: "jev" | "residente"): Veredicto => {
+  const decidir = (r: { choice: string; riesgo: string; p: number }, modelo: string, via: "jev" | "residente", nota = ""): Veredicto => {
     const riesgo = (RIESGOS.includes(r.riesgo as Riesgo) ? r.riesgo : "alto") as Riesgo;
     if (riesgo === "dinero") return { ok: false, riesgo, via, motivo: `rúbrica dinero (${modelo}): ${r.choice}` };
     // El 0,90 es de Jev, que sí devuelve probabilidades. El residente escribe `p: 0.0` (medido): pedirle una
     // probabilidad que no tiene dejaba la puerta cerrada siempre, así que su veredicto decide, como en `decidir()`.
     const ok = r.choice === "seguir" && (via === "residente" || r.p >= UMBRAL);
     return { ok, riesgo: ok ? riesgo : "alto", via,
-      motivo: ok ? `rúbrica ${r.p} (${modelo})` : `rúbrica ${r.p} (${modelo}): ${r.choice}` };
+      motivo: (ok ? `rúbrica ${r.p} (${modelo})` : `rúbrica ${r.p} (${modelo}): ${r.choice}`) + nota };
   };
   const traza: string[] = [];   // por qué no decidió el modelo: lo que se lee en el log de un fail-closed
   try {
@@ -104,7 +121,9 @@ export async function dictaminar(sugerencia: string, contexto: Record<string, un
     traza.push(`jev: ${String((error as Error).message).slice(0, 120)}`);   // caído o lento: decide el residente
   }
   try {
-    return { ...decidir(await residente(state), "residente", "residente"), traza };
+    const r = await residenteMayoria(state);
+    traza.push(`residente ${r.motivo} riesgo=${r.riesgo}`);
+    return { ...decidir(r, "residente", "residente", ` · ${r.motivo}`), traza };
   } catch (error) {
     traza.push(`residente: ${String((error as Error).message).slice(0, 120)}`);
     console.warn(JSON.stringify({ puerta: "no disponible", traza }));   // fail-closed
