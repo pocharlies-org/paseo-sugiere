@@ -26,14 +26,18 @@ al modelo de la sesión, sin compartir la caché de la sesión.
 - `server/suggest.ts` — ventana de silencio de 60 s con `seq`: un turno nuevo mata la
   sugerencia pendiente y descarta una respuesta en vuelo.
 - `client/suggest-pill.tsx` — píldora en el composer; sondea 10 s solo agentes
-  `idle`; el texto se tira al salir de idle, al enviar y al pasarlo al prompt. Su icono es el ancla del puente. El popover intenta
+  `idle`; el texto se tira al salir de idle, al enviar y al pasarlo al prompt. Su icono es el ancla del puente. Nada entra en el prompt
+  por su cuenta: una generación terminada se queda en la píldora de su ventana hasta que se pulsa su botón (Dani 02-11). El popover intenta
   primero el puente y solo pinta su tarjeta si no pudo: el propio campo más un botón pequeño de enviar a su derecha, sin caja ni
   bordes y con la altura del texto (el popover del host ya enmarca).
 - `client/composer-bridge.ts` — **atajo declarado** (`shortcut:`): la SDK de Paseo (0.11.2 y 0.12.0-beta.1) no tiene API del borrador
-  del composer, así que desde el icono de la píldora sube por el DOM hasta el único `textarea[data-composer-input]` visible de su
-  panel y le añade el texto como si se tecleara (`execCommand("insertText")`, y de respaldo el setter del prototipo más un evento
-  `input`), de modo que el `onChangeText` del host sigue siendo el único que escribe el borrador. Con dos composers a la vista en el
-  primer ancestro que tiene alguno, o sin DOM (iOS/Android), o en layout compacto (el panel puede ir en un sheet sin composer propio),
+  del composer, así que desde el icono de la píldora sube por el DOM hasta el primer ancestro que tenga un `textarea[data-composer-input]`
+  y lo toma solo si es el único y está a la vista; le añade el texto como si se tecleara (`execCommand("insertText")`, y de respaldo el
+  setter del prototipo más un evento
+  `input`), de modo que el `onChangeText` del host sigue siendo el único que escribe el borrador. Con dos composers en ese ancestro, con
+  el propio del panel oculto (la ventana del agente está detrás: seguir subiendo acabaría escribiendo en la ventana que Dani tiene
+  delante, que es lo que pasaba el 02-11), con la píldora fuera de pantalla, sin DOM (iOS/Android), o en layout compacto (el panel puede
+  ir en un sheet sin composer propio),
   devuelve `false` y la píldora abre su popover. Un update de Paseo que mueva `data-testid="message-input-root"` o
   `data-composer-input` produce el mismo respaldo, nunca una escritura en otro agente. **Retirada**: se borra cuando la SDK exponga el
   borrador (discusión getpaseo/paseo#4688), o si dos updates seguidos de Paseo lo rompen sin esa API.
