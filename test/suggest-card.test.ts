@@ -121,7 +121,12 @@ test("a forced suggestion stays on the pill until its button is pressed", async 
   );
   let button: any;
   const stop = exports.addSuggestPill({
-    addComposerPill: ({ button: next }: any) => { button = next; return { update: (n: unknown) => { button = n; }, remove() {} }; },
+    // The host's rule (validation.ts requireText): a label is undefined or non-blank, or the pill is never drawn.
+    addComposerPill: ({ button: next }: any) => {
+      const accept = (b: any) => { assert.ok(b.label === undefined || b.label.trim(), `the host refuses label ${JSON.stringify(b.label)}`); button = b; };
+      accept(next);
+      return { update: accept, remove() {} };
+    },
     rpc: async () => ({ started: true, text: "Forzada" }),
     paseo: {
       agents: {
