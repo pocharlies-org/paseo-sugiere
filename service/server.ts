@@ -1,6 +1,7 @@
 // El servicio: dos endpoints, sin estado y sin ficheros. /v1/suggest propone el siguiente mensaje y /v1/verdict dictamina si
 // puede enviarse. No envía, no escribe tickets y no lee transcripts: todo lo que necesita llega en la petición.
 import { createServer } from "node:http";
+import { clasificar } from "./clasificador.ts";
 import { dictaminar } from "./juez.ts";
 import { sugerir } from "./residente.ts";
 
@@ -50,9 +51,22 @@ async function verdict(body: Cuerpo) {
   if (!sid || !turno || typeof sugerencia !== "string" || !sugerencia.trim()) return [422, { error: "faltan sid, turno o sugerencia" }];
   if (sugerencia.length > MAX_SUGERENCIA) return [422, { error: `sugerencia > ${MAX_SUGERENCIA} caracteres` }];
   if (!contexto?.cwd) return [422, { error: "falta contexto.cwd" }];
+  const t0 = Date.now();
   const v = await dictaminar(sugerencia, contexto);
-  console.log(JSON.stringify({ modo: MODO, sid, turno, ...v, sugerencia: sugerencia.slice(0, 120) }));
+  // `ms` y `traza` son lo que permite auditar después un veredicto escalado: qué dijo Jev y por qué no decidió.
+  console.log(JSON.stringify({ modo: MODO, sid, turno, ms: Date.now() - t0, ...v, sugerencia: sugerencia.slice(0, 120) }));
   return [200, v];
+}
+
+// El clasificador barato, en sombra: se mide y se registra, pero no cambia lo que responde /v1/verdict. `decide: false`
+// en el log y en la respuesta, para que nadie lo lea como una decisión de la puerta.
+async function clasificarCuerpo(body: Cuerpo) {
+  const { texto } = body;
+  if (typeof texto !== "string" || !texto.trim()) return [422, { error: "falta texto" }];
+  const r = await clasificar(texto);
+  console.log(JSON.stringify({ modo: MODO, clasificador: "sombra", decide: false, etiqueta: r.etiqueta,
+    p: Number(r.p.toFixed(3)), ms: r.ms, motivo: r.motivo }));
+  return [200, { ...r, decide: false }];
 }
 
 const servidor = createServer(async (req, res) => {
@@ -61,7 +75,10 @@ const servidor = createServer(async (req, res) => {
     if (ruta === "/healthz") return json(res, 200, { ok: true, modo: MODO });
     if (req.method !== "POST") return json(res, 405, { error: "solo POST" });
     const body = await leer(req);
-    const [code, out] = ruta === "/v1/suggest" ? await suggest(body) : ruta === "/v1/verdict" ? await verdict(body) : [404, { error: "no existe" }];
+    const [code, out] = ruta === "/v1/suggest" ? await suggest(body)
+      : ruta === "/v1/verdict" ? await verdict(body)
+      : ruta === "/v1/clasificar" ? await clasificarCuerpo(body)
+      : [404, { error: "no existe" }];
     json(res, code as number, out);
   } catch (error) {
     json(res, 422, { error: String((error as Error).message).slice(0, 200) });

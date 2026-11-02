@@ -7,7 +7,9 @@ import { texto as residenteTexto } from "./residente.ts";
 const JUEZ_MODELO = process.env.SUGIERE_MODELO_JUEZ || "qwen38-flash-next";
 
 // `via` deja en el log quién decidió: es la prueba de que una regla no llamó a ningún modelo.
-export type Veredicto = { ok: boolean; riesgo: Riesgo; motivo: string; via: "reglas" | "jev" | "residente" | "ninguno" };
+/** `traza`: por qué no decidió cada modelo que no decidió. Sin ella, un veredicto escalado no se puede auditar. */
+export type Veredicto = { ok: boolean; riesgo: Riesgo; motivo: string; via: "reglas" | "jev" | "residente" | "ninguno";
+  traza?: string[] };
 
 const UMBRAL = Number(process.env.SUGIERE_UMBRAL || "0.90");
 const JEV_URL = process.env.JEV_URL || "http://ollaya.llm.svc:11435/v1/systemone";
@@ -97,12 +99,12 @@ export async function dictaminar(sugerencia: string, contexto: Record<string, un
   try {
     const j = await jev(state);
     traza.push(`jev ${j.choice} p=${j.p}`);
-    if (j.choice && (j.p >= UMBRAL || j.riesgo === "dinero")) return decidir(j, JEV_MODELO, "jev");
+    if (j.choice && (j.p >= UMBRAL || j.riesgo === "dinero")) return { ...decidir(j, JEV_MODELO, "jev"), traza };
   } catch (error) {
     traza.push(`jev: ${String((error as Error).message).slice(0, 120)}`);   // caído o lento: decide el residente
   }
   try {
-    return decidir(await residente(state), "residente", "residente");
+    return { ...decidir(await residente(state), "residente", "residente"), traza };
   } catch (error) {
     traza.push(`residente: ${String((error as Error).message).slice(0, 120)}`);
     console.warn(JSON.stringify({ puerta: "no disponible", traza }));   // fail-closed
