@@ -51,8 +51,10 @@ async function verdict(body: Cuerpo) {
   if (!sid || !turno || typeof sugerencia !== "string" || !sugerencia.trim()) return [422, { error: "faltan sid, turno o sugerencia" }];
   if (sugerencia.length > MAX_SUGERENCIA) return [422, { error: `sugerencia > ${MAX_SUGERENCIA} caracteres` }];
   if (!contexto?.cwd) return [422, { error: "falta contexto.cwd" }];
+  const t0 = Date.now();
   const v = await dictaminar(sugerencia, contexto);
-  console.log(JSON.stringify({ modo: MODO, sid, turno, ...v, sugerencia: sugerencia.slice(0, 120) }));
+  // `ms` y `traza` son lo que permite auditar después un veredicto escalado: qué dijo Jev y por qué no decidió.
+  console.log(JSON.stringify({ modo: MODO, sid, turno, ms: Date.now() - t0, ...v, sugerencia: sugerencia.slice(0, 120) }));
   return [200, v];
 }
 
