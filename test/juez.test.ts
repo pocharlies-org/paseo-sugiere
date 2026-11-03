@@ -28,6 +28,14 @@ describe("la puerta", () => {
     assert.equal(v.via, "jev");
   });
 
+  it("la llamada a Jev dice quién pide y para qué (atribución del nginx de Ollaya)", async () => {
+    const f = mock.method(globalThis, "fetch", async (url: any) => String(url).includes("ollaya") ? jev("seguir", 0.97) : residente({}));
+    await dictaminar("abre el PR contra deploy/prod", ctx);
+    const llamada = f.mock.calls.find((c: any) => String(c.arguments[0]).includes("ollaya")) as any;
+    assert.equal(llamada.arguments[1].headers["x-caller"], "sugiere");
+    assert.equal(llamada.arguments[1].headers["x-purpose"], "juzgar-sugerencias");
+  });
+
   it("por debajo del umbral escala al residente, y manda su veredicto", async () => {
     mock.method(globalThis, "fetch", async (url: any) =>
       String(url).includes("ollaya") ? jev("seguir", 0.5) : residente({ veredicto: "seguir", riesgo: "bajo", p: 0.96, motivo: "ok" }));
