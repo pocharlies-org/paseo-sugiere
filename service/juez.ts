@@ -54,7 +54,9 @@ export async function jev(state: string, timeoutMs = 60_000): Promise<{ choice: 
       riesgo: { type: "choice", instructions: "¿Qué riesgo tiene ejecutarlo?", criteria: CRITERIOS_RIESGO },
     },
   };
-  const r = await fetch(JEV_URL, { method: "POST", headers: { "content-type": "application/json" },
+  // Atribución del nginx de Ollaya (dashboard /flota «quién pide»): sin estas cabeceras sale como [-].
+  const r = await fetch(JEV_URL, { method: "POST",
+    headers: { "content-type": "application/json", "x-caller": "sugiere", "x-purpose": "juzgar-sugerencias" },
     body: JSON.stringify(cuerpo), signal: AbortSignal.timeout(timeoutMs) });
   if (!r.ok) throw new Error(`Jev respondió ${r.status}`);
   const respuestas = ((await r.json()) as any)?.answers ?? {};
