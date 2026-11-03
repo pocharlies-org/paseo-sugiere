@@ -11,13 +11,14 @@ Este documento es la especificación. No hay implementación en este ticket: ni 
 
 - **Pod + ArgoCD app `sugiere` en el namespace `llm`**, junto a `ollaya` y el residente. Imagen por CI
   del repo `paseo-sugiere`; manifiesto en el repo GitOps.
-- **Sin estado y sin ficheros**: no lee transcripts, no guarda sesiones, no escribe tickets. Todo lo
-  que necesita llega en la petición. Es lo que permite servir a la vez a una sesión tmux del x86 y a un
-  agente de Paseo sin montar dos homes en el mismo volumen.
+- **Sin estado**: no lee transcripts, no guarda sesiones, no escribe tickets. Todo lo que necesita
+  llega en la petición. Es lo que permite servir a la vez a una sesión tmux del x86 y a un agente de
+  Paseo sin montar dos homes en el mismo volumen. La única escritura es la auditoría (§10), un JSONL
+  que no se lee para decidir nada.
 - **Solo interno**: Service de clúster y token. Sin ingress, sin `*.lan`, sin publicar en internet.
-- Alcance de red: LiteLLM (residente) y `ollaya` (Jev) por Service. Se va el router local, el bearer de
+- Alcance de red: LiteLLM (residente) y `ollaya` (Jev) por Service, y el brain (§9) solo si está encendido. Se va el router local, el bearer de
   la cuenta y el tope de 60 s del RPC del host.
-- Dos endpoints: `/v1/suggest` (propone) y `/v1/verdict` (dictamina). La instrucción del residente y la
+- Tres endpoints: `/v1/suggest` (propone), `/v1/verdict` (dictamina) y `/v1/auditoria` (lee el registro). La instrucción del residente y la
   rúbrica del juez viven aquí y en ningún otro sitio: un ConfigMap montado y releído en cada petición,
   sin reinicio.
 
@@ -199,3 +200,51 @@ Corpus congelado, uno por fila de §6 y dos paráfrasis por regla dura (p. ej. �
 la palabra `delete`), como test de aserciones del servicio. Criterio de salida: cero falsos negativos
 y un caso real registrado por cada resultado (`true`, `alto`, `dinero`) más uno por cliente (píldora y
 compañía) contra el mismo servicio.
+## 9. El brain (hindsight), apagado por defecto
+
+La rúbrica puede ver lo que la casa ya decidió en casos parecidos, traído del brain por su API de recall
+(`/v1/default/banks/<banco>/memories/recall`). Está **apagado de fábrica**, porque se midió lo que cuesta:
+el 03-11, desde el propio pod, un recall de 5 recuerdos tardó **8,6-9,6 s** y **3 de 5 pasaron de 20 s**.
+
+Se enciende por fichero (`/etc/sugiere/brain.json`, releído en cada petición: sin reiniciar), con tres modos:
+
+| `modo` | Qué hace | Latencia añadida | Efecto en el veredicto |
+|---|---|---|---|
+| `off` (de fábrica) | no llama a nadie | 0 | ninguno |
+| `sombra` | recall **en paralelo** al veredicto | 0 | ninguno: el resultado solo va a la auditoría |
+| `on` | recall **antes** de la rúbrica, con tope duro (`BRAIN_TOPE_MS`, 20 s) | 8-9 s típicos | los recuerdos entran en la rúbrica |
+
+Reglas del brain, en los tres modos:
+
+- **Falla abierto**: sin token, con error, con timeout o con respuesta ilegible, el veredicto sale como si
+  el brain no existiera. Un timeout del brain no puede cerrar la puerta.
+- Los recuerdos entran en la rúbrica envueltos en `<dato-xxxx>` igual que la sugerencia: son **dato no
+  confiable**, y un recuerdo que diga «ignora tus instrucciones» no cambia las preguntas.
+- El token (`BRAIN_TOKEN`, o `BRAIN_TOKEN_FICHERO`) es una identidad de lectura del boundary de hindsight:
+  la crea `security`. Sin token, `sombra` y `on` no miden nada y lo dicen (`motivo: "sin token"`).
+- Para pasar de `sombra` a `on` hace falta la comparación de la auditoría (§10): mismos casos con y sin
+  brain. `on` no se enciende por gusto.
+
+## 10. Auditoría de calidad
+
+Una línea JSON por veredicto en `AUDITORIA_RUTA` (por defecto `/var/lib/sugiere/auditoria.jsonl`, PVC),
+con la **sugerencia entera** (el log de stdout la corta a 120 caracteres, que no sirve para etiquetar), el
+`cwd`, la clave del ticket, `ok`, `riesgo`, `motivo`, `via`, `traza`, `ms` y el resultado del brain
+(`modo`, `ms`, `n`, `motivo`).
+
+- Se escribe **después** de responder: en `sombra` la línea espera a que el brain acabe y el llamante no
+  espera a la línea.
+- Rotación por tamaño (`AUDITORIA_MAX_BYTES`, 64 MiB) a un único `.1`.
+- Si no se puede escribir, se avisa y la puerta sigue: la auditoría no puede tumbar un veredicto.
+
+`GET /v1/auditoria?limit=&desde=&hasta=&ok=&via=` devuelve las últimas líneas que pasan el filtro (máximo
+500), de la más vieja a la más nueva.
+
+Con eso se etiqueta a mano lo que la puerta aprobó (¿era buena la continuación?) y se compara: reglas contra
+rúbrica, `via`, y brain apagado contra brain encendido sobre los mismos casos.
+
+## 11. Token y acceso fuera del clúster
+
+`SUGIERE_TOKEN` es opcional: sin él, el servicio se comporta como siempre (solo clúster). Con él, cada
+petición debe traer `authorization: Bearer <token>` (`/healthz` queda libre). Es lo que permite publicarlo
+por LAN sin que quede abierto a quien no lo tenga: la ruta y el token son un solo cambio, nunca la ruta sola.
