@@ -116,6 +116,8 @@ En la tabla, `\|` es el separador de alternancia de la regex (`|` rompe el markd
 | D8 | publicación y release | `\bsocial_(publish\|send_\|approve_draft)\w*\b` · `\bgmail_send\b` · `publish_html[^\n]*public\s*=\s*true` · `\b(npm\|twine\|cargo)\s+publish\b` · `\bgh\s+release\b[^\n]*upload` | `ok:false`, `dinero` |
 | D9 | programado | `\bcrontab\b` · `\bsystemctl\s+(enable\|start\|restart)\b` · `\bcreate_(schedule\|heartbeat)\b` | `ok:false`, `alto` |
 | D10 | fuera del ámbito | cualquier ruta `(~\|/home/[\w.-]+)/…` cuyo prefijo no sea `contexto.cwd` (o la casa del ticket si `cwd` es el de la sesión de compañía: `~/k8s/<repo>`, `~/src/<repo>`, `~/proyectos/<producto>`) | `ok:false`, `alto` |
+| D11 | ticket cerrado sin su PR | `\bdone\b[^\n]{0,60}\b(a mano\|sin (su \|la \|una )?pr( fusionad[ao])?\|sin (el \|la )?merge\|sin fusionar)\b` (y el orden inverso) | `ok:false`, `alto` |
+| D12 | hold sobre pedido en curso | `\bfulfillment\s+hold\b[^\n]{0,60}\b(in[ _-]?progress\|en curso\|ya empezad[oa])\b` (y el orden inverso) | `ok:false`, `alto` |
 
 Notas de aplicación:
 

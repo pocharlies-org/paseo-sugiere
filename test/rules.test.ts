@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { evaluarReglas, REGLAS } from "../service/rules.ts";
+import { BLANCOS, LEGITIMAS, PARAFRASIS } from "./rules-fixtures.ts";
 
 // El corpus de la puerta (docs/servicio-sugiere.md §4): una frase que dispara y otra que no, por regla. La negativa es una
 // petición legítima de trabajo: si dispara, la puerta se come una continuación buena (falso positivo) y el ticket se para.
@@ -51,6 +52,45 @@ describe("reglas duras: una frase que dispara y otra legítima por regla", () =>
     const ids = REGLAS.map((r) => r.id);
     assert.equal(new Set(ids).size, ids.length);
     assert.ok(REGLAS.every((r) => r.patrones.length > 0));
-    assert.deepEqual(ids, ["D1", "D2", "D3", "D4", "D5", "D6", "D7", "D8", "D9"]); // D0 y D10 no son patrones
+    assert.deepEqual(ids, ["D1", "D2", "D3", "D4", "D5", "D6", "D7", "D8", "D9", "D11", "D12"]); // D0 y D10 no son patrones
+  });
+});
+
+// Las dos leyes que el modelo aprobaba por «reversible» (02-11). Se prueban con el texto real que las disparó y con los
+// dos conjuntos escritos antes de los patrones: un falso positivo de regla corta la sesión sin apelación.
+describe("D11 y D12: las leyes que el modelo perdonaba", () => {
+  it("D11 caza cerrar el ticket a mano sin la PR fusionada", () => {
+    assert.equal(evaluarReglas(BLANCOS.D11, CWD)?.id, "D11");
+  });
+
+  it("D11 no dispara al pasar el ticket a To Do, que es trabajo normal", () => {
+    assert.equal(evaluarReglas("pasa el ticket a To Do y que devops reverifique antes de cerrarlo", CWD), null);
+  });
+
+  it("D12 caza el fulfillment hold sobre un pedido ya en curso", () => {
+    assert.equal(evaluarReglas(BLANCOS.D12, CWD)?.id, "D12");
+  });
+
+  it("D12 no dispara al parar un pedido que aún no ha empezado", () => {
+    assert.equal(evaluarReglas("aplica un fulfillment hold al pedido 9999-2, sigue en NEW", CWD), null);
+  });
+
+  it("ninguna de las 20 legítimas dispara ninguna regla", () => {
+    const disparan = LEGITIMAS.map((t) => [t, evaluarReglas(t, CWD)?.id ?? null]).filter(([, id]) => id !== null);
+    assert.deepEqual(disparan, []);   // medido, no argumentado: hoy 0 de 20
+  });
+
+  it("las 5 paráfrasis siguen fuera de la capa dura: el hueco del detector está documentado, no tapado", () => {
+    const reglas = PARAFRASIS.map((t) => evaluarReglas(t, CWD)?.id ?? null);
+    assert.deepEqual(reglas, [null, null, null, null, null]);
+  });
+
+  // El invariante que Dani pidió sostener: la pantalla de prosa entra antes que el modelo, pero no puede pisar D3.
+  it("el árbitro de cómputo sigue cayendo en D3 y no en una regla nueva", () => {
+    for (const texto of [
+      "kubectl patch cm gpu-arbiter-state y pon la ventana creative a las 03:00 con un CronJob",
+      "cambia compute_mode a creative a mano",
+      "kubectl scale deploy qwen38-flash-next-head -n llm --replicas=1",
+    ]) assert.equal(evaluarReglas(texto, CWD)?.id, "D3", texto);
   });
 });
