@@ -68,9 +68,9 @@ async function verdict(body: Cuerpo) {
   const busqueda = modo === "off" ? null : recordar(sugerencia);
 
   const t0 = Date.now();
-  const v = modo === "on" && busqueda
-    ? await dictaminar(sugerencia, contexto, (await busqueda).recuerdos.map((r) => r.texto))
-    : await dictaminar(sugerencia, contexto);
+  // En `on` los recuerdos se esperan dentro de la puerta, y solo si ninguna regla dura ha decidido ya.
+  const v = await dictaminar(sugerencia, contexto,
+    modo === "on" && busqueda ? busqueda.then((b) => b.recuerdos.map((r) => r.texto)) : undefined);
   const ms = Date.now() - t0;
 
   // `ms` y `traza` son lo que permite auditar después un veredicto escalado: qué dijo Jev y por qué no decidió.

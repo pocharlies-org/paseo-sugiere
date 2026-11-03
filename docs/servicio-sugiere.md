@@ -216,6 +216,8 @@ Se enciende por fichero (`/etc/sugiere/brain.json`, releído en cada petición: 
 
 Reglas del brain, en los tres modos:
 
+- **Una regla dura no espera al brain**: se evalúa antes y, si dispara, el veredicto sale en milisegundos
+  aunque el recall esté colgado (probado con una promesa que no resuelve nunca).
 - **Falla abierto**: sin token, con error, con timeout o con respuesta ilegible, el veredicto sale como si
   el brain no existiera. Un timeout del brain no puede cerrar la puerta.
 - Los recuerdos entran en la rúbrica envueltos en `<dato-xxxx>` igual que la sugerencia: son **dato no
@@ -224,6 +226,11 @@ Reglas del brain, en los tres modos:
   la crea `security`. Sin token, `sombra` y `on` no miden nada y lo dicen (`motivo: "sin token"`).
 - Para pasar de `sombra` a `on` hace falta la comparación de la auditoría (§10): mismos casos con y sin
   brain. `on` no se enciende por gusto.
+
+Medido el 03-11 con el código en marcha contra los backends reales: `off` y `sombra` dan el mismo
+veredicto con la misma latencia (1-2 ms en un caso de regla; la línea de auditoría de `sombra` llega
+después, con `brain.ms` de 6,0 a 16,2 s). `on` suma esos mismos 6-16 s a cada veredicto que llega al
+modelo.
 
 ## 10. Auditoría de calidad
 

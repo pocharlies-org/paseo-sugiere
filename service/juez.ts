@@ -86,10 +86,12 @@ export async function residente(state: string): Promise<{ choice: string; riesgo
 }
 
 /** El dictamen completo. No envía nada: devuelve lo que el llamante debe hacer. */
-export async function dictaminar(sugerencia: string, contexto: Record<string, unknown>, recuerdos: string[] = []): Promise<Veredicto> {
+export async function dictaminar(sugerencia: string, contexto: Record<string, unknown>,
+  recuerdos?: Promise<string[]> | string[]): Promise<Veredicto> {
   const regla = evaluarReglas(sugerencia, String(contexto.cwd || ""));
   if (regla) return { ok: false, riesgo: regla.riesgo, motivo: `${regla.id}: ${regla.motivo}`, via: "reglas" };
-  const state = estadoJev(contexto, sugerencia, recuerdos);
+  // El brain se espera SOLO aquí: una regla dura decide sin pagar la latencia del recall.
+  const state = estadoJev(contexto, sugerencia, recuerdos ? await recuerdos : []);
   const decidir = (r: { choice: string; riesgo: string; p: number }, modelo: string, via: "jev" | "residente"): Veredicto => {
     const riesgo = (RIESGOS.includes(r.riesgo as Riesgo) ? r.riesgo : "alto") as Riesgo;
     if (riesgo === "dinero") return { ok: false, riesgo, via, motivo: `rúbrica dinero (${modelo}): ${r.choice}` };
