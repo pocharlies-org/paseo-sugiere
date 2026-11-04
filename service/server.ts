@@ -5,8 +5,10 @@ import { createServer } from "node:http";
 import { consultar, registrar, registrarCuando } from "./auditoria.ts";
 import { modoBrain, recordar } from "./brain.ts";
 import { clasificar } from "./clasificador.ts";
+import { clave, guardar as guardarCache, leer as leerCache } from "./cache.ts";
 import { dictaminar } from "./juez.ts";
 import { sugerir } from "./residente.ts";
+import { evaluarReglas } from "./rules.ts";
 
 const PORT = Number(process.env.PORT || "8080");
 const MAX_TRANSCRIPT = Number(process.env.MAX_TRANSCRIPT || String(32 * 1024 * 1024)); // el recorte de contexto (400k caracteres) lo hace shared/transcript.ts
@@ -68,9 +70,16 @@ async function verdict(body: Cuerpo) {
   const busqueda = modo === "off" ? null : recordar(sugerencia);
 
   const t0 = Date.now();
+  // Las reglas se evalúan SIEMPRE, también con veredicto cacheado: ganan a lo guardado. Con el brain `on` no se cachea,
+  // porque el dictamen depende de los recuerdos de ese momento.
+  const k = clave(sid, turno, sugerencia);
+  const cacheable = modo !== "on" && !evaluarReglas(sugerencia, String(contexto.cwd));
+  const guardado = cacheable ? leerCache(k) : null;
   // En `on` los recuerdos se esperan dentro de la puerta, y solo si ninguna regla dura ha decidido ya.
-  const v = await dictaminar(sugerencia, contexto,
-    modo === "on" && busqueda ? busqueda.then((b) => b.recuerdos.map((r) => r.texto)) : undefined);
+  const v = guardado ? { ...guardado, traza: [...(guardado.traza ?? []), "cache"] }
+    : await dictaminar(sugerencia, contexto,
+      modo === "on" && busqueda ? busqueda.then((b) => b.recuerdos.map((r) => r.texto)) : undefined);
+  if (!guardado) guardarCache(k, v);
   const ms = Date.now() - t0;
 
   // `ms` y `traza` son lo que permite auditar después un veredicto: cuánto tardó y, si cerró por caída, por qué.

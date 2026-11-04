@@ -95,7 +95,8 @@ Presupuesto, medido en el clúster (01-11): el residente tarda ~18-60 s; el serv
 el veredicto es asíncrono: un llamante síncrono con presupuesto de 30 s no lo puede
 esperar entero y debe tratar el silencio como fail-closed. Caché: `sha256(sid|turno|sugerencia)` →
 veredicto de modelo, 24 h, LRU 1000. Las reglas duras **no** se cachean: se evalúan siempre y ganan al
-veredicto cacheado.
+veredicto cacheado. Con el brain en `on` no se cachea nada, porque el dictamen depende de esos recuerdos; un
+veredicto servido de la caché lleva `traza: ["cache"]` y el fail-closed no se guarda nunca.
 
 ## 4. Reglas duras (lista cerrada)
 
