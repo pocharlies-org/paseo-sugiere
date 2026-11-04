@@ -32,6 +32,13 @@ describe("el head", () => {
     assert.deepEqual(decidir([1, 0], empate), { etiqueta: "escalar", p: 0.5 });
   });
 
+  it("con los pesos a cero no hay dictamen: ni etiqueta ni probabilidad inventada", async () => {
+    const cero: Pesos = { etiquetas: ["permitir", "escalar"], pesos: [[0, 0], [0, 0]], sesgo: [0, 0], umbral: 0.9 };
+    globalThis.fetch = embedDevuelve([0.9, 0.1]) as unknown as typeof fetch;
+    const r = await clasificar("rm -rf /home/dibanez/k8s", conPesos(cero));
+    assert.deepEqual([r.etiqueta, r.p, r.motivo], [null, null, "head sin entrenar"]);
+  });
+
   it("sin pesos escala, aunque el texto sea benigno", async () => {
     const r = await clasificar("revisa los tests del PR", "/no/existe.json");
     assert.deepEqual([r.etiqueta, r.motivo], ["escalar", "sin pesos"]);
@@ -51,7 +58,7 @@ describe("el head", () => {
     const r = await clasificar("revisa los tests del PR", ruta);
     assert.equal(r.etiqueta, "permitir");
     assert.equal(r.motivo, "");
-    assert.ok(r.p > 0.9);
+    assert.ok((r.p ?? 0) > 0.9);
     assert.ok(r.ms >= 0);
   });
 

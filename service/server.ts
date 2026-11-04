@@ -1,6 +1,9 @@
 // El servicio: dos endpoints, sin estado y sin ficheros. /v1/suggest propone el siguiente mensaje y /v1/verdict dictamina si
 // puede enviarse. No envía, no escribe tickets y no lee transcripts: todo lo que necesita llega en la petición.
+// La auditoría (`/v1/auditoria`) es la única escritura: el registro de calidad de la puerta, en un JSONL.
 import { createServer } from "node:http";
+import { consultar, registrar, registrarCuando } from "./auditoria.ts";
+import { modoBrain, recordar } from "./brain.ts";
 import { clasificar } from "./clasificador.ts";
 import { dictaminar } from "./juez.ts";
 import { sugerir } from "./residente.ts";
@@ -9,6 +12,8 @@ const PORT = Number(process.env.PORT || "8080");
 const MAX_TRANSCRIPT = Number(process.env.MAX_TRANSCRIPT || String(32 * 1024 * 1024)); // el recorte de contexto (400k caracteres) lo hace shared/transcript.ts
 const MAX_SUGERENCIA = 4000;
 const MODO = process.env.SUGIERE_MODO || "sombra"; // sombra = hay servicio y veredictos, ningún llamante que actúe
+// Sin token, el servicio se comporta como siempre (solo clúster); con token, cada petición lo lleva. La ruta LAN lo usa.
+const TOKEN = process.env.SUGIERE_TOKEN || "";
 
 type Cuerpo = Record<string, any>;
 
@@ -17,6 +22,12 @@ const json = (res: any, code: number, out: unknown) => {
   res.writeHead(code, { "content-type": "application/json", "content-length": Buffer.byteLength(text) });
   res.end(text);
 };
+
+function autorizado(req: any): boolean {
+  if (!TOKEN) return true;
+  const cabecera = String(req.headers.authorization || "");
+  return cabecera === `Bearer ${TOKEN}`;
+}
 
 async function leer(req: any): Promise<Cuerpo> {
   let size = 0;
@@ -51,10 +62,26 @@ async function verdict(body: Cuerpo) {
   if (!sid || !turno || typeof sugerencia !== "string" || !sugerencia.trim()) return [422, { error: "faltan sid, turno o sugerencia" }];
   if (sugerencia.length > MAX_SUGERENCIA) return [422, { error: `sugerencia > ${MAX_SUGERENCIA} caracteres` }];
   if (!contexto?.cwd) return [422, { error: "falta contexto.cwd" }];
+
+  // El brain: `off` no llama a nadie; `sombra` corre en paralelo y solo se audita; `on` entra en la rúbrica y se paga.
+  const modo = modoBrain();
+  const busqueda = modo === "off" ? null : recordar(sugerencia);
+
   const t0 = Date.now();
-  const v = await dictaminar(sugerencia, contexto);
-  // `ms` y `traza` son lo que permite auditar después un veredicto escalado: qué dijo Jev y por qué no decidió.
-  console.log(JSON.stringify({ modo: MODO, sid, turno, ms: Date.now() - t0, ...v, sugerencia: sugerencia.slice(0, 120) }));
+  // En `on` los recuerdos se esperan dentro de la puerta, y solo si ninguna regla dura ha decidido ya.
+  const v = await dictaminar(sugerencia, contexto,
+    modo === "on" && busqueda ? busqueda.then((b) => b.recuerdos.map((r) => r.texto)) : undefined);
+  const ms = Date.now() - t0;
+
+  // `ms` y `traza` son lo que permite auditar después un veredicto: cuánto tardó y, si cerró por caída, por qué.
+  console.log(JSON.stringify({ modo: MODO, sid, turno, ms, ...v, sugerencia: sugerencia.slice(0, 120) }));
+
+  // La auditoría se cierra cuando acaba el brain, sin retrasar la respuesta: la sugerencia va entera.
+  const base = { ts: new Date().toISOString(), sid, turno, ms, ok: v.ok, riesgo: v.riesgo, motivo: v.motivo,
+    via: v.via, traza: v.traza, cwd: String(contexto.cwd || ""),
+    key: typeof contexto.key === "string" ? contexto.key : undefined, sugerencia };
+  if (busqueda) registrarCuando(busqueda.then((b) => ({ modo, ms: b.ms, n: b.recuerdos.length, motivo: b.motivo })), base);
+  else registrar(base);
   return [200, v];
 }
 
@@ -65,14 +92,33 @@ async function clasificarCuerpo(body: Cuerpo) {
   if (typeof texto !== "string" || !texto.trim()) return [422, { error: "falta texto" }];
   const r = await clasificar(texto);
   console.log(JSON.stringify({ modo: MODO, clasificador: "sombra", decide: false, etiqueta: r.etiqueta,
-    p: Number(r.p.toFixed(3)), ms: r.ms, motivo: r.motivo }));
+    p: r.p === null ? null : Number(r.p.toFixed(3)), ms: r.ms, motivo: r.motivo }));
   return [200, { ...r, decide: false }];
+}
+
+// La auditoría de calidad: los veredictos con su sugerencia entera, para etiquetarlos y comparar el brain contra el modelo.
+function auditoria(url: string) {
+  const q = new URL(url, "http://sugiere").searchParams;
+  const ok = q.get("ok");
+  return [200, consultar({
+    limit: Number(q.get("limit") || "100"),
+    desde: q.get("desde") || undefined,
+    hasta: q.get("hasta") || undefined,
+    ok: ok === null ? undefined : ok === "true",
+    via: q.get("via") || undefined,
+  })];
 }
 
 const servidor = createServer(async (req, res) => {
   const ruta = (req.url || "/").split("?")[0];
   try {
-    if (ruta === "/healthz") return json(res, 200, { ok: true, modo: MODO });
+    if (ruta === "/healthz") return json(res, 200, { ok: true, modo: MODO, brain: modoBrain() });
+    if (!autorizado(req)) return json(res, 401, { error: "falta el token" });
+    if (ruta === "/v1/auditoria") {
+      if (req.method !== "GET") return json(res, 405, { error: "solo GET" });
+      const [code, out] = auditoria(req.url || "/");
+      return json(res, code as number, out);
+    }
     if (req.method !== "POST") return json(res, 405, { error: "solo POST" });
     const body = await leer(req);
     const [code, out] = ruta === "/v1/suggest" ? await suggest(body)
@@ -85,4 +131,4 @@ const servidor = createServer(async (req, res) => {
   }
 });
 
-servidor.listen(PORT, () => console.log(JSON.stringify({ arranca: PORT, modo: MODO })));
+servidor.listen(PORT, () => console.log(JSON.stringify({ arranca: PORT, modo: MODO, brain: modoBrain() })));

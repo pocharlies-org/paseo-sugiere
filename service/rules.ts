@@ -1,4 +1,4 @@
-// Las reglas duras del dictamen: lo que decide sin modelo, antes de Jev. Lista CERRADA (docs/servicio-sugiere.md §4):
+// Las reglas duras del dictamen: lo que decide sin modelo, antes que el residente. Lista CERRADA (docs/servicio-sugiere.md §4):
 // añadir una regla es cambiar la especificación, no el código.
 //
 // El texto llega normalizado (NFKC, sin espacios de borde) y se juzga entero, también dentro de bloques de código.
