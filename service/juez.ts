@@ -36,9 +36,18 @@ export function estado(ctx: Record<string, unknown>, sugerencia: string, recuerd
 export async function residente(state: string): Promise<{ choice: string; riesgo: string; p: number; motivo: string }> {
   const salida = await residenteTexto(JUEZ_MODELO,
     `${state}\nResponde solo JSON: {"veredicto": "seguir|detener", "riesgo": "ninguno|bajo|alto|dinero", "p": 0.0, "motivo": "…"}`);
-  const m = salida.match(/\{[\s\S]*\}/);
-  if (!m) throw new Error(`el residente no dio JSON: ${salida.slice(0, 120)}`);
-  const out = JSON.parse(m[0]);
+  const i = salida.indexOf("{");
+  if (i < 0) throw new Error(`el residente no dio JSON: ${salida.slice(0, 120)}`);
+  // A veces el JSON llega cortado por `max_tokens` (medido en el pod el 04-11): sin cierre, `JSON.parse` falla y la
+  // puerta cerraba un caso benigno. Se leen los campos sueltos: lo que decide es `veredicto` y `riesgo`.
+  const cuerpo = salida.slice(i);
+  const out = (() => {
+    try { return JSON.parse(cuerpo.slice(0, cuerpo.lastIndexOf("}") + 1) || cuerpo); } catch {
+      const campo = (k: string) => cuerpo.match(new RegExp(`"${k}"\\s*:\\s*"([^"]*)`))?.[1] ?? "";
+      return { veredicto: campo("veredicto"), riesgo: campo("riesgo"),
+        p: Number(cuerpo.match(/"p"\s*:\s*([0-9.]+)/)?.[1] ?? 0), motivo: campo("motivo") };
+    }
+  })();
   // El residente escribe a veces «SEGUIR», o «seguir (…»: se compara por prefijo y lo que no sea uno de los dos
   // veredictos no aprueba (y se queda en el log para saber por qué).
   const crudo = String(out.veredicto ?? "").toLowerCase().trim();

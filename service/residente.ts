@@ -42,7 +42,7 @@ export async function sugerir(lines: string[], instruccion = "", timeoutMs = 120
 
 /** Una respuesta de texto para la rúbrica del dictamen (eso sí, con un modelo fijo: no depende de ninguna sesión). */
 export async function texto(modelo: string, prompt: string, timeoutMs = 60_000): Promise<string> {
-  const cuerpo = JSON.stringify({ model: modelo, max_tokens: 300, reasoning_effort: "none",
+  const cuerpo = JSON.stringify({ model: modelo, max_tokens: 400, reasoning_effort: "none",
     messages: [{ role: "user", content: prompt }] });
   const r = await llamar(cuerpo, timeoutMs);
   return String(r?.choices?.[0]?.message?.content ?? "").trim();

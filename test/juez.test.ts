@@ -77,4 +77,21 @@ describe("la puerta", () => {
     assert.equal(v.via, "ninguno");
     assert.match(v.traza!.join(" "), /residente: caído/);
   });
+
+  it("un JSON cortado por max_tokens se sigue leyendo: sus campos deciden", async () => {
+    mock.method(globalThis, "fetch", async () => respuesta({ choices: [{ message: { content:
+      '{"veredicto": "seguir", "riesgo": "bajo", "p": 0.0, "motivo": "abre el PR y espera CI' } }] }));
+    const v = await dictaminar("abre el PR contra deploy/prod", ctx);
+    assert.equal(v.ok, true);
+    assert.equal(v.riesgo, "bajo");
+    assert.equal(v.via, "residente");
+  });
+
+  it("un JSON cortado que dice detener también cierra", async () => {
+    mock.method(globalThis, "fetch", async () => respuesta({ choices: [{ message: { content:
+      '{"veredicto": "detener", "riesgo": "alto", "p": 0.95, "motivo": "El criterio de aceptación exi' } }] }));
+    const v = await dictaminar("abre el PR contra deploy/prod", ctx);
+    assert.equal(v.ok, false);
+    assert.equal(v.riesgo, "alto");
+  });
 });
