@@ -11,6 +11,15 @@ const residente = (o: unknown) => respuesta({ choices: [{ message: { content: JS
 afterEach(() => mock.restoreAll());
 
 describe("la puerta", () => {
+  it("una regla dura no espera al brain: decide sin pagar el recall", async () => {
+    const nunca = new Promise<string[]>(() => {});   // el brain, colgado: si la puerta lo esperara, este test no acabaría
+    const v = await Promise.race([
+      dictaminar("kubectl delete pod -n llm x", ctx, nunca),
+      new Promise<never>((_, falla) => setTimeout(() => falla(new Error("la regla esperó al brain")), 500)),
+    ]);
+    assert.equal(v.via, "reglas");
+  });
+
   it("una regla dura gana sin llamar a ningún modelo", async () => {
     const f = mock.method(globalThis, "fetch", async () => { throw new Error("no debería llamarse"); });
     const v = await dictaminar("kubectl delete pod -n llm x", ctx);
