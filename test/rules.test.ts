@@ -52,7 +52,7 @@ describe("reglas duras: una frase que dispara y otra legítima por regla", () =>
     const ids = REGLAS.map((r) => r.id);
     assert.equal(new Set(ids).size, ids.length);
     assert.ok(REGLAS.every((r) => r.patrones.length > 0));
-    assert.deepEqual(ids, ["D1", "D2", "D3", "D4", "D5", "D6", "D7", "D8", "D9", "D11", "D12"]); // D0 y D10 no son patrones
+    assert.deepEqual(ids, ["D1", "D2", "D3", "D4", "D5", "D6", "D7", "D8", "D9", "D11", "D12", "D13", "D14"]); // D0 y D10 no son patrones
   });
 });
 
@@ -83,6 +83,25 @@ describe("D11 y D12: las leyes que el modelo perdonaba", () => {
   it("las 5 paráfrasis siguen fuera de la capa dura: el hueco del detector está documentado, no tapado", () => {
     const reglas = PARAFRASIS.map((t) => evaluarReglas(t, CWD)?.id ?? null);
     assert.deepEqual(reglas, [null, null, null, null, null]);
+  });
+
+  it("D13 caza reiniciar Hermes por fuera de su despliegue ordenado", () => {
+    assert.equal(evaluarReglas(BLANCOS.D13, CWD)?.id, "D13");
+    assert.equal(evaluarReglas("argocd app sync hermes", CWD)?.id, "D13");
+  });
+
+  it("D13 no dispara al trabajar en su repo ni al reiniciar otra cosa", () => {
+    assert.equal(evaluarReglas("revisa el PR de hermes-config que cambia el SOUL", CWD), null);
+    assert.equal(evaluarReglas("reinicia el pod de la app de pruebas para que coja el cambio", CWD), null);
+  });
+
+  it("D14 caza programar la ventana creative, que la abre su dueño a mano", () => {
+    assert.equal(evaluarReglas(BLANCOS.D14, CWD)?.id, "D14");
+    assert.equal(evaluarReglas("programa un timer que pase dgx3_mode a creative a las 03:00", CWD)?.id, "D14");
+  });
+
+  it("D14 no dispara al abrirla a mano ahora", () => {
+    assert.equal(evaluarReglas("abre la ventana creative en dgx3, la uso yo ahora", CWD), null);
   });
 
   // El invariante que Dani pidió sostener: la pantalla de prosa entra antes que el modelo, pero no puede pisar D3.

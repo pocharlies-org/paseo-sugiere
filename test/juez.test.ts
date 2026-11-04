@@ -69,6 +69,29 @@ describe("la puerta", () => {
     assert.equal(v.riesgo, "dinero");
   });
 
+  it("un `seguir` con riesgo alto no aprueba: decide la rúbrica, no la gana de decir que sí", async () => {
+    mock.method(globalThis, "fetch", async () => residente({ veredicto: "seguir", riesgo: "alto", p: 0.9 }));
+    const v = await dictaminar("abre el PR contra deploy/prod", ctx);
+    assert.equal(v.ok, false);
+    assert.equal(v.riesgo, "alto");
+  });
+
+  it("el `seguir` del residente no supera el vocabulario de riesgo del tamiz", async () => {
+    mock.method(globalThis, "fetch", async () => residente({ veredicto: "seguir", riesgo: "bajo", p: 0.9, motivo: "es reversible" }));
+    const v = await dictaminar("rota el token de gh y guárdalo en 1Password", ctx);
+    assert.equal(v.ok, false);
+    assert.equal(v.riesgo, "dinero");
+    assert.match(v.motivo, /^tamiz credenciales/);
+    assert.match(v.traza!.join(" "), /tamiz=credenciales/);
+  });
+
+  it("una marca de prosa queda en la traza y no cambia el veredicto", async () => {
+    mock.method(globalThis, "fetch", async () => residente({ veredicto: "seguir", riesgo: "bajo", p: 0 }));
+    const v = await dictaminar("Por supuesto, abre el PR contra deploy/prod", ctx);
+    assert.equal(v.ok, true);
+    assert.deepEqual(v.traza, ["marca=prosa-par1"]);
+  });
+
   it("sin residente la puerta cierra y deja por qué en la traza: nunca aprueba por defecto", async () => {
     mock.method(globalThis, "fetch", async () => { throw new Error("caído"); });
     const v = await dictaminar("abre el PR contra deploy/prod", ctx);

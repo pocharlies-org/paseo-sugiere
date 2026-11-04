@@ -66,6 +66,14 @@ export const REGLAS: Regla[] = [
   R("D12", "alto", "hold de fulfillment sobre un pedido en curso",
     /\bfulfillment\s+hold\b[^\n]{0,60}\b(in[ _-]?progress|en curso|ya empezad[oa])\b/i,
     /\b(in[ _-]?progress|en curso|ya empezad[oa])\b[^\n]{0,60}\bfulfillment\s+hold\b/),
+  // D9 caza el `systemctl restart`, pero Hermes se reinicia a mano por otras puertas: `rollout restart` y `argocd app
+  // sync` (skill `hermes-config`). Y la ventana de dgx3 la abre su dueño, a mano: programarla es lo prohibido.
+  R("D13", "alto", "reinicio de Hermes fuera de su despliegue ordenado",
+    /\bhermes\b[^\n]{0,60}\b(rollout\s+restart|reinici\w+|restart\w*|argocd\s+app\s+sync)\b/i,
+    /\b(rollout\s+restart|reinici\w+|restart\w*|argocd\s+app\s+sync)\b[^\n]{0,60}\bhermes\b/i),
+  R("D14", "alto", "ventana creative programada: la abre su dueño a mano",
+    /\b(ventana\s+creative|dgx3[- ]ventana|dgx3_mode)\b[^\n]{0,80}\b(cron\w*|program\w+|schedule\w*|timer|a las?\s+\d)\b/i,
+    /\b(cron\w*|program\w+|schedule\w*|timer|a las?\s+\d)\b[^\n]{0,80}\b(ventana\s+creative|dgx3[- ]ventana|dgx3_mode)\b/i),
 ];
 
 // D10 no es una regex sobre el texto sino una comparación de prefijos: toda ruta con raíz (~ o /home/…) que se salga del cwd de la

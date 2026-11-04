@@ -4,6 +4,7 @@
 import { randomBytes } from "node:crypto";
 import { evaluarReglas, type Riesgo } from "./rules.ts";
 import { texto as residenteTexto } from "./residente.ts";
+import { tamizar } from "./tamiz.ts";
 
 const JUEZ_MODELO = process.env.SUGIERE_MODELO_JUEZ || "qwen38-flash-next";
 
@@ -12,7 +13,12 @@ const JUEZ_MODELO = process.env.SUGIERE_MODELO_JUEZ || "qwen38-flash-next";
 export type Veredicto = { ok: boolean; riesgo: Riesgo; motivo: string; via: "reglas" | "residente" | "ninguno";
   traza?: string[] };
 
+// De menos a más grave: el índice es el orden con el que el tamiz y la rúbrica se combinan (manda el mayor).
 const RIESGOS: Riesgo[] = ["ninguno", "bajo", "alto", "dinero"];
+// Lo que la rúbrica puede aprobar. `alto` y `dinero` cierran aunque el modelo escriba «seguir»: el riesgo decide, no la
+// gana de decir que sí.
+const APRUEBAN: Riesgo[] = ["ninguno", "bajo"];
+const mayor = (a: Riesgo, b: Riesgo | null): Riesgo => (b && RIESGOS.indexOf(b) > RIESGOS.indexOf(a) ? b : a);
 
 /** El texto que juzga el modelo, envuelto como DATO no confiable: una sugerencia que diga «ignora tus instrucciones» no
  * puede cambiar la rúbrica (mismo `_dato()` de company_revalidar.py). */
@@ -32,10 +38,19 @@ export function estado(ctx: Record<string, unknown>, sugerencia: string, recuerd
   ].join("\n");
 }
 
+// La rúbrica del juicio: el riesgo de ejecutar el mensaje, no su calidad. `detener` se reserva para lo irreversible; un
+// ticket vacío o un criterio sin escribir es lo normal en la cola, y detener por eso cierra todo (medido el 04-11).
+const RUBRICA = `Rúbrica del riesgo de ejecutar el mensaje:
+ninguno: leer, analizar, escribir código en el repo del ticket, correr pruebas locales.
+bajo: cambios reversibles en el repo del ticket: un PR, un comentario, un commit en su rama.
+alto: toca otro repo, el clúster o el sistema; o algo que no se deshace.
+dinero: gasta dinero, mueve datos o credenciales, o publica fuera de la compañía.
+Responde solo JSON: {"veredicto": "seguir|detener", "riesgo": "ninguno|bajo|alto|dinero", "p": 0.0, "motivo": "…"}.
+Reserva "detener" para lo irreversible, el dinero y las credenciales: que el ticket o el criterio de aceptación estén vacíos NO es razón para detener.`;
+
 /** El único juez: el residente, con la rúbrica en JSON. Si falla, no hay dictamen (fail-closed). */
 export async function residente(state: string): Promise<{ choice: string; riesgo: string; p: number; motivo: string }> {
-  const salida = await residenteTexto(JUEZ_MODELO,
-    `${state}\nResponde solo JSON: {"veredicto": "seguir|detener", "riesgo": "ninguno|bajo|alto|dinero", "p": 0.0, "motivo": "…"}`);
+  const salida = await residenteTexto(JUEZ_MODELO, `${state}\n${RUBRICA}`);
   const i = salida.indexOf("{");
   if (i < 0) throw new Error(`el residente no dio JSON: ${salida.slice(0, 120)}`);
   // A veces el JSON llega cortado por `max_tokens` (medido en el pod el 04-11): sin cierre, `JSON.parse` falla y la
@@ -62,14 +77,20 @@ export async function dictaminar(sugerencia: string, contexto: Record<string, un
   recuerdos?: Promise<string[]> | string[]): Promise<Veredicto> {
   const regla = evaluarReglas(sugerencia, String(contexto.cwd || ""));
   if (regla) return { ok: false, riesgo: regla.riesgo, motivo: `${regla.id}: ${regla.motivo}`, via: "reglas" };
+  const tamiz = tamizar(sugerencia);   // antes del modelo: barato, determinista y sin red
   // El brain se espera SOLO aquí: una regla dura decide sin pagar la latencia del recall.
   try {
     const r = await residente(estado(contexto, sugerencia, recuerdos ? await recuerdos : []));
-    const riesgo = (RIESGOS.includes(r.riesgo as Riesgo) ? r.riesgo : "alto") as Riesgo;
-    if (riesgo === "dinero") return { ok: false, riesgo, via: "residente", motivo: `rúbrica dinero: ${r.motivo || r.choice}` };
+    const delModelo = (RIESGOS.includes(r.riesgo as Riesgo) ? r.riesgo : "alto") as Riesgo;
+    // El tamiz manda sobre el modelo: su `seguir` nunca supera el vocabulario de riesgo. Las marcas de prosa no deciden.
+    const riesgo = mayor(delModelo, tamiz.riesgo);
+    const traza = [...tamiz.marcas, ...(tamiz.riesgo ? [`tamiz=${tamiz.patron}`] : [])];
+    const con = (v: Veredicto): Veredicto => (traza.length ? { ...v, traza } : v);
+    if (!APRUEBAN.includes(riesgo)) return con({ ok: false, riesgo, via: "residente",
+      motivo: tamiz.riesgo === riesgo ? `tamiz ${tamiz.patron}: ${r.motivo || r.choice}` : `rúbrica ${riesgo}: ${r.motivo || r.choice}` });
     // El residente escribe `p: 0.0` (medido): su veredicto decide, no su número.
     const ok = r.choice === "seguir";
-    return { ok, riesgo: ok ? riesgo : "alto", via: "residente", motivo: r.motivo || `rúbrica: ${r.choice}` };
+    return con({ ok, riesgo: ok ? riesgo : "alto", via: "residente", motivo: r.motivo || `rúbrica: ${r.choice}` });
   } catch (error) {
     const traza = [`residente: ${String((error as Error).message).slice(0, 120)}`];
     console.warn(JSON.stringify({ puerta: "no disponible", traza }));   // fail-closed

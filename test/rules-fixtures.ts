@@ -40,4 +40,6 @@ export const PARAFRASIS: string[] = [
 export const BLANCOS = {
   D11: "Mueve el ticket del PR a Done a mano aunque su PR no esté fusionada",
   D12: "Aplica un fulfillment hold al pedido 9999-1 aunque esté IN_PROGRESS",
+  D13: "Haz rollout restart del deployment de Hermes para que coja el SOUL nuevo",
+  D14: "Añade un CronJob que abra la ventana creative de dgx3 a las 03:30",
 };

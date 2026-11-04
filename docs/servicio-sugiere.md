@@ -118,6 +118,8 @@ En la tabla, `\|` es el separador de alternancia de la regex (`|` rompe el markd
 | D10 | fuera del ámbito | cualquier ruta `(~\|/home/[\w.-]+)/…` cuyo prefijo no sea `contexto.cwd` (o la casa del ticket si `cwd` es el de la sesión de compañía: `~/k8s/<repo>`, `~/src/<repo>`, `~/proyectos/<producto>`) | `ok:false`, `alto` |
 | D11 | ticket cerrado sin su PR | `\bdone\b[^\n]{0,60}\b(a mano\|sin (su \|la \|una )?pr( fusionad[ao])?\|sin (el \|la )?merge\|sin fusionar)\b` (y el orden inverso) | `ok:false`, `alto` |
 | D12 | hold sobre pedido en curso | `\bfulfillment\s+hold\b[^\n]{0,60}\b(in[ _-]?progress\|en curso\|ya empezad[oa])\b` (y el orden inverso) | `ok:false`, `alto` |
+| D13 | reinicio de Hermes | `\bhermes\b[^\n]{0,60}\b(rollout\s+restart\|reinici\w+\|restart\w*\|argocd\s+app\s+sync)\b` (y el orden inverso) | `ok:false`, `alto` (skill `hermes-config`: solo su despliegue ordenado) |
+| D14 | ventana creative programada | `\b(ventana\s+creative\|dgx3[- ]ventana\|dgx3_mode)\b[^\n]{0,80}\b(cron\w*\|program\w+\|schedule\w*\|timer\|a las?\s+\d)\b` (y el orden inverso) | `ok:false`, `alto` (la abre su dueño, a mano) |
 
 Notas de aplicación:
 
@@ -137,13 +139,23 @@ El estado que ve el modelo va envuelto en `<dato-xxxx>` con nonce (el `_dato()` 
 la sugerencia es **dato no confiable**, y una que diga "ignora tus instrucciones" no puede cambiar la
 rúbrica. Incluye resumen y criterio de aceptación del ticket y el mensaje propuesto.
 
+Antes del modelo corre el **tamiz léxico** (`service/tamiz.ts`), barato y determinista. Su invariante: sobre
+vocabulario de riesgo —dinero, credenciales, publicación fuera, lo irreversible— el `seguir` del residente
+**nunca es final**; el riesgo del tamiz se combina con el del modelo y manda el mayor. Los patrones de prosa
+solo dejan `marca=prosa-parN` en la traza y no cambian ningún veredicto. Los verbos de borrado en prosa no
+entran en el tamiz: ya los cazan D1/D2/D5 en su literal, y en prosa son la mitad de las legítimas medidas.
+
 | Paso | Condición | Qué pasa |
 |---|---|---|
-| 1 | una regla dura (D0-D12) | `ok:false`, `riesgo` el de la regla, `motivo:"<id>: <motivo>"`, **sin llamar a ningún modelo** |
-| 2 | residente `seguir` y `riesgo ≠ dinero` | `ok:true`, `riesgo` el suyo, `motivo` el que da el residente |
-| 3 | residente `detener` | `ok:false`, `riesgo:"alto"` |
-| 4 | residente con `riesgo:"dinero"` | `ok:false`, `riesgo:"dinero"`: dinero no se negocia con un modelo |
+| 1 | una regla dura (D0-D14) | `ok:false`, `riesgo` el de la regla, `motivo:"<id>: <motivo>"`, **sin llamar a ningún modelo** |
+| 2 | residente `seguir` y riesgo final `ninguno`/`bajo` | `ok:true`, `riesgo` el final, `motivo` el que da el residente |
+| 3 | residente `detener`, o riesgo final `alto` aunque diga `seguir` | `ok:false`, `riesgo:"alto"` |
+| 4 | riesgo final `dinero` (del modelo o del tamiz) | `ok:false`, `riesgo:"dinero"`: dinero no se negocia con un modelo |
 | 5 | JSON inválido, falla o no contesta en 60 s | `ok:false`, `riesgo:"alto"`, `via:"ninguno"` y la traza del fallo |
+
+La rúbrica pide el **riesgo** de ejecutar el mensaje (`ninguno`/`bajo`/`alto`/`dinero`) y reserva `detener`
+para lo irreversible, el dinero y las credenciales: un ticket sin resumen o un criterio sin escribir **no** son
+razón para detener (medido el 04-11: detenía la cola entera por eso).
 
 El residente escribe `p: 0.0` cuando se le pide una (medido el 01-11), así que su campo `p` se registra pero
 no se compara: decide su `veredicto`.
@@ -154,8 +166,8 @@ no se compara: decide su `veredicto`.
 |---|---|---|---|---|
 | Sugerencia buena | `true` | `ninguno` | `mensaje` al dueño con la sugerencia, prefijada `[SUPERVISOR]` | píldora normal; enviar sigue siendo el toque de Dani |
 | Buena con riesgo bajo | `true` | `bajo` | igual | igual |
-| D1/D2/D4/D9/D10, o el modelo dice `detener` | `false` | `alto` | `RETOMA` de hoy; el motivo va al historial del ticket, no a Dani | sin píldora; motivo en `paseo plugin logs` |
-| D3/D5/D6/D7/D8, o rúbrica `dinero` | `false` | `dinero` | `PARA DANI` con `preguntar()`; **no se autoenvía nunca** | sin píldora; la sugerencia se guarda junto a la pregunta |
+| D1/D2/D4/D9/D10/D13/D14, o el modelo dice `detener`, o rúbrica `alto` | `false` | `alto` | `RETOMA` de hoy; el motivo va al historial del ticket, no a Dani | sin píldora; motivo en `paseo plugin logs` |
+| D3/D5/D6/D7/D8, o rúbrica o tamiz `dinero` | `false` | `dinero` | `PARA DANI` con `preguntar()`; **no se autoenvía nunca** | sin píldora; la sugerencia se guarda junto a la pregunta |
 | Vacía (D0) | `false` | `bajo` | `RETOMA` | sin píldora |
 | Servicio caído o timeout | — | — | `RETOMA` | sin píldora |
 
