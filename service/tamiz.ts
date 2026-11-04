@@ -25,7 +25,7 @@ const PROSA: RegExp[] = [
   /\b(no dudes en|espero que|si necesitas algo|quedo atento)\b/i,
 ];
 
-export type Tamiz = { riesgo: Riesgo | null; patron: string; marcas: string[] };
+type Tamiz = { riesgo: Riesgo | null; patron: string; marcas: string[] };
 
 /** El tamiz de un texto. Barato, sin red, y nunca lanza: no puede tumbar la puerta. */
 export function tamizar(texto: string): Tamiz {
