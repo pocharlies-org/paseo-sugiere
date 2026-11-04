@@ -53,7 +53,7 @@ async function verdict(body: Cuerpo) {
   if (!contexto?.cwd) return [422, { error: "falta contexto.cwd" }];
   const t0 = Date.now();
   const v = await dictaminar(sugerencia, contexto);
-  // `ms` y `traza` son lo que permite auditar después un veredicto escalado: qué dijo Jev y por qué no decidió.
+  // `ms` y `traza` son lo que permite auditar después un veredicto: cuánto tardó y, si cerró por caída, por qué.
   console.log(JSON.stringify({ modo: MODO, sid, turno, ms: Date.now() - t0, ...v, sugerencia: sugerencia.slice(0, 120) }));
   return [200, v];
 }

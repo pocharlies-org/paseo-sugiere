@@ -6,8 +6,6 @@ import { dictaminar } from "../service/juez.ts";
 const ctx = { cwd: "/home/dani/k8s/k8s-paseo-pocharlies", resumen: "arma el PR", criterio: "CI en verde" };
 
 const respuesta = (out: unknown) => ({ ok: true, json: async () => out, text: async () => JSON.stringify(out) }) as any;
-const jev = (choice: string, p: number, riesgo = "bajo") =>
-  respuesta({ answers: { veredicto: { choice, probabilities: { [choice]: p } }, riesgo: { choice: riesgo } } });
 const residente = (o: unknown) => respuesta({ choices: [{ message: { content: JSON.stringify(o) } }] });
 
 afterEach(() => mock.restoreAll());
@@ -20,58 +18,54 @@ describe("la puerta", () => {
     assert.equal(f.mock.callCount(), 0);
   });
 
-  it("con la rúbrica de Jev por encima del umbral, aprueba", async () => {
-    mock.method(globalThis, "fetch", async (url: any) => String(url).includes("ollaya") ? jev("seguir", 0.97) : residente({}));
+  it("el residente decide solo: no queda ningún Jev delante", async () => {
+    const f = mock.method(globalThis, "fetch", async () => residente({ veredicto: "seguir", riesgo: "bajo", p: 0 }));
+    await dictaminar("abre el PR contra deploy/prod", ctx);
+    assert.equal(f.mock.callCount(), 1);
+    assert.match(String(f.mock.calls[0].arguments[0]), /litellm/);
+  });
+
+  it("con el residente en `seguir`, aprueba, y su motivo es el que se lee en la auditoría", async () => {
+    mock.method(globalThis, "fetch", async () => residente({ veredicto: "seguir", riesgo: "bajo", p: 0, motivo: "abre el PR" }));
     const v = await dictaminar("abre el PR contra deploy/prod", ctx);
     assert.equal(v.ok, true);
     assert.equal(v.riesgo, "bajo");
-    assert.equal(v.via, "jev");
-  });
-
-  it("la llamada a Jev dice quién pide y para qué (atribución del nginx de Ollaya)", async () => {
-    const f = mock.method(globalThis, "fetch", async (url: any) => String(url).includes("ollaya") ? jev("seguir", 0.97) : residente({}));
-    await dictaminar("abre el PR contra deploy/prod", ctx);
-    const llamada = f.mock.calls.find((c: any) => String(c.arguments[0]).includes("ollaya")) as any;
-    assert.equal(llamada.arguments[1].headers["x-caller"], "sugiere");
-    assert.equal(llamada.arguments[1].headers["x-purpose"], "juzgar-sugerencias");
-  });
-
-  it("por debajo del umbral escala al residente, y manda su veredicto", async () => {
-    mock.method(globalThis, "fetch", async (url: any) =>
-      String(url).includes("ollaya") ? jev("seguir", 0.5) : residente({ veredicto: "seguir", riesgo: "bajo", p: 0.96, motivo: "ok" }));
-    const v = await dictaminar("abre el PR contra deploy/prod", ctx);
-    assert.equal(v.ok, true);
-    assert.match(v.motivo, /residente/);
     assert.equal(v.via, "residente");
+    assert.equal(v.motivo, "abre el PR");
   });
 
   it("el residente decide con su veredicto aunque escriba p: 0.0, que es lo que escribe", async () => {
-    mock.method(globalThis, "fetch", async (url: any) =>
-      String(url).includes("ollaya") ? jev("seguir", 0.2) : residente({ veredicto: "seguir", riesgo: "bajo", p: 0.0, motivo: "ok" }));
+    mock.method(globalThis, "fetch", async () => residente({ veredicto: "seguir", riesgo: "ninguno", p: 0.0 }));
     const v = await dictaminar("abre el PR contra deploy/prod", ctx);
     assert.equal(v.ok, true);
-    assert.equal(v.via, "residente");
-    assert.equal(v.riesgo, "bajo");
+    assert.equal(v.riesgo, "ninguno");
   });
 
   it("un veredicto del residente con mayúsculas o cola se lee igual", async () => {
-    mock.method(globalThis, "fetch", async (url: any) =>
-      String(url).includes("ollaya") ? jev("seguir", 0.1) : residente({ veredicto: "SEGUIR (claro)", riesgo: "ninguno", p: 0 }));
+    mock.method(globalThis, "fetch", async () => residente({ veredicto: "SEGUIR (claro)", riesgo: "ninguno", p: 0 }));
     assert.equal((await dictaminar("abre el PR contra deploy/prod", ctx)).ok, true);
   });
 
-  it("dinero no escala ni se aprueba, venga de donde venga", async () => {
-    const f = mock.method(globalThis, "fetch", async (url: any) =>
-      String(url).includes("ollaya") ? jev("seguir", 0.99, "dinero") : residente({ veredicto: "seguir", riesgo: "ninguno", p: 0.99 }));
+  it("un `detener` cierra con riesgo alto aunque el modelo diga bajo", async () => {
+    mock.method(globalThis, "fetch", async () => residente({ veredicto: "detener", riesgo: "bajo", p: 0.99 }));
+    const v = await dictaminar("abre el PR contra deploy/prod", ctx);
+    assert.equal(v.ok, false);
+    assert.equal(v.riesgo, "alto");
+  });
+
+  it("dinero no se aprueba aunque diga seguir", async () => {
+    mock.method(globalThis, "fetch", async () => residente({ veredicto: "seguir", riesgo: "dinero", p: 0.99 }));
     const v = await dictaminar("revisa el pedido", ctx);
     assert.equal(v.ok, false);
     assert.equal(v.riesgo, "dinero");
-    assert.equal(f.mock.callCount(), 1); // solo Jev: no hay escalado que hacer
   });
 
-  it("sin Jev y sin residente la puerta cierra: nunca aprueba por defecto", async () => {
+  it("sin residente la puerta cierra y deja por qué en la traza: nunca aprueba por defecto", async () => {
     mock.method(globalThis, "fetch", async () => { throw new Error("caído"); });
     const v = await dictaminar("abre el PR contra deploy/prod", ctx);
-    assert.deepEqual(v, { ok: false, riesgo: "alto", motivo: "puerta no disponible", via: "ninguno" });
+    assert.equal(v.ok, false);
+    assert.equal(v.riesgo, "alto");
+    assert.equal(v.via, "ninguno");
+    assert.match(v.traza!.join(" "), /residente: caído/);
   });
 });
