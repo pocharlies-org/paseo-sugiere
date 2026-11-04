@@ -13,6 +13,11 @@ export type Pesos = { etiquetas: Etiqueta[]; pesos: number[][]; sesgo: number[];
 
 let cache: { ruta: string; pesos: Pesos | null } | null = null;
 
+/** Un head con todos sus pesos a cero no ha aprendido nada: su softmax es una constante, y devolverla con forma de
+ * probabilidad invita a que alguien la use de umbral. Sin entrenar se dice, no se disimula (medido 02-11: `p` 0,731
+ * para `rm -rf` y para «añade un test»). */
+export const sinEntrenar = (p: Pesos): boolean => p.pesos.every((f) => f.every((w) => w === 0));
+
 /** Los pesos del head, o null si no están (somos sombra: sin pesos se escala todo). */
 export function cargarPesos(ruta: string = RUTA_PESOS): Pesos | null {
   if (cache?.ruta === ruta) return cache.pesos;
@@ -55,11 +60,13 @@ export function decidir(x: number[], p: Pesos): { etiqueta: Etiqueta; p: number 
   return { etiqueta, p: prob };
 }
 
-/** Una pasada completa. Cualquier fallo es `escalar`: el filtro barato no puede abrir la puerta por accidente. */
-export async function clasificar(texto: string, rutaPesos: string = RUTA_PESOS): Promise<{ etiqueta: Etiqueta; p: number; ms: number; motivo: string }> {
+/** Una pasada completa. Cualquier fallo es `escalar`: el filtro barato no puede abrir la puerta por accidente.
+ * `etiqueta: null` es «no hay dictamen»: un head sin entrenar no clasifica, y su número no significa nada. */
+export async function clasificar(texto: string, rutaPesos: string = RUTA_PESOS): Promise<{ etiqueta: Etiqueta | null; p: number | null; ms: number; motivo: string }> {
   const t0 = Date.now();
   const pesos = cargarPesos(rutaPesos);
   if (!pesos) return { etiqueta: "escalar", p: 0, ms: Date.now() - t0, motivo: "sin pesos" };
+  if (sinEntrenar(pesos)) return { etiqueta: null, p: null, ms: Date.now() - t0, motivo: "head sin entrenar" };
   try {
     const { etiqueta, p } = decidir(await embedding(texto), pesos);
     return { etiqueta, p, ms: Date.now() - t0, motivo: "" };

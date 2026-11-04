@@ -73,7 +73,7 @@ async function verdict(body: Cuerpo) {
     modo === "on" && busqueda ? busqueda.then((b) => b.recuerdos.map((r) => r.texto)) : undefined);
   const ms = Date.now() - t0;
 
-  // `ms` y `traza` son lo que permite auditar después un veredicto escalado: qué dijo Jev y por qué no decidió.
+  // `ms` y `traza` son lo que permite auditar después un veredicto: cuánto tardó y, si cerró por caída, por qué.
   console.log(JSON.stringify({ modo: MODO, sid, turno, ms, ...v, sugerencia: sugerencia.slice(0, 120) }));
 
   // La auditoría se cierra cuando acaba el brain, sin retrasar la respuesta: la sugerencia va entera.
@@ -92,7 +92,7 @@ async function clasificarCuerpo(body: Cuerpo) {
   if (typeof texto !== "string" || !texto.trim()) return [422, { error: "falta texto" }];
   const r = await clasificar(texto);
   console.log(JSON.stringify({ modo: MODO, clasificador: "sombra", decide: false, etiqueta: r.etiqueta,
-    p: Number(r.p.toFixed(3)), ms: r.ms, motivo: r.motivo }));
+    p: r.p === null ? null : Number(r.p.toFixed(3)), ms: r.ms, motivo: r.motivo }));
   return [200, { ...r, decide: false }];
 }
 
