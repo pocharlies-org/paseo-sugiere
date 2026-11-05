@@ -4,7 +4,7 @@
 // El texto llega normalizado (NFKC, sin espacios de borde) y se juzga entero, también dentro de bloques de código.
 
 export type Riesgo = "ninguno" | "bajo" | "alto" | "dinero";
-export type Regla = { id: string; riesgo: Riesgo; motivo: string; patrones: RegExp[] };
+export type Regla = { id: string; riesgo: Riesgo; motivo: string; patrones: RegExp[]; excluye?: RegExp };
 
 const R = (id: string, riesgo: Riesgo, motivo: string, ...patrones: RegExp[]): Regla => ({ id, riesgo, motivo, patrones });
 
@@ -62,10 +62,14 @@ export const REGLAS: Regla[] = [
   // D2/D3: esas miran el mando, estas el efecto sobre un ticket y sobre un pedido en curso.
   R("D11", "alto", "ticket cerrado sin su PR fusionada",
     /\bdone\b[^\n]{0,60}\b(a mano|sin (su |la |una )?pr( fusionad[ao])?|sin (el |la )?merge|sin fusionar)\b/i,
-    /\b(a mano|sin (su |la )?pr( fusionad[ao])?|sin fusionar)\b[^\n]{0,60}\bdone\b/),
-  R("D12", "alto", "hold de fulfillment sobre un pedido en curso",
-    /\bfulfillment\s+hold\b[^\n]{0,60}\b(in[ _-]?progress|en curso|ya empezad[oa])\b/i,
-    /\b(in[ _-]?progress|en curso|ya empezad[oa])\b[^\n]{0,60}\bfulfillment\s+hold\b/),
+    /\b(a mano|sin (su |la )?pr( fusionad[ao])?|sin (el |la )?merge|sin fusionar)\b[^\n]{0,60}\bdone\b/i),
+  {
+    ...R("D12", "alto", "hold de fulfillment sobre un pedido en curso",
+      /\bfulfillment\s+hold\b[^\n]{0,60}\b(in[ _-]?progress|en curso|ya empezad[oa])\b/i,
+      /\b(in[ _-]?progress|en curso|ya empezad[oa])\b[^\n]{0,60}\bfulfillment\s+hold\b/i),
+    // Quitar, liberar o levantar el hold es el arreglo de un pedido estancado, no el daño que la regla caza (05-11).
+    excluye: /\b(qu[ií]ta\w*|lib[eé]ra\w*|ret[ií]ra\w*|lev[aá]nta\w*|an[uú]la\w*|suelta\w*)\b[^\n]{0,40}\bfulfillment\s+hold\b|\bfulfillment\s+hold\b[^\n]{0,40}\b(qu[ií]ta\w*|lib[eé]ra\w*|ret[ií]ra\w*|lev[aá]nta\w*|an[uú]la\w*|suelta\w*)\b/i,
+  },
   // D9 caza el `systemctl restart`, pero Hermes se reinicia a mano por otras puertas: `rollout restart` y `argocd app
   // sync` (skill `hermes-config`). Y la ventana de dgx3 la abre su dueño, a mano: programarla es lo prohibido.
   R("D13", "alto", "reinicio de Hermes fuera de su despliegue ordenado",
@@ -101,7 +105,8 @@ export function evaluarReglas(sugerencia: string, cwd: string): { id: string; ri
   const texto = normalizar(sugerencia);
   if (texto.length < 3) return { id: "D0", riesgo: "bajo", motivo: "sugerencia vacía" };
   for (const regla of REGLAS) {
-    if (regla.patrones.some((p) => p.test(texto))) return { id: regla.id, riesgo: regla.riesgo, motivo: regla.motivo };
+    if (regla.patrones.some((p) => p.test(texto)) && !regla.excluye?.test(texto))
+      return { id: regla.id, riesgo: regla.riesgo, motivo: regla.motivo };
   }
   const ruta = fueraDeAmbito(texto, cwd);
   return ruta ? { id: "D10", riesgo: "alto", motivo: `ruta fuera del ámbito: ${ruta}` } : null;

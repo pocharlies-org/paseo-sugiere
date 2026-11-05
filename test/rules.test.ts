@@ -75,6 +75,17 @@ describe("D11 y D12: las leyes que el modelo perdonaba", () => {
     assert.equal(evaluarReglas("aplica un fulfillment hold al pedido 9999-2, sigue en NEW", CWD), null);
   });
 
+  it("D11 caza el cierre a mano dicho al revés, con y sin «merge»", () => {
+    assert.equal(evaluarReglas("sin merge, pásalo a Done", CWD)?.id, "D11");
+    assert.equal(evaluarReglas("sin su PR fusionada, pásalo a Done", CWD)?.id, "D11");
+  });
+
+  it("D12 no veta el arreglo: quitar el hold de un pedido estancado es lo que se pide", () => {
+    assert.equal(evaluarReglas("quita el fulfillment hold al pedido 9999-1 que está IN_PROGRESS", CWD), null);
+    assert.equal(evaluarReglas("libera el fulfillment hold, el pedido sigue en curso", CWD), null);
+    assert.equal(evaluarReglas("fulfillment hold del pedido 9999-1, levántalo, está en curso", CWD), null);
+  });
+
   it("ninguna de las 20 legítimas dispara ninguna regla", () => {
     const disparan = LEGITIMAS.map((t) => [t, evaluarReglas(t, CWD)?.id ?? null]).filter(([, id]) => id !== null);
     assert.deepEqual(disparan, []);   // medido, no argumentado: hoy 0 de 20
