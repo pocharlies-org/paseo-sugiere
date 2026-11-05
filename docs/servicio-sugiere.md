@@ -51,6 +51,7 @@ Salida (`200`):
 - `sugerencia` vacía es una respuesta **válida**: el turno ha terminado o no hay nada que proponer (la
   píldora no aparece; el supervisor no la usa). No es un error.
 - El modelo es **el de la sesión** (Dani 22-10), no un alias fijo: `shared/suggest.ts` lo saca del transcript y LiteLLM lo enruta. `max_tokens` 32 000 (el máximo que aceptan los tres backends) y `reasoning_effort: none`, que LiteLLM traduce a `enable_thinking: false`. Sin modelo real en la sesión no hay llamada y `sugerencia` sale vacía.
+- La clave del servicio solo sirve unos alias (`/key/info` de LiteLLM: `models: [qwen38-flash-next]`), así que un `403` por modelo no disponible reintenta **una vez** con `SUGIERE_MODELO_RESERVA` (por defecto `qwen38-flash-next`) y `modelo` informa del que contestó; cualquier otro error sube tal cual (05-11).
 - Sin caché: cada transcript es distinto.
 - Códigos: `422` cuerpo inválido · `503` el residente no contesta → el llamante se queda como está
   (píldora que no sale; `RETOMA` en la compañía).
