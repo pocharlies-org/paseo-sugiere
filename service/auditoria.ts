@@ -55,5 +55,7 @@ export function consultar(f: Filtro = {}, ruta: string = RUTA): Registro[] {
     if (f.via && r.via !== f.via) continue;
     out.push(r);
   }
-  return out.slice(-Math.min(Math.max(f.limit ?? 100, 1), MAX_CONSULTA));
+  // `limit` no numérico llega como NaN (`Number("abc")`): sin esto, slice(-NaN) es slice(0) y devuelve el registro ENTERO.
+  const limit = Number.isFinite(f.limit) ? Math.max(Math.trunc(f.limit as number), 1) : 100;
+  return out.slice(-Math.min(limit, MAX_CONSULTA));
 }

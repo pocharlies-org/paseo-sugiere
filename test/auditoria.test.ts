@@ -31,6 +31,14 @@ describe("la auditoría de calidad", () => {
     assert.deepEqual(consultar({ limit: 1 }, f).map((r) => r.turno), ["t3"]);   // las últimas, no las primeras
   });
 
+  // `Number("abc")` es NaN y `slice(-NaN)` es `slice(0)`: sin el guardado, `?limit=abc` devolvía el registro ENTERO.
+  it("un limit no numérico cae al de por defecto, no al registro entero", () => {
+    const f = ruta();
+    for (let n = 1; n <= 3; n++) registrar(base(n), f);
+    assert.deepEqual(consultar({ limit: Number("abc") }, f).map((r) => r.turno), ["t1", "t2", "t3"]);
+    assert.deepEqual(consultar({ limit: -5 }, f).map((r) => r.turno), ["t3"]);   // el suelo sigue en 1
+  });
+
   it("una línea rota no se lleva por delante las demás", () => {
     const f = ruta();
     registrar(base(1), f);
