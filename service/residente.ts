@@ -4,6 +4,8 @@ import { suggestBody, suggestionAnswer, lastAssistantText } from "../shared/sugg
 
 const LITELLM = process.env.RESIDENTE_URL || "http://litellm.litellm.svc:4000";
 const KEY = process.env.RESIDENTE_KEY || "";
+/** Alias que la clave del servicio sí puede usar (`/key/info` de LiteLLM: `models: [qwen38-flash-next]`, 05-11). */
+const RESERVA = process.env.SUGIERE_MODELO_RESERVA || "qwen38-flash-next";
 
 /** El cuerpo de la sugerencia en la forma del chat: el `system` del cuerpo Anthropic (dos bloques) pasa a un mensaje de sistema. */
 export function cuerpoSugerencia(lines: string[], instruccion = ""): string | null {
@@ -25,7 +27,7 @@ async function llamar(cuerpo: string, timeoutMs: number): Promise<any> {
   const r = await fetch(`${LITELLM.replace(/\/$/, "")}/v1/chat/completions`, {
     method: "POST", headers, body: cuerpo, signal: AbortSignal.timeout(timeoutMs),
   });
-  if (!r.ok) throw new Error(`LiteLLM respondió ${r.status}: ${(await r.text()).slice(0, 200)}`);
+  if (!r.ok) throw Object.assign(new Error(`LiteLLM respondió ${r.status}: ${(await r.text()).slice(0, 200)}`), { status: r.status });
   return r.json();
 }
 
@@ -36,8 +38,16 @@ const comoAnthropic = (r: any) => ({ content: [{ type: "text", text: r?.choices?
 export async function sugerir(lines: string[], instruccion = "", timeoutMs = 120_000): Promise<{ texto: string; modelo: string }> {
   const cuerpo = cuerpoSugerencia(lines, instruccion);
   if (!cuerpo) return { texto: "", modelo: "" };
-  return { texto: suggestionAnswer(comoAnthropic(await llamar(cuerpo, timeoutMs)), lastAssistantText(lines)),
-    modelo: JSON.parse(cuerpo).model };
+  const modelo = JSON.parse(cuerpo).model;
+  const pedir = async (c: string) => suggestionAnswer(comoAnthropic(await llamar(c, timeoutMs)), lastAssistantText(lines));
+  try {
+    return { texto: await pedir(cuerpo), modelo };
+  } catch (e) {
+    // La clave del servicio no sirve todos los alias (LiteLLM: `models: [qwen38-flash-next]`), así que una sesión en otro
+    // modelo —Alibaba, `claude-*`— recibía un 403 y la píldora salía vacía (Dani 05-11). Una sola reserva, y solo para el 403.
+    if ((e as { status?: number }).status !== 403 || modelo === RESERVA) throw e;
+    return { texto: await pedir(JSON.stringify({ ...JSON.parse(cuerpo), model: RESERVA })), modelo: RESERVA };
+  }
 }
 
 /** Una respuesta de texto para la rúbrica del dictamen (eso sí, con un modelo fijo: no depende de ninguna sesión). */
