@@ -1,13 +1,13 @@
 // The next-message suggestion: after a turn ends quietly for a minute, one small call proposes what the user should send next,
 // and the composer pill shows it. Port of OpenChamber's session-assist: same 60 s quiet window, same rule that a finished
-// conversation gets nothing. Nothing here touches the session: the call goes to LiteLLM with the session's own model (Dani 22-10),
-// without sharing the session's cache — each suggestion pays for the conversation (up to ~100k tokens).
+// conversation gets nothing. Nothing here touches the session: the suggestion comes from the cluster's `sugiere` service
+// (Dani 05-11), the same place the company uses, so there is one mechanism and not two.
 import { readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import type { PluginHandlerContext, PluginHookContext } from "@getpaseo/plugin/server";
-import { lastAssistantText, suggestBody, suggestionAnswer } from "../shared/suggest.ts";
-import { SessionError, locateSession, nativeSuggestion, routerRequest } from "./session.ts";
+import { transcriptMessages } from "../shared/transcript.ts";
+import { SessionError, locateSession, nativeSuggestion, sugiereRequest } from "./session.ts";
 
 // The settings document in force: off drops every pending and shown suggestion; auto gates only the quiet window (the pill's
 // force works without it); quiet is the silence window.
@@ -119,25 +119,26 @@ async function generate(agentId: string, seq: number, context: PluginHandlerCont
       return;
     }
     const lines = await locateSession(agentId, context.paseo);
+    // Sin modelo real (sin turno del asistente, o solo `<synthetic>`) no hay nada que pedir: ni llamada ni reserva (Dani 22-10).
+    if (!transcriptMessages(lines).model) throw new Error("la sesión aún no tiene modelo");
     // Sync and read per generation: no override file is the normal case (built-in instruction), and the read adds no await, so the
     // seq guard stays built on the two awaits below. A hand edit of the file takes effect on the next suggestion.
     let instruction = "";
     try {
       instruction = readFileSync(PROMPT_FILE, "utf8");
     } catch {}
-    const call = suggestBody(lines, instruction);
-    if (!call) throw new Error("la sesión aún no tiene modelo"); // no real model, no call, no fallback: logged and shown by the catch below
-    const answer = await routerRequest(call.body);
+    // La sugerencia la genera el servicio `sugiere` del clúster, el mismo sitio que usa la compañía (Dani, 05-11).
+    const answer = await sugiereRequest(agentId, seq, lines, instruction);
     if (answer.status !== 200) {
-      console.warn(`suggest: el router respondió ${answer.status} para ${agentId} con ${call.model}: ${answer.text.slice(0, 200)}`);
-      settle("el router no respondió bien");
+      console.warn(`suggest: el servicio sugiere respondió ${answer.status} para ${agentId}`);
+      settle("el servicio sugiere no respondió bien");
       return;
     }
-    const text = suggestionAnswer(JSON.parse(answer.text), lastAssistantText(lines));
+    const text = answer.sugerencia;
     if (!text) console.log(`suggest: respuesta vacía (nada que sugerir) para ${agentId}`);
     const entry = settle(text ? null : "nada que sugerir");
     if (entry && entry.seq === seq && text) {
-      console.log(`suggest: generada para ${agentId} con ${call.model}: ${JSON.stringify(text.slice(0, 60))}`);
+      console.log(`suggest: generada para ${agentId} con ${answer.modelo}: ${JSON.stringify(text.slice(0, 60))}`);
       entry.text = text;
     } else if (forced && entry && !entry.pending && !entry.text) {
       console.log(`suggest: respuesta descartada para ${agentId} (la sesión se movió)`);
