@@ -9,10 +9,10 @@ mock.module(new URL("../server/session.ts", import.meta.url).href, {
   namedExports: {
     SessionError: class extends Error {},
     locateSession: async () => transcript,
-    nativeSuggestion: async () => null, // sin fichero nativo : la llamada al router es el camino normal
-    routerRequest: async (body: string) => {
+    nativeSuggestion: async () => null, // sin fichero nativo : la llamada al servicio es el camino normal
+    sugiereRequest: async () => {
       calls += 1;
-      return { status: 200, text: JSON.stringify({ model: JSON.parse(body).model, content: [{ type: "text", text: "sigue con el merge" }] }) };
+      return { status: 200, sugerencia: "sigue con el merge", modelo: "qwen38-off" };
     },
   },
 });
