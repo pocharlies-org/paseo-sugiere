@@ -8,8 +8,8 @@
 import { readFileSync } from "node:fs";
 
 const RUTA_MODO = process.env.BRAIN_MODO_FICHERO || "/etc/sugiere/brain.json";
-const BRAIN_URL = process.env.BRAIN_URL || "http://hindsight-api.hindsight.svc:8888";
-const BANCO = process.env.BRAIN_BANCO || "claude-personal";
+export const BRAIN_URL = process.env.BRAIN_URL || "http://hindsight-api.hindsight.svc:8888";
+export const BANCO = process.env.BRAIN_BANCO || "claude-personal";
 const TOPE_MS = Number(process.env.BRAIN_TOPE_MS || "20000");
 const MAX_RECUERDOS = Number(process.env.BRAIN_MAX || "5");
 const MAX_RECUERDO = 400;   // un recuerdo largo no añade señal a la rúbrica y sí tokens de espera

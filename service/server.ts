@@ -2,12 +2,12 @@
 // puede enviarse. No envía, no escribe tickets y no lee transcripts: todo lo que necesita llega en la petición.
 // La auditoría (`/v1/auditoria`) es la única escritura: el registro de calidad de la puerta, en un JSONL.
 import { createServer } from "node:http";
-import { consultar, registrar, registrarCuando } from "./auditoria.ts";
-import { modoBrain, recordar } from "./brain.ts";
-import { clasificar } from "./clasificador.ts";
+import { RUTA, MAX_BYTES, consultar, registrar, registrarCuando } from "./auditoria.ts";
+import { BRAIN_URL, BANCO, modoBrain, recordar } from "./brain.ts";
+import { cargarPesos, clasificar, sinEntrenar } from "./clasificador.ts";
 import { clave, guardar as guardarCache, leer as leerCache } from "./cache.ts";
-import { dictaminar } from "./juez.ts";
-import { sugerir } from "./residente.ts";
+import { JUEZ_MODELO, dictaminar } from "./juez.ts";
+import { LITELLM, RESERVA, sugerir } from "./residente.ts";
 import { evaluarReglas } from "./rules.ts";
 
 const PORT = Number(process.env.PORT || "8080");
@@ -118,11 +118,32 @@ function auditoria(url: string) {
   })];
 }
 
+// La configuración EFECTIVA, para el dashboard: lo que este proceso ve de verdad. Los secretos solo se anuncian, no se leen.
+function config() {
+  const pesos = cargarPesos();
+  return {
+    modo: MODO,
+    modelo_juez: JUEZ_MODELO,
+    modelo_reserva: RESERVA,
+    residente_url: LITELLM,
+    clave_residente: Boolean(process.env.RESIDENTE_KEY),
+    brain: { modo: modoBrain(), url: BRAIN_URL, banco: BANCO, token: Boolean(process.env.BRAIN_TOKEN) },
+    clasificador: { pesos: pesos !== null, sin_entrenar: pesos ? sinEntrenar(pesos) : null, mide: false },
+    limites: { max_transcript: MAX_TRANSCRIPT, max_sugerencia: MAX_SUGERENCIA },
+    auditoria: { ruta: RUTA, max_bytes: MAX_BYTES },
+    token: Boolean(TOKEN),
+  };
+}
+
 const servidor = createServer(async (req, res) => {
   const ruta = (req.url || "/").split("?")[0];
   try {
     if (ruta === "/healthz") return json(res, 200, { ok: true, modo: MODO, brain: modoBrain() });
     if (!autorizado(req)) return json(res, 401, { error: "falta el token" });
+    if (ruta === "/v1/config") {
+      if (req.method !== "GET") return json(res, 405, { error: "solo GET" });
+      return json(res, 200, config());
+    }
     if (ruta === "/v1/auditoria") {
       if (req.method !== "GET") return json(res, 405, { error: "solo GET" });
       const [code, out] = auditoria(req.url || "/");

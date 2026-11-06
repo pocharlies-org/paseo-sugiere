@@ -244,6 +244,11 @@ con la **sugerencia entera** (el log de stdout la corta a 120 caracteres, que no
 `GET /v1/auditoria?limit=&desde=&hasta=&ok=&via=` devuelve las últimas líneas que pasan el filtro (máximo
 500; por defecto 100, y un `limit` no numérico cae a ese defecto), de la más vieja a la más nueva.
 
+`GET /v1/config` devuelve la configuración **efectiva** del proceso, para el dashboard (`/sugiere`): modo,
+modelos de juez y de reserva, URL del residente, modo del brain, si el clasificador tiene pesos (y si están
+sin entrenar), límites y ruta de la auditoría. Los secretos solo se anuncian como booleano
+(`clave_residente`, `brain.token`, `token`), nunca su valor.
+
 Con eso se etiqueta a mano lo que la puerta aprobó (¿era buena la continuación?) y se compara: reglas contra
 rúbrica, `via`, y brain apagado contra brain encendido sobre los mismos casos.
 
