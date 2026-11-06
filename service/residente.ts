@@ -2,10 +2,10 @@
 // cuerpo que ya arma `shared/suggest.ts` y `reasoning_effort: none`, que LiteLLM traduce a `enable_thinking: false` en cualquier alias.
 import { suggestBody, suggestionAnswer, lastAssistantText } from "../shared/suggest.ts";
 
-const LITELLM = process.env.RESIDENTE_URL || "http://litellm.litellm.svc:4000";
+export const LITELLM = process.env.RESIDENTE_URL || "http://litellm.litellm.svc:4000";
 const KEY = process.env.RESIDENTE_KEY || "";
 /** Alias que la clave del servicio sí puede usar (`/key/info` de LiteLLM: `models: [qwen38-flash-next]`, 05-11). */
-const RESERVA = process.env.SUGIERE_MODELO_RESERVA || "qwen38-flash-next";
+export const RESERVA = process.env.SUGIERE_MODELO_RESERVA || "qwen38-flash-next";
 
 /** El cuerpo de la sugerencia en la forma del chat: el `system` del cuerpo Anthropic (dos bloques) pasa a un mensaje de sistema. */
 export function cuerpoSugerencia(lines: string[], instruccion = ""): string | null {

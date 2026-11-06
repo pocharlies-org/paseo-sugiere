@@ -6,7 +6,7 @@ import { evaluarReglas, type Riesgo } from "./rules.ts";
 import { texto as residenteTexto } from "./residente.ts";
 import { tamizar } from "./tamiz.ts";
 
-const JUEZ_MODELO = process.env.SUGIERE_MODELO_JUEZ || "qwen38-flash-next";
+export const JUEZ_MODELO = process.env.SUGIERE_MODELO_JUEZ || "qwen38-flash-next";
 
 // `via` deja en el log quién decidió: es la prueba de que una regla no llamó a ningún modelo.
 /** `traza`: por qué no dictó el residente. Sin ella, un veredicto cerrado por caída no se puede auditar. */

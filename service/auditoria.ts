@@ -3,8 +3,8 @@
 // La línea se escribe cuando termina el brain (en `sombra` corre en paralelo), nunca antes de responder al llamante.
 import { appendFileSync, readFileSync, renameSync, statSync } from "node:fs";
 
-const RUTA = process.env.AUDITORIA_RUTA || "/var/lib/sugiere/auditoria.jsonl";
-const MAX_BYTES = Number(process.env.AUDITORIA_MAX_BYTES || String(64 * 1024 * 1024));
+export const RUTA = process.env.AUDITORIA_RUTA || "/var/lib/sugiere/auditoria.jsonl";
+export const MAX_BYTES = Number(process.env.AUDITORIA_MAX_BYTES || String(64 * 1024 * 1024));
 const MAX_CONSULTA = 500;
 
 export type BrainReg = { modo: string; ms: number; n: number; motivo: string } | null;
