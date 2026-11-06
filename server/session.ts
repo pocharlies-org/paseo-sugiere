@@ -4,12 +4,13 @@ import { readdir, readFile, rm, stat } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import type { PluginHandlerContext } from "@getpaseo/plugin/server";
+import { SUGGEST_WAIT_MS } from "../shared/suggest.ts";
 
 // The server runtime boundary forbids importing @getpaseo/client: the API type comes from the SDK's own context.
 type PaseoApi = PluginHandlerContext["paseo"];
 
 const TIMEOUT_MS = 120_000;
-const SUGIERE_TIMEOUT_MS = 150_000;   // el servicio espera al residente hasta 60 s; aquí se le da margen
+const SUGIERE_TIMEOUT_MS = SUGGEST_WAIT_MS + 15_000; // lo que espera el servicio al residente, y margen
 const MAX_BYTES = 4 * 1024 * 1024;
 
 const FAILURE_TEXT = {
@@ -51,7 +52,7 @@ export async function locateSession(agentId: string, paseo: PaseoApi): Promise<s
 
 /** El servicio `sugiere` del clúster: la única puerta de la sugerencia, la misma que usa la compañía (Dani, 05-11). En el
  * pod de Paseo se resuelve por el DNS del clúster; fuera, `SUGIERE_URL` apunta a su IP. Su plazo es mayor que el del
- * servicio (60 s esperando al residente), o toda sugerencia lenta se perdería aquí. */
+ * servicio (`SUGGEST_WAIT_MS` esperando al residente), o toda sugerencia lenta se perdería aquí. */
 export async function sugiereRequest(
   sid: string,
   turno: number,

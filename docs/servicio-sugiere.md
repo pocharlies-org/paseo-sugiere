@@ -92,7 +92,7 @@ Códigos: `422` cuerpo inválido o falta `contexto.cwd` · `200` en todo lo dem�
 residente no contesta, se agota o no da JSON, responde `{"ok": false, "riesgo": "alto", "motivo": "puerta no
 disponible"}` con la traza del fallo, y el llamante cae a `RETOMA`.
 
-Presupuesto: `/v1/suggest` espera al residente hasta **300 s** (Dani, 06-11: con transcript de ticket tarda 60-120 s y la mitad de las propuestas se perdían contra un plazo de 60 s); `/v1/verdict` mantiene 60 s para la rúbrica, que es un prompt corto. Por eso
+Presupuesto: `/v1/suggest` espera al residente hasta **300 s** (`SUGGEST_WAIT_MS`; Dani, 06-11: con transcript de ticket tarda 60-120 s y la mitad de las propuestas se perdían contra un plazo de 60 s), y el plugin de Paseo espera algo más que eso; `/v1/verdict` mantiene 60 s para la rúbrica, que es un prompt corto. Por eso
 el veredicto es asíncrono: un llamante síncrono con presupuesto de 30 s no lo puede
 esperar entero y debe tratar el silencio como fail-closed. Caché: `sha256(sid|turno|sugerencia)` →
 veredicto de modelo, 24 h, LRU 1000. Las reglas duras **no** se cachean: se evalúan siempre y ganan al

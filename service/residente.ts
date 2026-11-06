@@ -1,6 +1,6 @@
 // La única llamada al residente, por LiteLLM: /v1/chat/completions con el MISMO modelo que corre la sesión (Dani 22-10), el
 // cuerpo que ya arma `shared/suggest.ts` y `reasoning_effort: none`, que LiteLLM traduce a `enable_thinking: false` en cualquier alias.
-import { suggestBody, suggestionAnswer, lastAssistantText } from "../shared/suggest.ts";
+import { SUGGEST_WAIT_MS, suggestBody, suggestionAnswer, lastAssistantText } from "../shared/suggest.ts";
 
 export const LITELLM = process.env.RESIDENTE_URL || "http://litellm.litellm.svc:4000";
 const KEY = process.env.RESIDENTE_KEY || "";
@@ -35,7 +35,7 @@ async function llamar(cuerpo: string, timeoutMs: number): Promise<any> {
 const comoAnthropic = (r: any) => ({ content: [{ type: "text", text: r?.choices?.[0]?.message?.content ?? "" }] });
 
 /** La sugerencia del siguiente mensaje: "" cuando no hay nada que proponer. */
-export async function sugerir(lines: string[], instruccion = "", timeoutMs = 300_000): Promise<{ texto: string; modelo: string }> {
+export async function sugerir(lines: string[], instruccion = "", timeoutMs = SUGGEST_WAIT_MS): Promise<{ texto: string; modelo: string }> {
   const cuerpo = cuerpoSugerencia(lines, instruccion);
   if (!cuerpo) return { texto: "", modelo: "" };
   const modelo = JSON.parse(cuerpo).model;
