@@ -3,6 +3,7 @@ import { Icon, TextInput } from "@getpaseo/plugin/client/react-native";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Pressable, Text, View } from "react-native";
 import { suggestForce, suggestGet } from "../shared/contract.ts";
+import { SUGGEST_WAIT_MS } from "../shared/suggest.ts";
 import { insertSuggestion, registerPillAnchor } from "./composer-bridge.ts";
 
 // One composer pill per idle agent: with a suggestion ready it opens the card, without one it is a small ✦ whose click forces a
@@ -207,7 +208,7 @@ export function addSuggestPill(client: PluginClientContext): () => void {
                 pendingFor.set(agent.id, true);
                 errors.delete(agent.id);
                 show(agents.get(agent.id) ?? agent);
-                const deadline = Date.now() + 130_000; // the router's own cap (120 s)
+                const deadline = Date.now() + SUGGEST_WAIT_MS + 30_000; // after the service's wait and the plugin server's margin over it
                 const id = setInterval(() => {
                   const current = agents.get(agent.id);
                   if (stopped || !current || current.status !== "idle") {

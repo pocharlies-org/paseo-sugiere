@@ -27,6 +27,7 @@ test("suggestion card uses the sheet-aware input, edits before sending and has a
     "react-native": { View: "View", Text: "Text", Pressable: "Pressable", TextInput: "UnsafeInput" },
     "@getpaseo/plugin/client/react-native": { Icon: "Icon", TextInput: "SheetAwareInput" },
     "../shared/contract.ts": { suggestGet: "get", suggestForce: "force" },
+    "../shared/suggest.ts": { SUGGEST_WAIT_MS: 300_000 },
     "./composer-bridge.ts": { insertSuggestion: () => false },
   };
   const exports: any = {};
@@ -106,6 +107,7 @@ test("a forced suggestion stays on the pill until its button is pressed", async 
     "react-native": { View: "View", Text: "Text", Pressable: "Pressable" },
     "@getpaseo/plugin/client/react-native": { Icon: "Icon", TextInput: "Input" },
     "../shared/contract.ts": { suggestGet: "get", suggestForce: "force" },
+    "../shared/suggest.ts": { SUGGEST_WAIT_MS: 300_000 },
     "./composer-bridge.ts": {
       insertSuggestion: (agentId: string, text: string) => { inserted.push(`${agentId} ${text}`); return true; },
       registerPillAnchor: () => () => {},
