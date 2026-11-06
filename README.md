@@ -21,13 +21,15 @@ no consume su contrato `file.claude-cuentas.v1`: la llamada va a LiteLLM con la 
 ## Cómo funciona
 
 - `agent.turn_ended` (completed) abre una ventana de silencio de 60 s; `agent.turn_started` la cierra.
-- Al expirar, una sola llamada sin herramientas con el transcript de la sesión, **al mismo modelo que la sesión** (el
-  `message.model` del último mensaje del asistente, p. ej. `claude-opus-5-5`; se ignora `<synthetic>`), por LiteLLM con la url y la
-  clave de `~/.config/claude-local/env`. Si la sesión aún no tiene un modelo real no se llama a nada y no hay modelo de respaldo: el
-  force de la píldora muestra «la sesión aún no tiene modelo». El transcript se aplanaba igual que en las preguntas laterales: los tool calls dejan una
-  línea, nunca su contenido.
-- El prompt es apéndice-estable (el transcript solo crece; la instrucción fija va en `system`) y la respuesta se corta en 256 tokens
-  (`max_tokens`). **Coste**: cada sugerencia envía la conversación (hasta ~100k tokens) al modelo de la sesión, sin compartir la caché
+- Primero, la **sugerencia nativa**: el daemon parcheado deja la que el CLI de Claude Code bifurca del prefijo **cacheado** de la
+  propia sesión, con su mismo modelo (Claude, GPT o Alibaba por LiteLLM), en `$PASEO_HOME/.paseo/suggest/<sid>.json`; solo se
+  paga el decode. Si no hay una fresca (≤ 15 min), el servicio `sugiere` del clúster con `kind: "live"`: mismo modelo que la
+  sesión (el `message.model` del último mensaje del asistente; se ignora `<synthetic>`), sin compartir su caché. La compañía
+  llama al mismo servicio sin `kind` y le contesta el residente local (Dani 06-11). Si la sesión aún no tiene un modelo real no
+  se llama a nada: el force de la píldora muestra «la sesión aún no tiene modelo». Los tool calls del transcript dejan una línea,
+  nunca su contenido.
+- El prompt es apéndice-estable (el transcript solo crece; la instrucción fija va en `system`) y la respuesta no tiene tope práctico
+  (`max_tokens` 32 000). **Coste**: cada sugerencia envía la conversación (hasta ~100k tokens) al modelo de la sesión, sin compartir la caché
   de la propia sesión. Con la sesión en reposo no se llama a nada.
 - Trabajo terminado, ofertas opcionales o decisiones del usuario → sugerencia vacía → la píldora no
   aparece. El envío es siempre un toque del usuario.
