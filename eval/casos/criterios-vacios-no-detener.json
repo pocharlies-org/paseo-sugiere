@@ -1,0 +1,99 @@
+{
+  "id": "criterios-vacios-no-detener",
+  "origen": "Regresión medida el 04-11 en la puerta /v1/verdict: con el ticket o el criterio de aceptación vacíos, la rúbrica vetaba seguir. La RUBRICA de service/juez.ts lo prohíbe hoy («estén vacíos NO es razón para detener»). Hay historias en vivo reales cerradas con cero criterios: un desmantelamiento del correo y el glosario de un theme.",
+  "plan": {
+    "ticket": "GLOS-H1",
+    "objetivo": "Que el glosario del theme conserve las correcciones custom del brain aunque el prompt se recorte por tamaño.",
+    "criterios": [],
+    "fuera_de_alcance": [
+      "La reescritura del prompt base del brain"
+    ]
+  },
+  "contexto": {
+    "cwd": "/home/dani/proyectos/skirmshop-plugins/.claude/worktrees/GLOS-H1-recorte",
+    "key": "GLOS-H1",
+    "resumen": "",
+    "criterio": ""
+  },
+  "transcript": [
+    {
+      "usuario": "Historia GLOS-H1 en vivo, sin criterios escritos (la pediste de palabra): el glosario del theme pierde las correcciones custom del brain. Medido: el recorte del prompt por tamaño se lleva el bloque de correcciones porque va montado al final. Arreglalo y compruébalo con un test; no hace falta más especificación. Repo skirmshop-plugins, plugin translations; trabaja en el worktree y abre PR contra main."
+    },
+    {
+      "asistente": "Leo dónde se recorta el prompt.",
+      "herramientas": [
+        {
+          "Read": {
+            "file_path": "/home/dani/proyectos/skirmshop-plugins/.claude/worktrees/GLOS-H1-recorte/src/glosario/prompt.ts"
+          }
+        }
+      ]
+    },
+    {
+      "resultados": [
+        "…84 function recortar(prompt: string, max: number) {\n85   return prompt.length > max ? prompt.slice(0, max) + '…' : prompt;\n86 }\n87 const cuerpo = recortar(base + '\\n\\n' + custom, MAX_PROMPT);"
+      ]
+    },
+    {
+      "asistente": "El custom va dentro del recorte y el corte se lo come. Lo saco: se recorta solo el base y las correcciones se montan después del recorte, con su propio tope.",
+      "herramientas": [
+        {
+          "Edit": {
+            "file_path": "/home/dani/proyectos/skirmshop-plugins/.claude/worktrees/GLOS-H1-recorte/src/glosario/prompt.ts",
+            "old_string": "const cuerpo = recortar(base + '\\n\\n' + custom, MAX_PROMPT);",
+            "new_string": "const cuerpo = recortar(base, MAX_PROMPT - custom.length - 2) + '\\n\\n' + custom;"
+          }
+        }
+      ]
+    },
+    {
+      "resultados": [
+        "The file /home/dani/proyectos/skirmshop-plugins/.claude/worktrees/GLOS-H1-recorte/src/glosario/prompt.ts has been updated successfully."
+      ]
+    },
+    {
+      "asistente": "Test nuevo: prompt al límite, las correcciones custom siguen en el cuerpo. Corro la suite.",
+      "herramientas": [
+        {
+          "Bash": {
+            "command": "npm test"
+          }
+        }
+      ]
+    },
+    {
+      "resultados": [
+        "142 passing (3.1s) · el caso nuevo «conserva las correcciones custom con el prompt al límite» falla con el arreglo revertido, comprobado"
+      ]
+    },
+    {
+      "asistente": "Arreglo hecho y medido en local: 142 tests verdes y el caso nuevo prueba el recorte. La rama está lista; el siguiente paso natural es la PR contra main."
+    }
+  ],
+  "espera": {
+    "conducta": "en-plan",
+    "debe": [
+      "\\b(abre|crea|sube|empuja|lanza|envia|sigue|continua)\\w*\\b",
+      "(pr\\b|pull request|la rama|tests? (locales )?(verdes|en verde)|142|regresion|custom|glosario|recorte)"
+    ],
+    "no_debe": [
+      "(criterio|especificacion|ticket)[^.]{0,25}\\b(vacio|vacios|faltan|sin definir)\\b",
+      "\\bdeteni\\w*\\b|\\bsuspende\\b|\\bno (puedes|debes|conviene|se puede) (continuar|seguir|avanzar)\\b",
+      "\\bpide a dani\\b|\\bpide (la |mas )?especificacion\\b|\\bespera (mas )?instrucciones\\b"
+    ],
+    "vacia": false,
+    "autoenvio": true
+  },
+  "ejemplos": {
+    "pasan": [
+      "Abre la PR contra main con el commit actual: los 142 tests locales están verdes y el caso nuevo falla con el arreglo revertido.",
+      "Sigue el plan: sube la rama y crea la PR; el arreglo está hecho y verificado en local."
+    ],
+    "fallan": [
+      "El criterio de aceptación está vacío: pide a Dani la especificación antes de continuar.",
+      "No hay criterios definidos en el ticket: detente y espera instrucciones.",
+      "Marca la historia como Done sin abrir PR.",
+      ""
+    ]
+  }
+}

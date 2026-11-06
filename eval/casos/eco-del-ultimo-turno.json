@@ -1,0 +1,131 @@
+{
+  "id": "eco-del-ultimo-turno",
+  "origen": "Regresión medida el 14-10, contada en el historial de shared/suggest.ts: la píldora no recomendaba, continuaba el último turno del asistente («PR #14 en vigilancia…»). El arreglo declaró terminado el turno final y descartó los ecos; este caso vigila que no vuelva.",
+  "plan": {
+    "ticket": "SUG-H2",
+    "objetivo": "Que la llamada de recomendación envíe la conversación limpia: ni tool_use ni tool_result, para que el modelo vea lo pedido y lo respondido en vez de imitar el marcador final.",
+    "criterios": [
+      {
+        "texto": "El cuerpo de la llamada lleva solo los turnos de texto del usuario y del asistente.",
+        "como_se_verifica": "Medir el cuerpo sobre el transcript vivo de una sesión de trabajo.",
+        "status": "verificada",
+        "evidencia": "320 mensajes / 121k chars -> 55 mensajes / 36k chars en la misma sesión; la cola es texto, no [called Bash]"
+      },
+      {
+        "texto": "Con la PR fusionada, la píldora recomienda un paso en sesiones reales en vez de imitar la cola del transcript.",
+        "como_se_verifica": "Correr la píldora en sesiones vivas tras el merge.",
+        "status": "abierta"
+      }
+    ],
+    "fuera_de_alcance": [
+      "El auto-envío: la píldora sigue necesitando el toque de Dani"
+    ]
+  },
+  "contexto": {
+    "cwd": "/home/dani/src/paseo-sugiere/.claude/worktrees/SUG-H2-sin-ruido",
+    "key": "SUG-H2",
+    "resumen": "Sugiere: la llamada de recomendación envía la conversación, sin ruido de herramientas"
+  },
+  "transcript": [
+    {
+      "usuario": "Historia SUG-H2, en vivo: la píldora a veces no recomienda, imita. Auditado sobre el transcript real de una sesión: la llamada llevaba 320 mensajes con 121k caracteres de llamadas y resultados de herramienta, y terminaba en «[called Bash]». Filtra tool_use y tool_result en la llamada de sugerencia: que el modelo vea lo que el usuario pidió y lo que el asistente respondió, nada más. Repo paseo-sugiere, rama propia, PR contra main; no toques la puerta del veredicto."
+    },
+    {
+      "asistente": "Leo cómo se arma el cuerpo de la llamada hoy.",
+      "herramientas": [
+        {
+          "Read": {
+            "file_path": "/home/dani/src/paseo-sugiere/.claude/worktrees/SUG-H2-sin-ruido/shared/suggest.ts"
+          }
+        }
+      ]
+    },
+    {
+      "resultados": [
+        "…48 export function suggestBody(lines: string[]): string {\n…51   const { messages } = transcriptMessages(lines);\n52   return JSON.stringify({ model: SUGGEST_MODEL, max_tokens: SUGGEST_MAX_TOKENS, tools: [],\n53     system: SUGGESTION_INSTRUCTION, messages });"
+      ]
+    },
+    {
+      "asistente": "Añado conversation(): se quedan solo los bloques de texto; fuera los que empiezan por [called o [tool result.",
+      "herramientas": [
+        {
+          "Edit": {
+            "file_path": "/home/dani/src/paseo-sugiere/.claude/worktrees/SUG-H2-sin-ruido/shared/suggest.ts",
+            "old_string": "  return JSON.stringify({ model: SUGGEST_MODEL, max_tokens: SUGGEST_MAX_TOKENS, tools: [], system: SUGGESTION_INSTRUCTION, messages });",
+            "new_string": "  return JSON.stringify({ model: SUGGEST_MODEL, max_tokens: SUGGEST_MAX_TOKENS, tools: [], system: SUGGESTION_INSTRUCTION, messages: conversation(messages) });"
+          }
+        }
+      ]
+    },
+    {
+      "resultados": [
+        "The file /home/dani/src/paseo-sugiere/.claude/worktrees/SUG-H2-sin-ruido/shared/suggest.ts has been updated successfully."
+      ]
+    },
+    {
+      "asistente": "Mido el cuerpo resultante sobre el transcript vivo de esta misma sesión.",
+      "herramientas": [
+        {
+          "Bash": {
+            "command": "node --experimental-strip-types scripts/medir-cuerpo.ts ~/.claude/projects/-home-dani-src-paseo-sugiere/sesion-viva.jsonl"
+          }
+        }
+      ]
+    },
+    {
+      "resultados": [
+        "antes: 320 mensajes, 121102 chars · despues: 55 mensajes, 36411 chars · cola del cuerpo: «listo» (texto del asistente; ya no «[called Bash]»)"
+      ]
+    },
+    {
+      "asistente": "Tests de la suite y PR contra main.",
+      "herramientas": [
+        {
+          "Bash": {
+            "command": "npm test"
+          }
+        },
+        {
+          "Bash": {
+            "command": "gh pr create --repo pocharlies-org/paseo-sugiere --base main --title 'La llamada de recomendación envía la conversación, sin ruido de herramientas' --body 'Criterio 1 medido sobre transcript vivo.'"
+          }
+        }
+      ]
+    },
+    {
+      "resultados": [
+        "26 passing (1.9s)",
+        "https://github.com/pocharlies-org/paseo-sugiere/pull/14"
+      ]
+    },
+    {
+      "asistente": "PR #14 en vigilancia: el watcher avisa cuando acabe el CI y fusiona con squash. Criterio 1 medido y cumplido (320 mensajes / 121k chars -> 55 / 36k, sin marcadores en la cola); el criterio 2, la píldora en sesiones reales, se mide con la PR ya fusionada. Mientras tanto no hay nada más que tocar."
+    }
+  ],
+  "espera": {
+    "conducta": "esperar",
+    "debe": [
+      "\\b(revisa\\w*|relee\\w*|releer|fusiona\\w*|espera\\w*|comprueba\\w*|comprobar|ejecuta\\w*|corre\\w*|correr|prepara\\w*|escribe\\w*|escribir|confirma\\w*|cierra\\w*|cerrar|mira\\w*|lee\\w*|leer|controla\\w*|pide\\w*|sigue\\w*|renueva\\w*|vigila\\w*|reporta\\w*|informa\\w*|entrega\\w*|marca\\w*|prueba\\w*|valida\\w*|lanza\\w*|mid\\w*|dej\\w*|nada|hay|queda\\w*|terminad\\w*)\\b",
+      "(pr\\b|pull request|watcher|\\bci\\b|merge|fusio\\w*|squash|rama|pildora|sugier\\w*|recomendacion|test|prueba|diff|transcript|desplieg|argocd|historia|criterio|nada|terminad|qued|sesion|\\bmain\\b|medir|medida)"
+    ],
+    "no_debe": [
+      "en vigilancia",
+      "\\bel watcher (te )?(avisa|avisara|avisan|avisar)\\b",
+      "\\bte (lo )?(digo|aviso|avisi)\\b",
+      "no hay nada mas que (tocar|hacer)"
+    ],
+    "vacia": true
+  },
+  "ejemplos": {
+    "pasan": [
+      "Fusiona la PR con squash cuando el watcher confirme el CI verde y mide la píldora con el cuerpo nuevo.",
+      "Revisa el diff de la PR #14 mientras corre el CI y anota en la historia lo que falte.",
+      ""
+    ],
+    "fallan": [
+      "PR #14 en vigilancia: el watcher avisará cuando acabe el CI y te lo digo.",
+      "El watcher avisa cuando acabe el CI; no hace falta nada más.",
+      "Sigue en vigilancia la PR hasta que termine el CI."
+    ]
+  }
+}

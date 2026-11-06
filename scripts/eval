@@ -1,0 +1,4 @@
+#!/bin/bash
+# El eval dorado del sugeridor (eval/README.md). `--vivo`: cada caso ×3 contra el servicio `sugiere` real (SUGIERE_URL, por
+# defecto el Service del clúster; SUGIERE_TOKEN si la ruta lo pide). Sin argumentos: el informe de la última corrida grabada.
+exec node "$(dirname "$0")/../eval/eval.ts" "$@"
