@@ -35,7 +35,7 @@ async function llamar(cuerpo: string, timeoutMs: number): Promise<any> {
 const comoAnthropic = (r: any) => ({ content: [{ type: "text", text: r?.choices?.[0]?.message?.content ?? "" }] });
 
 /** La sugerencia del siguiente mensaje: "" cuando no hay nada que proponer. */
-export async function sugerir(lines: string[], instruccion = "", timeoutMs = 120_000): Promise<{ texto: string; modelo: string }> {
+export async function sugerir(lines: string[], instruccion = "", timeoutMs = 300_000): Promise<{ texto: string; modelo: string }> {
   const cuerpo = cuerpoSugerencia(lines, instruccion);
   if (!cuerpo) return { texto: "", modelo: "" };
   const modelo = JSON.parse(cuerpo).model;
