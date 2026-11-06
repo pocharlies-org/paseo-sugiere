@@ -50,7 +50,7 @@ async function suggest(body: Cuerpo) {
   if (transcript.length > MAX_TRANSCRIPT) return [422, { error: `transcript > ${MAX_TRANSCRIPT} caracteres` }];
   try {
     // La instrucción llega del llamante (ConfigMap en el pod): una sola instrucción para todos, editable sin reiniciar.
-    const { texto: sugerencia, modelo } = await sugerir(lineas(transcript), contexto?.instruccion ?? "");
+    const { texto: sugerencia, modelo } = await sugerir(lineas(transcript), contexto?.instruccion ?? "", undefined, contexto?.kind ?? "");
     console.log(JSON.stringify({ modo: MODO, sid, turno, sugerencia: sugerencia.slice(0, 120) }));
     return [200, { sugerencia, modelo, ms: 0 }];
   } catch (error) {

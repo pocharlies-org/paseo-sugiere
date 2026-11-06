@@ -66,7 +66,7 @@ export async function sugiereRequest(
     const response = await fetch(`${base}/v1/suggest`, {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ sid, turno, transcript: lines.join("\n"), contexto: instruccion ? { instruccion } : {} }),
+      body: JSON.stringify({ sid, turno, transcript: lines.join("\n"), contexto: { kind: "live", ...(instruccion ? { instruccion } : {}) } }),
       signal: controller.signal,
     });
     const out = response.ok ? ((await response.json().catch(() => ({}))) as Record<string, unknown>) : {};

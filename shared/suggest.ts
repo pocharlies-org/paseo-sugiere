@@ -51,9 +51,10 @@ export const CLAUDE_CODE_SYSTEM = "You are Claude Code, Anthropic's official CLI
 /** The whole call: the session's own model, and the body — the conversation (no tool noise), the instruction in `system` after the
 Claude Code line (the configured one, or the built-in when it is empty), the constant trigger last, no tools. Null when the session has no real model
 (no assistant message yet, or only `<synthetic>` ones): there is nothing to call and no fallback model (Dani 22-10). */
-export function suggestBody(lines: string[], prompt = ""): { model: string; body: string } | null {
-  const { messages, model } = transcriptMessages(lines);
-  if (!model) return null;
+export function suggestBody(lines: string[], prompt = "", modelOverride = ""): { model: string; body: string } | null {
+  const { messages, model: sessionModel } = transcriptMessages(lines);
+  if (!sessionModel) return null;
+  const model = modelOverride || sessionModel; // the caller may pin the model (the company: the local resident); the effort follows it
   const body = JSON.stringify({
     model,
     max_tokens: SUGGEST_MAX_TOKENS,
