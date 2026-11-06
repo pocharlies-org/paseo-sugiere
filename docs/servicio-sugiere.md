@@ -92,7 +92,7 @@ Códigos: `422` cuerpo inválido o falta `contexto.cwd` · `200` en todo lo dem�
 residente no contesta, se agota o no da JSON, responde `{"ok": false, "riesgo": "alto", "motivo": "puerta no
 disponible"}` con la traza del fallo, y el llamante cae a `RETOMA`.
 
-Presupuesto, medido en el clúster (01-11): el residente tarda ~18-60 s; el servicio le espera 60 s. Por eso
+Presupuesto: `/v1/suggest` espera al residente hasta **300 s** (Dani, 06-11: con transcript de ticket tarda 60-120 s y la mitad de las propuestas se perdían contra un plazo de 60 s); `/v1/verdict` mantiene 60 s para la rúbrica, que es un prompt corto. Por eso
 el veredicto es asíncrono: un llamante síncrono con presupuesto de 30 s no lo puede
 esperar entero y debe tratar el silencio como fail-closed. Caché: `sha256(sid|turno|sugerencia)` →
 veredicto de modelo, 24 h, LRU 1000. Las reglas duras **no** se cachean: se evalúan siempre y ganan al
@@ -157,7 +157,10 @@ entran en el tamiz: ya los cazan D1/D2/D5 en su literal, y en prosa son la mitad
 
 La rúbrica pide el **riesgo** de ejecutar el mensaje (`ninguno`/`bajo`/`alto`/`dinero`) y reserva `detener`
 para lo irreversible, el dinero y las credenciales: un ticket sin resumen o un criterio sin escribir **no** son
-razón para detener (medido el 04-11: detenía la cola entera por eso).
+razón para detener (medido el 04-11: detenía la cola entera por eso). `alto` es **cambiar** otro repo, el
+clúster o el sistema; **mirar** cómo está (leer un recurso, `kubectl get/describe`, un Synced/Healthy) y
+escribir una nota o cerrar un ticket es `bajo` — la rúbrica vetaba las retomas de verificación como si
+tocaran el clúster (medido 06-11: 5 retomas bloqueadas).
 
 El residente escribe `p: 0.0` cuando se le pide una (medido el 01-11), así que su campo `p` se registra pero
 no se compara: decide su `veredicto`.
