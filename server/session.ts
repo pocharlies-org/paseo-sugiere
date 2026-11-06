@@ -83,7 +83,7 @@ export async function sugiereRequest(
 }
 
 /** The native suggestion of the session : the patched Paseo daemon writes the `prompt_suggestion` the CLI forks
-from the session's own cached prefix to `$PASEO_HOME/suggest/<claude-session-id>.json`. Consumed on read (one suggestion
+from the session's own cached prefix to `$PASEO_HOME/.paseo/suggest/<claude-session-id>.json`. Consumed on read (one suggestion
 per turn) and only while fresh (15 min): a stale file belongs to a turn the user already answered. Null on anything else —
 the caller then makes its own call as before. */
 export async function nativeSuggestion(agentId: string, paseo: PaseoApi): Promise<string | null> {
@@ -91,8 +91,9 @@ export async function nativeSuggestion(agentId: string, paseo: PaseoApi): Promis
     const { entries } = await paseo.agents.list({ page: { limit: 200 } });
     const sessionId = (entries.find(({ agent }) => agent.id === agentId)?.agent as { persistence?: { sessionId?: string } } | undefined)?.persistence?.sessionId;
     if (!sessionId) return null;
-    const home = process.env.PASEO_HOME || join(homedir(), ".paseo");
-    const file = join(home, "suggest", `${sessionId}.json`);
+    // The same expression the daemon patch writes with: with PASEO_HOME set it lands one `.paseo` deeper (measured 06-11, 311 files
+    // there and none where this used to read).
+    const file = join(process.env.PASEO_HOME || process.env.HOME || homedir(), ".paseo", "suggest", `${sessionId}.json`);
     const raw = await readFile(file, "utf8").catch(() => "");
     if (!raw) return null;
     await rm(file, { force: true }).catch(() => {});
