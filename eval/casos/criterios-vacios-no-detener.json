@@ -73,13 +73,14 @@
   "espera": {
     "conducta": "en-plan",
     "debe": [
-      "\\b(abre|crea|sube|empuja|lanza|envia|sigue|continua)\\w*\\b",
+      "\\b(abr[ei]\\w*|crea\\w*|sub[ei]\\w*|empuj\\w*|lanz\\w*|envi\\w*|sigu[ei]\\w*|segu\\w*|continu\\w*)\\b",
       "(pr\\b|pull request|la rama|tests? (locales )?(verdes|en verde)|142|regresion|custom|glosario|recorte)"
     ],
     "no_debe": [
       "(criterio|especificacion|ticket)[^.]{0,25}\\b(vacio|vacios|faltan|sin definir)\\b",
-      "\\bdeteni\\w*\\b|\\bsuspende\\b|\\bno (puedes|debes|conviene|se puede) (continuar|seguir|avanzar)\\b",
-      "\\bpide a dani\\b|\\bpide (la |mas )?especificacion\\b|\\bespera (mas )?instrucciones\\b"
+      "\\bdeteni\\w*\\b|\\bdetene\\w*\\b|\\bsuspende\\w*\\b|\\bno (puedes|debes|conviene|se puede) (continuar|seguir|avanzar)\\b",
+      "\\bpide\\b[^\\n]{0,30}\\bdani\\b|\\bpide (la |mas )?especificacion\\b|\\bespera (mas )?instrucciones\\b",
+      "\\bdone\\b|\\b(cierr|cerr)\\w*\\b[^\\n]{0,40}\\b(historia|ticket|criterios)\\b"
     ],
     "vacia": false,
     "autoenvio": true

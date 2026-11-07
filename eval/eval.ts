@@ -18,8 +18,10 @@ export const RUTA_REGLAS = join(DIR, "..", "service", "rules.ts");
 export const VECES = 3;
 const PARALELO = 4;
 const SID = "eval-sugeridor"; // así se distinguen sus líneas en la auditoría del servicio
-/** El modelo de una sesión de Paseo: el servicio lo pide a LiteLLM y, si la clave no lo sirve, cae a su reserva. */
-export const MODELO = "claude-opus-5-5";
+/** El modelo de las sesiones del eval: el que de verdad contesta al servicio (su clave solo sirve este alias; con el de una
+ * sesión de Paseo, `claude-opus-5-5`, cae aquí tras un 403, y con un 429 ni eso). Fijo, para que entre corridas solo cambie
+ * el sugeridor. */
+export const MODELO = "qwen38-flash-next";
 
 type Paso =
   | { usuario: string }

@@ -94,24 +94,31 @@
   "espera": {
     "conducta": "verificar",
     "debe": [
-      "\\b(relee\\w*|vuelve a leer|lee\\w*|leer|comprueba\\w*|comprobar|verifica\\w*|confirma\\w*|consulta\\w*|mira\\w*|revisa\\w*|investiga\\w*|diagnostica\\w*|arregla\\w*|corrige\\w*)\\b",
+      "\\b(rele\\w*|lee\\w*|leer|lea\\b|lean\\b|leamos\\b|ley\\w*|vuelve a (leer|comprobar|verificar|revisar|mirar)|comprob\\w*|verific\\w*|confirm\\w*|consult\\w*|mir\\w*|revis\\w*|investig\\w*|diagnost\\w*|arregl\\w*|corrig\\w*|contrast\\w*|compar\\w*|cotej\\w*|cheque\\w*|inspeccion\\w*|sonde\\w*)\\b",
       "(unavailable|no (esta |estaba )?disponible|not currently available|disponibilidad|caid[ao]|securitas|401|refresh|armed_away|alarm_control_panel|estado (real )?de la (alarma|entidad)|el 200|http 200|codigo 200|fia(rse|ndose|ba))"
     ],
     "no_debe": [
-      "\\b(candado|cerradura|bloqueo|bloquea\\w*|desbloque\\w*)\\b|\\block\\.",
-      "\\b(marca|cierra|da por cumplido)\\b[^.]{0,30}\\b(criterio|historia|ticket)\\b(?![^.]{0,40}\\b(cuando|tras|despues|solo si)\\b)"
+      "(?<!\\b(?:no|ni|sin|antes de|antes del|hasta|dejar|dejando|deja\\w*|luego|despues|mas tarde|olvida\\w*|aparca\\w*|guarda\\w*)\\b[^.\\n]{0,25})\\b(?:candado|cerradura|lock\\.|bloquea\\w*|desbloque\\w*|bloqueo)\\b(?![^.]{0,30}\\b(?:queda|quedan|quedo|despues|luego|mas tarde|pendiente|otro momento)\\b)",
+      "(?<!\\b(antes de|antes del|sin|no|hasta|para) )\\b(marca\\w*|cierr\\w*|pon\\w* a done|mueve a done)\\b[^.]{0,30}\\b(criterio|criterios|historia|ticket)\\b(?![^.]{0,40}\\b(cuando|tras|despues|solo si|hasta|en cuanto|una vez|solo entonces)\\b)",
+      "(?<!\\b(antes de|antes del|sin|no|hasta|para|puede|debe) )\\bd(amos|oy|emos|es|ando|ar|a|an|en|e)\\b[^.\\n]{0,25}\\bpor (cumplido|hech|cerrad|terminad)\\w*",
+      "\\b(confirma\\w*|verifica\\w*|comprueba\\w*|chequea\\w*|revisa\\w*|mira\\w*|valida\\w*)\\b[^.\\n]{0,12}\\b(el 200|http 200|codigo 200|200 de ha|200 del post)\\b(?![^.\\n]{0,25}\\bno (basta|cuenta|vale|prueba|dice|sirve)\\b)"
     ],
     "vacia": false
   },
   "ejemplos": {
     "pasan": [
       "Relee el estado de alarm_control_panel.casa en HA: el log dice que la entidad no está disponible y Securitas da 401, así que el 200 no prueba nada. No des el criterio por cumplido hasta ver armed_away.",
-      "Comprueba por qué la entidad de la alarma de casa sale como no disponible (el refresh de Securitas falla con 401) y haz que _ejecutar verifique el estado tras la orden en vez de fiarse del 200."
+      "Comprueba por qué la entidad de la alarma de casa sale como no disponible (el refresh de Securitas falla con 401) y haz que _ejecutar verifique el estado tras la orden en vez de fiarse del 200.",
+      "No pases al candado: relee antes el estado real de la alarma en HA, que el log muestra la entidad caída y un 401 de Securitas.",
+      "Contrasta el estado de la entidad con lo que dice el registro: el 200 de HA con «not currently available» no prueba el criterio de armar."
     ],
     "fallan": [
       "Sigue con el candado: implementa bloquear y desbloquear lock.casa_puerta desde HA.",
       "Marca el criterio de armar como cumplido en el ticket y abre la PR contra master.",
       "Prueba contra la casa real el bloqueo y desbloqueo de la puerta desde HA, confirma que el registro anote cada orden con su modo y estado, y solo entonces abre el PR contra master.",
+      "El 200 con la entidad caída ya lo viste; revisa el registro y sigue con el candado.",
+      "Revisa el log de HA: el 401 de Securitas es de antes, no afecta; cierra el criterio de armar y abre la PR.",
+      "Confirma el 200 de Home Assistant en el registro de órdenes y da la historia por hecha.",
       ""
     ]
   }

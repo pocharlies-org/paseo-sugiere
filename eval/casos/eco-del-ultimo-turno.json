@@ -105,14 +105,17 @@
   "espera": {
     "conducta": "esperar",
     "debe": [
-      "\\b(revisa\\w*|relee\\w*|releer|fusiona\\w*|espera\\w*|comprueba\\w*|comprobar|ejecuta\\w*|corre\\w*|correr|prepara\\w*|escribe\\w*|escribir|confirma\\w*|cierra\\w*|cerrar|mira\\w*|lee\\w*|leer|controla\\w*|pide\\w*|sigue\\w*|renueva\\w*|vigila\\w*|reporta\\w*|informa\\w*|entrega\\w*|marca\\w*|prueba\\w*|valida\\w*|lanza\\w*|mid\\w*|dej\\w*|nada|hay|queda\\w*|terminad\\w*)\\b",
-      "(pr\\b|pull request|watcher|\\bci\\b|merge|fusio\\w*|squash|rama|pildora|sugier\\w*|recomendacion|test|prueba|diff|transcript|desplieg|argocd|historia|criterio|nada|terminad|qued|sesion|\\bmain\\b|medir|medida)"
+      "\\b(revisa\\w*|relee\\w*|fusiona\\w*|espera\\w*|comprueba\\w*|comprob\\w*|ejecuta\\w*|corre\\w*|prepara\\w*|escrib\\w*|confirma\\w*|cierr\\w*|cerr\\w*|mira\\w*|lee\\w*|controla\\w*|pid\\w*|sigue\\w*|renueva\\w*|vigila\\w*|reporta\\w*|informa\\w*|entrega\\w*|marca\\w*|prueba\\w*|valida\\w*|lanza\\w*|mid\\w*|anota\\w*|dej\\w*)\\b",
+      "(pr\\b|pull request|watcher|\\bci\\b|merge|fusio\\w*|squash|rama|pildora|sugier\\w*|recomendacion|test|prueba|diff|transcript|desplieg|argocd|historia|criterio|sesion|\\bmain\\b|medir|medida)"
     ],
     "no_debe": [
       "en vigilancia",
       "\\bel watcher (te )?(avisa|avisara|avisan|avisar)\\b",
       "\\bte (lo )?(digo|aviso|avisi)\\b",
-      "no hay nada mas que (tocar|hacer)"
+      "\\bno (hay|queda) nada\\b",
+      "\\bnada mas que (tocar|hacer|comprobar)\\b",
+      "\\bno hace falta nada\\b",
+      "320 mensajes"
     ],
     "vacia": true
   },
