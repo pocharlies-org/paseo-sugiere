@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { afterEach, describe, it } from "node:test";
 import { sugerir } from "../service/residente.ts";
 
-// Paseo en vivo pide el modelo de la sesión; si la clave no sirve ese alias, un 403 reintenta una sola vez con el residente.
+// Paseo en vivo pide el modelo de la sesión; si la clave no sirve ese alias (403) o no le quedan cuentas (429), reintenta una sola vez con el residente.
 // La compañía (o quien no diga `kind`) va directa al residente local (Dani 06-11).
 const line = (o: object) => JSON.stringify(o);
 const TRANSCRIPT = [
@@ -36,7 +36,16 @@ describe("el modelo de reserva", () => {
     assert.equal(r.texto, "sube el pin del digest");
   });
 
-  it("un fallo que no es 403 no se reintenta: un timeout no se paga dos veces", async () => {
+  it("ante un 429 (cuentas de la sesión agotadas) también reintenta UNA vez con el residente", async () => {
+    const cuerpos = stub((c) => (c.model === "alibaba-q38-flash"
+      ? new Response('{"error":{"message":"No deployments available for selected model"}}', { status: 429 })
+      : ok("revisa el CI")));
+    const r = await sugerir(TRANSCRIPT, "", 5_000, "live");
+    assert.deepEqual(cuerpos.map((c) => c.model), ["alibaba-q38-flash", "qwen38-flash-next"]);
+    assert.equal(r.modelo, "qwen38-flash-next");
+  });
+
+  it("un fallo que no es 403 ni 429 no se reintenta: un timeout no se paga dos veces", async () => {
     const cuerpos = stub(() => new Response("boom", { status: 500 }));
     await assert.rejects(() => sugerir(TRANSCRIPT, "", 5_000, "live"), /500/);
     assert.equal(cuerpos.length, 1);
