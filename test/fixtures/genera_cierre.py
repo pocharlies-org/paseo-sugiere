@@ -1,0 +1,61 @@
+#!/usr/bin/env python3
+"""Regenera test/fixtures/cierre.json con el parser REAL del supervisor (fuente de verdad de la gramática del cierre, spec §12):
+lee del tronco de x86-host-runtime `company_runtime.esperas_de`/`paras_de`, `company-sesion` `estado_de` y `DINERO_RE`, y calcula lo
+esperado de cada caso. Uso: `python3 test/fixtures/genera_cierre.py [~/src/x86-host-runtime-pocharlies] > test/fixtures/cierre.json`."""
+import json, os, subprocess, sys
+
+X86 = os.path.expanduser(sys.argv[1] if len(sys.argv) > 1 else "~/src/x86-host-runtime-pocharlies")
+show = lambda ruta: subprocess.run(["git", "-C", X86, "show", f"origin/main:{ruta}"], check=True, capture_output=True, text=True).stdout
+trozo = lambda texto, desde, hasta: texto[texto.index(desde):texto.index(hasta)]
+fuente = "\n".join(["import os, re, time", "from datetime import datetime, timezone",
+    trozo(show("libexec/company_runtime.py"), "ESPERA_RE = re.compile(", "# ------------------------------------------------------------------ qué pide la épica"),
+    trozo(show("libexec/company-sesion"), "ESTADO_RE = re.compile(", "# Lo que el cto lanza él mismo"),
+    next(l for l in show("libexec/jira-epic-trigger.py").splitlines() if l.startswith("DINERO_RE = "))])
+g = {}
+exec(compile(fuente, "gramatica_supervisor", "exec"), g)
+
+# (nombre, texto, alcance, entregado): `alcance` y `entregado` son solo del autopilot (TS); lo demás lo dice el Python.
+CASOS = [
+ ("espera ci con flecha", "Abrí el PR.\nESPERA: ci pocharlies-org/paseo-sugiere#77 → fusiono si está verde", False, None),
+ ("espera merge en viñeta y backticks", "Hecho.\n- `ESPERA: merge pocharlies-org/k8s-sugiere-pocharlies#14` → miro ArgoCD", False, None),
+ ("espera review", "ESPERA: review pocharlies-org/dgx-infra#901 -> contesto al juez", False, None),
+ ("espera run con id", "ESPERA: run pocharlies-org/paseo-sugiere 123456789 → leo el log", False, None),
+ ("espera run sin id no vale", "ESPERA: run pocharlies-org/paseo-sugiere → leo el log", False, None),
+ ("espera argocd con commit", "ESPERA: argocd sugiere 06defc7 → pruebo el endpoint", False, None),
+ ("espera fichero", "ESPERA: fichero /tmp/salida.json → la leo", False, None),
+ ("espera jira", "ESPERA: jira TAREA-1000002 → sigo cuando se cierre", False, None),
+ ("espera fecha con hora", "ESPERA: fecha 2026-11-08 09:30 → reviso la cola", False, None),
+ ("espera fecha imposible no vale", "ESPERA: fecha 2026-02-30 → nada", False, None),
+ ("espera sin objetivo no vale", "ESPERA: ci el pipeline del repo → sigo", False, None),
+ ("espera repetida cuenta una", "ESPERA: ci pocharlies-org/x#1 → a\nESPERA: ci pocharlies-org/x#1 → b", False, None),
+ ("espera en prosa no cuenta", "Dejo una ESPERA: ci pocharlies-org/x#1 para luego.", False, None),
+ ("para dani sin dinero", "Listo el plan.\n\nPARA DANI: ¿apruebas el plan con las propuestas por defecto?", False, None),
+ ("para dani con euros", "PARA DANI (dinero): comprar el dominio cuesta 120 € al año, ¿lo pago?", False, None),
+ ("para dani con dolares delante", "PARA DANI: la API cobra $45 al mes, ¿la contrato?", False, None),
+ ("para dani etiqueta dinero sin importe", "PARA DANI (dinero): nada de dinero, solo confirma el nombre", False, None),
+ ("para dani decimales eur", "PARA DANI: el plan cuesta 12,50 eur al mes", False, None),
+ ("para dani alcance", "PARA DANI (alcance): el brief pide X pero lo correcto es Y, ¿cambio el alcance?", True, None),
+ ("para it y security en orden", "PARA IT: falta el token del runner\n\nPARA SECURITY: revisa el secreto nuevo", False, None),
+ ("para dani y espera a la vez", "ESPERA: ci pocharlies-org/x#9 → fusiono\n\nPARA DANI: ¿le pongo otro nombre al servicio?", False, None),
+ ("estado entrega", "Todo verificado en vivo.\nESTADO: ENTREGA", False, None),
+ ("estado entrega en negrita", "Hecho.\n**ESTADO: ENTREGA** — PR fusionada y desplegada", False, None),
+ ("estado pregunta antiguo", "ESTADO: PREGUNTA ¿sigo con la fase 2?", False, None),
+ ("entregado con clave y url", "ESTADO: ENTREGA\nAUTOPILOT: ENTREGADO TAREA-1000001 https://artefactos.example.com/entrega.html", False,
+  {"key": "TAREA-1000001", "url": "https://artefactos.example.com/entrega.html"}),
+ ("entregado en backticks", "ESTADO: ENTREGA\n`AUTOPILOT: ENTREGADO TAREA-1000003 https://artefactos.example.com/a.html`", False,
+  {"key": "TAREA-1000003", "url": "https://artefactos.example.com/a.html"}),
+ ("entregado de ejemplo no cierra", "5. Último renglón: `AUTOPILOT: ENTREGADO <KEY> <url>`\n`AUTOPILOT: ENTREGADO <KEY> <url>`", False, None),
+ ("nada", "He leído el código y sigo mañana.", False, None),
+]
+
+casos = []
+for nombre, texto, alcance, entregado in CASOS:
+    paras = g["paras_de"](texto)
+    dani = next((t for q, t in paras if q == "DANI"), None)
+    casos.append({"nombre": nombre, "texto": texto, "esperas": [e["linea"] for e in g["esperas_de"](texto, 1762500000.0)],
+                  "paras": [q for q, _ in paras], "para_dani": dani, "estado": list(g["estado_de"](texto)),
+                  "dinero": bool(dani is not None and g["DINERO_RE"].search(dani)), "alcance": alcance, "entregado": entregado})
+json.dump({"_fuente": "x86-host-runtime origin/main: company_runtime.esperas_de/paras_de, company-sesion estado_de, "
+           "jira-epic-trigger.DINERO_RE. `alcance` y `entregado` son solo del autopilot (TS). Regenerar con test/fixtures/genera_cierre.py.",
+           "casos": casos}, sys.stdout, ensure_ascii=False, indent=1)
+print()

@@ -1,5 +1,6 @@
-// El servicio: dos endpoints, sin estado y sin ficheros. /v1/suggest propone el siguiente mensaje y /v1/verdict dictamina si
-// puede enviarse. No envía, no escribe tickets y no lee transcripts: todo lo que necesita llega en la petición.
+// El servicio: sin estado y sin ficheros. /v1/suggest propone el siguiente mensaje, /v1/verdict dictamina si puede enviarse y
+// /v1/autopilot dice qué hace el llamante al acabar un turno (enviar, esperar, humano o cerrar). No envía, no escribe tickets y
+// no guarda sesiones: todo lo que necesita llega en la petición.
 // La auditoría (`/v1/auditoria`) es la única escritura: el registro de calidad de la puerta, en un JSONL.
 import { createServer } from "node:http";
 import { RUTA, MAX_BYTES, consultar, registrar, registrarCuando } from "./auditoria.ts";
@@ -9,6 +10,7 @@ import { clave, guardar as guardarCache, leer as leerCache } from "./cache.ts";
 import { JUEZ_MODELO, dictaminar } from "./juez.ts";
 import { LITELLM, RESERVA, sugerir } from "./residente.ts";
 import { evaluarReglas } from "./rules.ts";
+import { SinServicio, decidir, topes } from "./autopilot.ts";
 
 const PORT = Number(process.env.PORT || "8080");
 const MAX_TRANSCRIPT = Number(process.env.MAX_TRANSCRIPT || String(32 * 1024 * 1024)); // el recorte de contexto (400k caracteres) lo hace shared/transcript.ts
@@ -44,6 +46,7 @@ async function leer(req: any): Promise<Cuerpo> {
 
 const lineas = (transcript: string) => transcript.split("\n").filter((l) => l.trim());
 
+// CONTRACT: http.sugiere.suggest.v1 — POST /v1/suggest (docs/servicio-sugiere.md §2)
 async function suggest(body: Cuerpo) {
   const { sid, turno, transcript, contexto } = body;
   if (!sid || !turno || typeof transcript !== "string" || !transcript.trim()) return [422, { error: "faltan sid, turno o transcript" }];
@@ -62,6 +65,7 @@ async function suggest(body: Cuerpo) {
   }
 }
 
+// CONTRACT: http.sugiere.verdict.v1 — POST /v1/verdict (docs/servicio-sugiere.md §3)
 async function verdict(body: Cuerpo) {
   const { sid, turno, sugerencia, contexto } = body;
   if (!sid || !turno || typeof sugerencia !== "string" || !sugerencia.trim()) return [422, { error: "faltan sid, turno o sugerencia" }];
@@ -95,6 +99,32 @@ async function verdict(body: Cuerpo) {
   if (busqueda) registrarCuando(busqueda.then((b) => ({ modo, ms: b.ms, n: b.recuerdos.length, motivo: b.motivo })), base);
   else registrar(base);
   return [200, v];
+}
+
+// CONTRACT: http.sugiere.autopilot.v1 — POST /v1/autopilot (docs/servicio-sugiere.md §12): una acción por turno cerrado.
+async function autopilot(body: Cuerpo) {
+  const { sid, turno, transcript, contexto, nativa } = body;
+  if (!sid || !turno || typeof transcript !== "string" || !transcript.trim()) return [422, { error: "faltan sid, turno o transcript" }];
+  if (transcript.length > MAX_TRANSCRIPT) return [422, { error: `transcript > ${MAX_TRANSCRIPT} caracteres` }];
+  if (!contexto || typeof contexto !== "object" || typeof contexto.cwd !== "string" || !contexto.cwd) return [422, { error: "falta contexto.cwd" }];
+  const plan = contexto.plan ?? null;
+  if (plan !== null && (typeof plan !== "object" || Array.isArray(plan))) return [422, { error: "contexto.plan tiene que ser un objeto" }];
+  if (nativa !== undefined && (typeof nativa !== "string" || nativa.length > MAX_SUGERENCIA)) return [422, { error: "nativa inválida" }];
+  const key = typeof contexto.key === "string" ? contexto.key : undefined;
+  const t0 = Date.now();
+  try {
+    const d = await decidir(lineas(transcript), { kind: contexto.kind, cwd: contexto.cwd, key, plan }, nativa ?? "");
+    const ms = Date.now() - t0;
+    console.log(JSON.stringify({ modo: MODO, sid, turno, ms, autopilot: d.accion, fase: d.fase, motivo: d.motivo.slice(0, 120) }));
+    registrar({ ts: new Date().toISOString(), sid, turno, ms, ok: d.accion === "enviar", riesgo: d.riesgo ?? "ninguno",
+      motivo: d.motivo, via: d.via ?? "autopilot", ...(d.traza ? { traza: d.traza } : {}), cwd: contexto.cwd, key,
+      sugerencia: d.mensaje ?? "", autopilot: { accion: d.accion, ...(d.fase ? { fase: d.fase } : {}) } });
+    return [200, { ...d, ms }];
+  } catch (error) {
+    if (!(error instanceof SinServicio)) throw error;
+    console.warn(JSON.stringify({ sid, turno, autopilot: "sin servicio", error: error.message }));
+    return [503, { error: error.message }];
+  }
 }
 
 // El clasificador barato, en sombra: se mide y se registra, pero no cambia lo que responde /v1/verdict. `decide: false`
@@ -133,6 +163,7 @@ function config() {
     brain: { modo: modoBrain(), url: BRAIN_URL, banco: BANCO, token: Boolean(process.env.BRAIN_TOKEN) },
     clasificador: { pesos: pesos !== null, sin_entrenar: pesos ? sinEntrenar(pesos) : null, mide: false },
     limites: { max_transcript: MAX_TRANSCRIPT, max_sugerencia: MAX_SUGERENCIA },
+    autopilot: topes(),
     auditoria: { ruta: RUTA, max_bytes: MAX_BYTES },
     token: Boolean(TOKEN),
   };
@@ -156,6 +187,7 @@ const servidor = createServer(async (req, res) => {
     const body = await leer(req);
     const [code, out] = ruta === "/v1/suggest" ? await suggest(body)
       : ruta === "/v1/verdict" ? await verdict(body)
+      : ruta === "/v1/autopilot" ? await autopilot(body)
       : ruta === "/v1/clasificar" ? await clasificarCuerpo(body)
       : [404, { error: "no existe" }];
     json(res, code as number, out);

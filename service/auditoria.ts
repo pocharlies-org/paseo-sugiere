@@ -9,7 +9,8 @@ const MAX_CONSULTA = 500;
 
 export type BrainReg = { modo: string; ms: number; n: number; motivo: string } | null;
 export type Registro = { ts: string; sid: string; turno: string; ms: number; ok: boolean; riesgo: string; motivo: string;
-  via: string; traza?: string[]; cwd?: string; key?: string; sugerencia: string; brain?: BrainReg };
+  via: string; traza?: string[]; cwd?: string; key?: string; sugerencia: string; brain?: BrainReg;
+  autopilot?: { accion: string; fase?: string } };
 
 let tamano: { ruta: string; bytes: number } | null = null;
 

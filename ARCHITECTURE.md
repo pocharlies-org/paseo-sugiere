@@ -55,8 +55,11 @@ al modelo de la sesión, sin compartir la caché de la sesión.
 
 ## Superficie
 
-Nada publicado hacia otros repos: los RPCs del plugin solo los consume su propio
-client. El registro `CONTRACTS.yaml` vive en claude-account-switcher, no aquí.
+Los RPCs del plugin solo los consume su propio client. El servicio `sugiere` sí publica hacia otros repos: el supervisor de
+la compañía (x86-host-runtime, `libexec/sugiere_puerta.py`) consume `/v1/suggest` y `/v1/verdict`, y `/v1/autopilot` lo
+consumirán el plugin (F2 del autopilot) y el supervisor (F5). Esa superficie está en `CONTRACTS.yaml` de la raíz.
+`service/cierre.ts` es una copia declarada y permanente de la gramática del cierre del supervisor; el corpus
+`test/fixtures/cierre.json` lo genera su Python (spec §12).
 
 ## Riesgos conocidos
 

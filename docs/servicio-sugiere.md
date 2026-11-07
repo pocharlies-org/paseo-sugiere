@@ -18,8 +18,8 @@ Este documento es la especificación. No hay implementación en este ticket: ni 
 - **Solo interno**: Service de clúster y token. Sin ingress, sin `*.lan`, sin publicar en internet.
 - Alcance de red: LiteLLM (residente) por Service, y el brain (§9) solo si está encendido. Se va el router local, el bearer de
   la cuenta y el tope de 60 s del RPC del host.
-- Tres endpoints: `/v1/suggest` (propone), `/v1/verdict` (dictamina) y `/v1/auditoria` (lee el registro). La instrucción de la
-  sugerencia y la rúbrica del juez viven aquí, en el código del servicio, y en ningún otro sitio (decisión 5 de Dani: el
+- Cuatro endpoints: `/v1/suggest` (propone), `/v1/verdict` (dictamina), `/v1/autopilot` (qué hace el llamante al acabar un turno,
+  §12) y `/v1/auditoria` (lee el registro). La instrucción de la sugerencia, las plantillas del autopilot y la rúbrica del juez viven aquí, en el código del servicio, y en ningún otro sitio (decisión 5 de Dani: el
   plugin ya no lee `~/.local/state/paseo-sugiere/prompt.txt` ni el servicio acepta una instrucción del llamante).
 
 ## 2. `POST /v1/suggest`
@@ -219,7 +219,7 @@ Reglas transversales:
 ## 7. Lo que el servicio no hace
 
 - No lee transcripts, no conoce sesiones, no guarda estado.
-- No envía, no escribe en el ticket, no mueve estados.
+- No envía, no escribe en el ticket, no mueve estados. El autopilot (§12) devuelve qué hacer; quien envía o archiva es el llamante.
 - No lee el repositorio ni el clúster: decide con el texto y el contexto que le mandan.
 - No sustituye a `security` ni autoriza nada: un `ok:true` sobre un secreto es imposible por D7.
 
@@ -289,3 +289,62 @@ rúbrica, `via`, y brain apagado contra brain encendido sobre los mismos casos.
 `SUGIERE_TOKEN` es opcional: sin él, el servicio se comporta como siempre (solo clúster). Con él, cada
 petición debe traer `authorization: Bearer <token>` (`/healthz` queda libre). Es lo que permite publicarlo
 por LAN sin que quede abierto a quien no lo tenga: la ruta y el token son un solo cambio, nunca la ruta sola.
+
+## 12. `POST /v1/autopilot`
+
+El autopilot de Paseo y, más adelante, la compañía: al acabar un turno el llamante pregunta qué hace y el servicio contesta
+**una** acción. Toda la lógica vive aquí (Dani, 07-11); el llamante solo obedece. Sigue sin estado: la racha de pasos, la fase
+anterior y el cierre del turno salen del transcript que llega en la petición. Contrato `http.sugiere.autopilot.v1`
+(`CONTRACTS.yaml`). Plan completo y decisiones de Dani (07-11): el plan del autopilot adjunto a su historia.
+
+Entrada:
+
+```json
+{"sid": "…", "turno": "…", "transcript": "<.jsonl tal cual>",
+ "contexto": {"cwd": "/home/<usuario>/k8s/<repo>", "kind": "live|company", "key": "<clave del ticket>", "plan": {"…ancla de paseo-plan…"}},
+ "nativa": "<sugerencia nativa del daemon; no se manda si hay ancla de plan>"}
+```
+
+`sid`, `turno`, `transcript` y `contexto.cwd` son obligatorios (`422` si faltan); `plan` es el mismo objeto de §2 y `nativa`
+un texto de como mucho 4000 caracteres.
+
+Salida (`200`):
+
+```json
+{"accion": "enviar|esperar|humano|cerrar", "motivo": "una línea", "mensaje": "[AUTOPILOT] …",
+ "fase": "arranque|devolver|entregar|seguir|desvio", "riesgo": "…", "modelo": "…", "via": "…",
+ "pasos": {"seguidos": 4, "total": 17}, "ms": 812}
+```
+
+`mensaje` y `fase` solo con `enviar`. `503` si el modelo o la puerta no contestaron: el llamante reintenta **una** vez y, si
+vuelve a fallar, lo trata como `humano`. Es regla de parada, no de propuesta: no hay razonamiento de respaldo en el llamante.
+
+Tabla de decisión, en orden (lo determinista antes que cualquier modelo):
+
+| # | El último turno (lo que el asistente escribió tras el último mensaje real) | Acción |
+|---|---|---|
+| 1 | `AUTOPILOT: ENTREGADO <CLAVE> <url>` con clave y URL reales | `cerrar` |
+| 2 | `PARA DANI` (o `ESTADO: PREGUNTA/BLOQUEO`) con importe (`DINERO_RE` del supervisor) o `PARA DANI (alcance):` | `humano` |
+| 3 | alguna `ESPERA:` vigilable que no sea `fichero` | `esperar` (la despierta el `EVENTO:` del supervisor) |
+| 4 | `PARA IT:` / `PARA SECURITY:` / `PARA QA:` | `esperar` |
+| 5 | topes (`max_seguidos`, `max_total`) superados | `humano` |
+| 6 | primer paso del autopilot sin ticket (ni `contexto.key` ni el del ancla) | `enviar` · `arranque` (el ticket primero) |
+| 7 | `PARA DANI` sin dinero | `enviar` · `devolver` (elige la recomendada, `DECISIÓN TOMADA:`); si insiste justo después, `humano` |
+| 8 | `ESTADO: ENTREGA` sin plan, o plan con todos los criterios verificados | `enviar` · `entregar` (el prompt de la entrega, con los números del autopilot); pedida y no cerrada en el turno siguiente, `humano` |
+| 9 | lo demás | el modelo propone (`nativa` si viene) y la puerta dictamina: `ok` → `enviar` · `seguir`; `alto` → `enviar` · `desvio`, y un segundo veto seguido `humano`; `dinero` → `humano`; vacío o el mismo paso que el anterior → `humano` |
+
+- La gramática del cierre (`service/cierre.ts`) es una copia declarada y permanente del parser del supervisor
+  (`company_runtime.esperas_de`/`paras_de`, `company-sesion` `estado_de`, `DINERO_RE`), que sigue vivo para el hook `Stop` y el
+  barrido. `test/fixtures/cierre.json` lo genera el Python del supervisor y el TS tiene que dar lo mismo caso por caso.
+- La racha: los mensajes de usuario que empiezan por `[AUTOPILOT]` son del autopilot; un `EVENTO:` o un mensaje humano ponen
+  `seguidos` a 0; lo que manda el sistema (`RETOMA:`, `[SUPERVISOR]`, el feedback del hook `Stop`, recordatorios) no cuenta.
+  La fase anterior (devolver, entregar, desvío) solo cuenta dentro de la racha.
+- Topes: `max_seguidos` 15 y `max_total` 40 (decisión 3 de Dani), en `/etc/sugiere/autopilot.json` (`AUTOPILOT_FICHERO`), el
+  ConfigMap montado `sugiere-clasificador`, releído en cada petición como `brain.json`. Ausente o ilegible, esos valores.
+- Todo lo que propone el autopilot va prefijado `[AUTOPILOT] `. Las plantillas (`arranque`, `devolver`, `desvio`, `entregar`)
+  son texto fijo y no pasan por la puerta; el paso del modelo (`seguir`) sí, siempre.
+- **Desviación declarada de la regla transversal de §6** («el servicio nunca deja un ticket en silencio»): en `live`,
+  `esperar` y `humano` dejan la sesión callada. Lo cubren la ✦ roja del plugin y la línea en el topic «Autopilot» de Telegram
+  (decisión 2 de Dani), no un `RETOMA`. En la compañía (F5) el `RETOMA` del supervisor sigue de respaldo.
+- Cada decisión deja una línea en la auditoría (§10) con `via: "autopilot"` (o la de la puerta) y `autopilot: {accion, fase}`.
+
