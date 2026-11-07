@@ -1,0 +1,440 @@
+{
+ "_fuente": "x86-host-runtime origin/main: company_runtime.esperas_de/paras_de, company-sesion estado_de, jira-epic-trigger.DINERO_RE. `alcance` y `entregado` son solo del autopilot (TS). Regenerar con test/fixtures/genera_cierre.py.",
+ "casos": [
+  {
+   "nombre": "espera ci con flecha",
+   "texto": "Abrí el PR.\nESPERA: ci pocharlies-org/paseo-sugiere#77 → fusiono si está verde",
+   "esperas": [
+    "ci pocharlies-org/paseo-sugiere#77"
+   ],
+   "paras": [],
+   "para_dani": null,
+   "estado": [
+    null,
+    ""
+   ],
+   "dinero": false,
+   "alcance": false,
+   "entregado": null
+  },
+  {
+   "nombre": "espera merge en viñeta y backticks",
+   "texto": "Hecho.\n- `ESPERA: merge pocharlies-org/k8s-sugiere-pocharlies#14` → miro ArgoCD",
+   "esperas": [
+    "merge pocharlies-org/k8s-sugiere-pocharlies#14"
+   ],
+   "paras": [],
+   "para_dani": null,
+   "estado": [
+    null,
+    ""
+   ],
+   "dinero": false,
+   "alcance": false,
+   "entregado": null
+  },
+  {
+   "nombre": "espera review",
+   "texto": "ESPERA: review pocharlies-org/dgx-infra#901 -> contesto al juez",
+   "esperas": [
+    "review pocharlies-org/dgx-infra#901"
+   ],
+   "paras": [],
+   "para_dani": null,
+   "estado": [
+    null,
+    ""
+   ],
+   "dinero": false,
+   "alcance": false,
+   "entregado": null
+  },
+  {
+   "nombre": "espera run con id",
+   "texto": "ESPERA: run pocharlies-org/paseo-sugiere 123456789 → leo el log",
+   "esperas": [
+    "run pocharlies-org/paseo-sugiere 123456789"
+   ],
+   "paras": [],
+   "para_dani": null,
+   "estado": [
+    null,
+    ""
+   ],
+   "dinero": false,
+   "alcance": false,
+   "entregado": null
+  },
+  {
+   "nombre": "espera run sin id no vale",
+   "texto": "ESPERA: run pocharlies-org/paseo-sugiere → leo el log",
+   "esperas": [],
+   "paras": [],
+   "para_dani": null,
+   "estado": [
+    null,
+    ""
+   ],
+   "dinero": false,
+   "alcance": false,
+   "entregado": null
+  },
+  {
+   "nombre": "espera argocd con commit",
+   "texto": "ESPERA: argocd sugiere 06defc7 → pruebo el endpoint",
+   "esperas": [
+    "argocd sugiere 06defc7"
+   ],
+   "paras": [],
+   "para_dani": null,
+   "estado": [
+    null,
+    ""
+   ],
+   "dinero": false,
+   "alcance": false,
+   "entregado": null
+  },
+  {
+   "nombre": "espera fichero",
+   "texto": "ESPERA: fichero /tmp/salida.json → la leo",
+   "esperas": [
+    "fichero /tmp/salida.json"
+   ],
+   "paras": [],
+   "para_dani": null,
+   "estado": [
+    null,
+    ""
+   ],
+   "dinero": false,
+   "alcance": false,
+   "entregado": null
+  },
+  {
+   "nombre": "espera jira",
+   "texto": "ESPERA: jira TAREA-1000002 → sigo cuando se cierre",
+   "esperas": [
+    "jira TAREA-1000002"
+   ],
+   "paras": [],
+   "para_dani": null,
+   "estado": [
+    null,
+    ""
+   ],
+   "dinero": false,
+   "alcance": false,
+   "entregado": null
+  },
+  {
+   "nombre": "espera fecha con hora",
+   "texto": "ESPERA: fecha 2026-11-08 09:30 → reviso la cola",
+   "esperas": [
+    "fecha 2026-11-08 09:30Z"
+   ],
+   "paras": [],
+   "para_dani": null,
+   "estado": [
+    null,
+    ""
+   ],
+   "dinero": false,
+   "alcance": false,
+   "entregado": null
+  },
+  {
+   "nombre": "espera fecha imposible no vale",
+   "texto": "ESPERA: fecha 2026-02-30 → nada",
+   "esperas": [],
+   "paras": [],
+   "para_dani": null,
+   "estado": [
+    null,
+    ""
+   ],
+   "dinero": false,
+   "alcance": false,
+   "entregado": null
+  },
+  {
+   "nombre": "espera sin objetivo no vale",
+   "texto": "ESPERA: ci el pipeline del repo → sigo",
+   "esperas": [],
+   "paras": [],
+   "para_dani": null,
+   "estado": [
+    null,
+    ""
+   ],
+   "dinero": false,
+   "alcance": false,
+   "entregado": null
+  },
+  {
+   "nombre": "espera repetida cuenta una",
+   "texto": "ESPERA: ci pocharlies-org/x#1 → a\nESPERA: ci pocharlies-org/x#1 → b",
+   "esperas": [
+    "ci pocharlies-org/x#1"
+   ],
+   "paras": [],
+   "para_dani": null,
+   "estado": [
+    null,
+    ""
+   ],
+   "dinero": false,
+   "alcance": false,
+   "entregado": null
+  },
+  {
+   "nombre": "espera en prosa no cuenta",
+   "texto": "Dejo una ESPERA: ci pocharlies-org/x#1 para luego.",
+   "esperas": [],
+   "paras": [],
+   "para_dani": null,
+   "estado": [
+    null,
+    ""
+   ],
+   "dinero": false,
+   "alcance": false,
+   "entregado": null
+  },
+  {
+   "nombre": "para dani sin dinero",
+   "texto": "Listo el plan.\n\nPARA DANI: ¿apruebas el plan con las propuestas por defecto?",
+   "esperas": [],
+   "paras": [
+    "DANI"
+   ],
+   "para_dani": "PARA DANI: ¿apruebas el plan con las propuestas por defecto?",
+   "estado": [
+    null,
+    ""
+   ],
+   "dinero": false,
+   "alcance": false,
+   "entregado": null
+  },
+  {
+   "nombre": "para dani con euros",
+   "texto": "PARA DANI (dinero): comprar el dominio cuesta 120 € al año, ¿lo pago?",
+   "esperas": [],
+   "paras": [
+    "DANI"
+   ],
+   "para_dani": "PARA DANI (dinero): comprar el dominio cuesta 120 € al año, ¿lo pago?",
+   "estado": [
+    null,
+    ""
+   ],
+   "dinero": true,
+   "alcance": false,
+   "entregado": null
+  },
+  {
+   "nombre": "para dani con dolares delante",
+   "texto": "PARA DANI: la API cobra $45 al mes, ¿la contrato?",
+   "esperas": [],
+   "paras": [
+    "DANI"
+   ],
+   "para_dani": "PARA DANI: la API cobra $45 al mes, ¿la contrato?",
+   "estado": [
+    null,
+    ""
+   ],
+   "dinero": true,
+   "alcance": false,
+   "entregado": null
+  },
+  {
+   "nombre": "para dani etiqueta dinero sin importe",
+   "texto": "PARA DANI (dinero): nada de dinero, solo confirma el nombre",
+   "esperas": [],
+   "paras": [
+    "DANI"
+   ],
+   "para_dani": "PARA DANI (dinero): nada de dinero, solo confirma el nombre",
+   "estado": [
+    null,
+    ""
+   ],
+   "dinero": false,
+   "alcance": false,
+   "entregado": null
+  },
+  {
+   "nombre": "para dani decimales eur",
+   "texto": "PARA DANI: el plan cuesta 12,50 eur al mes",
+   "esperas": [],
+   "paras": [
+    "DANI"
+   ],
+   "para_dani": "PARA DANI: el plan cuesta 12,50 eur al mes",
+   "estado": [
+    null,
+    ""
+   ],
+   "dinero": true,
+   "alcance": false,
+   "entregado": null
+  },
+  {
+   "nombre": "para dani alcance",
+   "texto": "PARA DANI (alcance): el brief pide X pero lo correcto es Y, ¿cambio el alcance?",
+   "esperas": [],
+   "paras": [
+    "DANI"
+   ],
+   "para_dani": "PARA DANI (alcance): el brief pide X pero lo correcto es Y, ¿cambio el alcance?",
+   "estado": [
+    null,
+    ""
+   ],
+   "dinero": false,
+   "alcance": true,
+   "entregado": null
+  },
+  {
+   "nombre": "para it y security en orden",
+   "texto": "PARA IT: falta el token del runner\n\nPARA SECURITY: revisa el secreto nuevo",
+   "esperas": [],
+   "paras": [
+    "SECURITY",
+    "IT"
+   ],
+   "para_dani": null,
+   "estado": [
+    null,
+    ""
+   ],
+   "dinero": false,
+   "alcance": false,
+   "entregado": null
+  },
+  {
+   "nombre": "para dani y espera a la vez",
+   "texto": "ESPERA: ci pocharlies-org/x#9 → fusiono\n\nPARA DANI: ¿le pongo otro nombre al servicio?",
+   "esperas": [
+    "ci pocharlies-org/x#9"
+   ],
+   "paras": [
+    "DANI"
+   ],
+   "para_dani": "PARA DANI: ¿le pongo otro nombre al servicio?",
+   "estado": [
+    null,
+    ""
+   ],
+   "dinero": false,
+   "alcance": false,
+   "entregado": null
+  },
+  {
+   "nombre": "estado entrega",
+   "texto": "Todo verificado en vivo.\nESTADO: ENTREGA",
+   "esperas": [],
+   "paras": [],
+   "para_dani": null,
+   "estado": [
+    "ENTREGA",
+    ""
+   ],
+   "dinero": false,
+   "alcance": false,
+   "entregado": null
+  },
+  {
+   "nombre": "estado entrega en negrita",
+   "texto": "Hecho.\n**ESTADO: ENTREGA** — PR fusionada y desplegada",
+   "esperas": [],
+   "paras": [],
+   "para_dani": null,
+   "estado": [
+    "ENTREGA",
+    "— PR fusionada y desplegada"
+   ],
+   "dinero": false,
+   "alcance": false,
+   "entregado": null
+  },
+  {
+   "nombre": "estado pregunta antiguo",
+   "texto": "ESTADO: PREGUNTA ¿sigo con la fase 2?",
+   "esperas": [],
+   "paras": [],
+   "para_dani": null,
+   "estado": [
+    "PREGUNTA",
+    "¿sigo con la fase 2?"
+   ],
+   "dinero": false,
+   "alcance": false,
+   "entregado": null
+  },
+  {
+   "nombre": "entregado con clave y url",
+   "texto": "ESTADO: ENTREGA\nAUTOPILOT: ENTREGADO TAREA-1000001 https://artefactos.example.com/entrega.html",
+   "esperas": [],
+   "paras": [],
+   "para_dani": null,
+   "estado": [
+    "ENTREGA",
+    ""
+   ],
+   "dinero": false,
+   "alcance": false,
+   "entregado": {
+    "key": "TAREA-1000001",
+    "url": "https://artefactos.example.com/entrega.html"
+   }
+  },
+  {
+   "nombre": "entregado en backticks",
+   "texto": "ESTADO: ENTREGA\n`AUTOPILOT: ENTREGADO TAREA-1000003 https://artefactos.example.com/a.html`",
+   "esperas": [],
+   "paras": [],
+   "para_dani": null,
+   "estado": [
+    "ENTREGA",
+    ""
+   ],
+   "dinero": false,
+   "alcance": false,
+   "entregado": {
+    "key": "TAREA-1000003",
+    "url": "https://artefactos.example.com/a.html"
+   }
+  },
+  {
+   "nombre": "entregado de ejemplo no cierra",
+   "texto": "5. Último renglón: `AUTOPILOT: ENTREGADO <KEY> <url>`\n`AUTOPILOT: ENTREGADO <KEY> <url>`",
+   "esperas": [],
+   "paras": [],
+   "para_dani": null,
+   "estado": [
+    null,
+    ""
+   ],
+   "dinero": false,
+   "alcance": false,
+   "entregado": null
+  },
+  {
+   "nombre": "nada",
+   "texto": "He leído el código y sigo mañana.",
+   "esperas": [],
+   "paras": [],
+   "para_dani": null,
+   "estado": [
+    null,
+    ""
+   ],
+   "dinero": false,
+   "alcance": false,
+   "entregado": null
+  }
+ ]
+}

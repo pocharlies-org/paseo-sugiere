@@ -1,0 +1,53 @@
+# CONTRACTS.yaml — superficie de contrato de paseo-sugiere.
+#
+# El servicio `sugiere` (ns llm, imagen de este repo, despliegue k8s-sugiere-pocharlies) lo consumen procesos de otros
+# repos: el supervisor de la compañía (x86-host-runtime, libexec/sugiere_puerta.py) y, desde el 07-11-2026, el plugin de Paseo
+# de este mismo repo para el autopilot. Sus rutas y nombres de campo son contrato: un renombre o un cambio de forma rompe
+# consumidores que los tests de aquí no ven.
+#
+# Lo existente NO muta. Breaking = entrada nueva `.vN+1`, la vieja a `status: deprecated` con `replaced_by` +
+# `remove_after`. Las entradas nunca se borran (retirar = `status: removed`). Un commit que toca superficie de contrato
+# actualiza el registro en el mismo push y lleva el trailer `Contract-Change: <accion> <id>`.
+#
+# Reglas completas y vía de excepción: skill `synapse-contracts`. La especificación: docs/servicio-sugiere.md.
+version: 1
+canonical_checkout: ~/src/paseo-sugiere
+registry_files:
+  - CONTRACTS.yaml
+contracts:
+  - id: http.sugiere.suggest.v1
+    kind: http-route
+    value: "POST /v1/suggest"
+    role: provider
+    files:
+      - service/server.ts
+    status: active
+    note: >-
+      Registro retroactivo (07-11-2026). Entrada {sid, turno, transcript, contexto?{kind, key, rol, plan}}; salida 200
+      {sugerencia, modelo, ms} (+ en_plan, criterio con plan); 422 cuerpo inválido; 503 el modelo no contesta. Consumidores:
+      x86-host-runtime libexec/sugiere_puerta.py (compañía, sin kind) y el server del plugin de este repo (kind live).
+      Spec: docs/servicio-sugiere.md §2.
+  - id: http.sugiere.verdict.v1
+    kind: http-route
+    value: "POST /v1/verdict"
+    role: provider
+    files:
+      - service/server.ts
+    status: active
+    note: >-
+      Registro retroactivo (07-11-2026). Entrada {sid, turno, sugerencia, contexto{cwd, key?, resumen?, criterio?}}; salida
+      siempre 200 {ok, riesgo ninguno|bajo|alto|dinero, motivo, via, traza?}; 422 cuerpo inválido o sin contexto.cwd;
+      fail-closed. Consumidor: x86-host-runtime libexec/sugiere_puerta.py. Spec: docs/servicio-sugiere.md §3-§6.
+  - id: http.sugiere.autopilot.v1
+    kind: http-route
+    value: "POST /v1/autopilot"
+    role: provider
+    files:
+      - service/server.ts
+    status: active
+    note: >-
+      07-11-2026. Entrada {sid, turno, transcript, contexto{cwd, kind?, key?, plan?}, nativa?}; salida 200
+      {accion enviar|esperar|humano|cerrar, motivo, mensaje?, fase? arranque|devolver|entregar|seguir|desvio, riesgo?,
+      modelo?, via?, traza?, pasos{seguidos, total}, ms}; 422 cuerpo inválido o sin contexto.cwd; 503 el modelo o la puerta
+      no contestaron (el llamante reintenta una vez). Consumidores: el plugin de Paseo de este repo (F2 del plan) y, en F5,
+      el supervisor de la compañía. Spec: docs/servicio-sugiere.md §12.
