@@ -129,7 +129,7 @@ async function corrida(base: string, caso: Caso, turno: string): Promise<Corrida
   const t0 = Date.now();
   let s: { sugerencia: string; modelo: string };
   try {
-    // El plan va en `contexto.plan` aunque el trunk de hoy lo ignore: así la misma petición mide el sugeridor de antes y el de después.
+    // El plan va en `contexto.plan`: un servicio anterior a «Garantizar plan» lo ignora, así que la misma petición mide el sugeridor de antes y el de después.
     s = await post(base, "/v1/suggest", { sid: SID, turno, transcript: jsonl(caso).join("\n"),
       contexto: { kind: "live", key: caso.plan.ticket, plan: caso.plan } }, 320_000);
   } catch (e) {

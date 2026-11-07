@@ -11,7 +11,7 @@ import { insertSuggestion, registerPillAnchor } from "./composer-bridge.ts";
 // front stays on this pill (Dani 02-11). Tapping a suggestion puts the text in the agent's prompt (composer-bridge.ts, web and
 // desktop; Dani 18-10) and, where that cannot be done, opens the text already editable in place, and Enter sends it as the
 // next user message (Dani 16-10: «editar» must edit the suggestion in place; 17-10: the two buttons were dead weight — the field
-// is the whole card). The instruction the model gets is not edited here: it is the file the server reads. The text lives in
+// is the whole card). The instruction the model gets is not edited here: it lives in the `sugiere` service. The text lives in
 // the plugin server — this only polls for idle agents, so a suggestion is never asked for while a turn is running.
 type Agent = { id: string; workspaceId?: string | null; status: string; archivedAt?: string | null };
 

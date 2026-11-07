@@ -46,7 +46,7 @@ This plugin was built for one setup and is published as it runs there. Read this
   written by paseo-plan (used only with its `guard` on).
 - **Sends** the text of the conversation (your messages and the assistant's replies since the last compaction; past about
   400,000 characters the oldest are left out), the instruction and one closing question to that endpoint and nowhere else,
-  with the key from `~/.config/claude-local/env`. Tool calls, tool results and thinking are removed before the call. From
+  with the key from `~/.config/claude-local/env`. Tool calls and thinking are removed before the call, and so are tool results unless the plan anchor is on (`guard`): then the anchor and the tool results since your last message (trimmed) go along. From
   `$PASEO_HOME/config.json` it uses only each Claude provider's `CLAUDE_CONFIG_DIR`; it reads no account token (only the LiteLLM url and key from the env file above).
 - **Writes**, in the Paseo client on web and desktop, into the composer's text box: it types the text into it (`execCommand`
   `insertText`, with an `input` event as the fallback), so Paseo's own handlers store the draft as if you had typed it. It

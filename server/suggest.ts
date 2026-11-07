@@ -34,7 +34,7 @@ const ANCHOR_DIR = join(homedir(), ".local", "state", "paseo-plan");
 
 /** The anchored plan of an agent, only with `guard` on and at least one criterion (Dani's decision 2: a guard without criteria does
  * not arm). Null on anything else — no file, unreadable, guard off — and then everything is as before plans existed. */
-export function guardedPlan(agentId: string): object | null {
+function guardedPlan(agentId: string): object | null {
   try {
     const anchor = JSON.parse(readFileSync(join(ANCHOR_DIR, `anchor-${agentId}.json`), "utf8"));
     return anchor?.guard === true && Array.isArray(anchor.criterios) && anchor.criterios.length ? anchor : null;
