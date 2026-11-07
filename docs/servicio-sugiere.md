@@ -61,7 +61,10 @@ Con `contexto.plan` (y al menos un criterio) la salida añade qué persigue la s
 
 - `en_plan` ∈ `en-plan` (un paso del plan; `criterio: "entrega"` cuando todo está verificado) · `trabajo-nuevo` (lo nuevo no es del
   plan: el prompt es abrir historia hija + sesión del rutador) · `verificar` (lo hecho no tiene evidencia válida, o un hecho la
-  contradice). `null` si el modelo no lo da o la sugerencia sale vacía. La píldora lo enseña como insignia ▸ / ✚ / ✓.
+  contradice) · `cerrar` (la entrega ya está hecha: el prompt es cerrar la sesión y archivarla, skill `close-session`; Dani 07-11).
+  `null` si el modelo no lo da o la sugerencia sale vacía. La píldora lo enseña como insignia ▸ / ✚ / ✓ / ■. El recuadro de la ✦ va
+  en color por estado (Dani 07-11): amarillo con la estrella girando mientras genera (sin puntos suspensivos), verde con la
+  sugerencia lista, azul cuando se puede pedir, rojo si falló.
 - Qué recibe el modelo con plan: la instrucción anclada (`PLAN_INSTRUCTION` en `shared/suggest.ts`) en `system`; la conversación sin
   ruido de herramientas, como siempre; y un último turno con `<plan>` (objetivo, criterios numerados C1..Cn con estado y evidencia,
   fuera de alcance, tareas) y `<hechos>`: los resultados de herramientas desde el último mensaje real del usuario, recortados (2 000
