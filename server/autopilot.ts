@@ -12,7 +12,7 @@ import { anchorKey, guardedPlan, turn } from "./suggest.ts";
 
 type Paseo = PluginHandlerContext["paseo"];
 type Agent = { id: string; cwd: string; status?: string; archivedAt?: string | null };
-export type Estado = { on: boolean; desde: string; estado: string; motivo: string };
+type Estado = { on: boolean; desde: string; estado: string; motivo: string };
 
 const TIMEOUT_MS = 330_000; // the service waits on the session's model and the gate: its slowest answer, plus margin
 const RETRY_MS = 60_000; // a 503 is retried once, after this

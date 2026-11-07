@@ -32,7 +32,7 @@ no consume su contrato `file.claude-cuentas.v1`: la llamada va a LiteLLM con la 
   (`max_tokens` 32 000). **Coste**: cada sugerencia envía la conversación (hasta ~100k tokens) al modelo de la sesión, sin compartir la caché
   de la propia sesión. Con la sesión en reposo no se llama a nada.
 - Trabajo terminado, ofertas opcionales o decisiones del usuario → sugerencia vacía → la píldora no
-  aparece. El envío es siempre un toque del usuario.
+  aparece. El envío de una sugerencia es siempre un toque del usuario.
 - Configurable: pantalla propia «Sugerencia del siguiente mensaje» en los ajustes de Paseo — interruptor
   `enabled` (al desactivar se tiran las sugerencias pendientes y mostradas) y ventana de silencio
   (30/60/120/300 s) y los topes del autopilot (pasos seguidos y por sesión; 0 = sin tope, lo de fábrica). El documento vive en
