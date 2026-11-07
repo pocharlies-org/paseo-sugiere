@@ -119,6 +119,12 @@ async function post(base: string, ruta: string, cuerpo: unknown, ms: number): Pr
   return JSON.parse(texto);
 }
 
+/** El error con su causa: «fetch failed» solo no dice si fue un reset, un timeout o un pod que se iba. */
+const fallo = (e: unknown) => {
+  const { message, cause } = e as Error & { cause?: { code?: string; message?: string } };
+  return `${message}${cause ? `: ${cause.code ?? cause.message}` : ""}`.slice(0, 200);
+};
+
 async function corrida(base: string, caso: Caso, turno: string): Promise<Corrida> {
   const t0 = Date.now();
   let s: { sugerencia: string; modelo: string };
@@ -127,13 +133,13 @@ async function corrida(base: string, caso: Caso, turno: string): Promise<Corrida
     s = await post(base, "/v1/suggest", { sid: SID, turno, transcript: jsonl(caso).join("\n"),
       contexto: { kind: "live", key: caso.plan.ticket, plan: caso.plan } }, 320_000);
   } catch (e) {
-    return { ms: Date.now() - t0, error: String((e as Error).message).slice(0, 200) };
+    return { ms: Date.now() - t0, error: fallo(e) };
   }
   const ms = Date.now() - t0;
   let veredicto: Veredicto | null = null;
   if (s.sugerencia)
     veredicto = await post(base, "/v1/verdict", { sid: SID, turno, sugerencia: s.sugerencia, contexto: caso.contexto }, 90_000)
-      .catch((e) => ({ error: String((e as Error).message).slice(0, 200) }));
+      .catch((e) => ({ error: fallo(e) }));
   return { sugerencia: s.sugerencia, modelo: s.modelo, ms, veredicto };
 }
 
@@ -171,9 +177,13 @@ export function informe(lista: Caso[], actual: Resultado, anterior: Resultado | 
   const filas = lista.map((c) => {
     const a = antes.get(c.id), h = ahora.get(c.id);
     const pa = mayoria(a, anterior?.veces ?? VECES), ph = mayoria(h, actual.veces);
-    const volteo = h === undefined ? "sin corrida" : a === undefined ? (anterior ? "nuevo" : "") : pa === ph ? "" : ph ? "▲ voltea a pasa" : "▼ voltea a falla";
+    // Sin respuesta no es conducta: un caso cuyas corridas fallaron todas no voltea, y las que fallaron se cuentan aparte.
+    const errores = (actual.casos[c.id] ?? []).filter((x) => x.error).length;
+    const volteo = h === undefined ? "sin corrida" : errores === actual.veces ? "sin respuesta" : a === undefined ? (anterior ? "nuevo" : "")
+      : pa === ph ? "" : ph ? "▲ voltea a pasa" : "▼ voltea a falla";
+    const nota = errores && errores < actual.veces ? ` (${errores} sin respuesta)` : "";
     const fmt = (n: number | undefined, v: number) => (n === undefined ? "—" : `${n}/${v}`);
-    return { c, volteo, linea: `${c.id.padEnd(34)} ${c.espera.conducta.padEnd(14)} ${fmt(a, anterior?.veces ?? VECES).padEnd(6)} ${fmt(h, actual.veces).padEnd(6)} ${volteo}` };
+    return { c, volteo, linea: `${c.id.padEnd(34)} ${c.espera.conducta.padEnd(14)} ${fmt(a, anterior?.veces ?? VECES).padEnd(6)} ${fmt(h, actual.veces).padEnd(6)} ${volteo}${nota}` };
   });
   const paraDani = Object.entries(actual.casos).flatMap(([id, cs]) => cs.filter(autoenviaParaDani).map(() => id));
   const reglasMal = Object.keys(SONDAS).filter((id) => !reglaCae(id, actual.reglas[id]));

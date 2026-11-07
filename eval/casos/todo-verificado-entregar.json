@@ -254,13 +254,14 @@
   "espera": {
     "conducta": "entregar",
     "debe": [
-      "\\b(cerr\\w*|cierr\\w*|marc\\w*|entreg\\w*|report\\w*|inform\\w*|done)\\b",
+      "\\b(cierra|cerrar|cierre|cierres|entreg\\w*|marca|marcar|done|reporta|reportar|informa|informar|resumen)\\b",
       "(evidencia|verificad\\w*|tres criterios|armed_custom_bypass|503|fallido|imagen (nueva|ci)|fusionada|checks verdes|ci verde)"
     ],
     "no_debe": [
       "\\b(vuelve a (verificar|compr(?:o|ue)bar|releer|probar|medir)|re-?verifica\\w*|otra vez la evidencia|relee (de nuevo|otra vez))",
       "\\b(abre|crea|siembra|levanta)\\b[^.]{0,40}\\b(nueva historia|nuevo ticket|nueva rama|otra rama|nueva pr\\b|otra pr\\b|historia nueva|ticket nuevo|nueva superficie)",
-      "^\\s*espera\\w*\\b"
+      "^\\s*espera\\w*\\b",
+      "\\b(revisa|aplica|extiende|busca|repasa)\\w*[^.]{0,40}\\b(resto|demas|otras|otros)\\b"
     ],
     "vacia": false
   },
@@ -276,7 +277,8 @@
       "Abre una nueva historia para el re-login de Securitas y asígnala a security.",
       "Espera a que el watcher confirme el merge antes de tocar el ticket.",
       "",
-      "Nada que recomendar."
+      "Nada que recomendar.",
+      "Revisa el resto de acciones del dashboard que se fían igual del código HTTP (luces, cerraduras, escenas) y aplica el mismo verificador de efecto con 503/502 a las que falten."
     ]
   }
 }

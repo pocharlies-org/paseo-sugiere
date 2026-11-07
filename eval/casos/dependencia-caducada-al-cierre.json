@@ -135,7 +135,7 @@
     "conducta": "verificar",
     "debe": [
       "\\b(relee\\w*|revisa\\w*|verifica\\w*|comprueba\\w*|confirma\\w*|consulta\\w*|renueva\\w*|renova\\w*|reactiva\\w*|revalida\\w*|re-?loguea\\w*|re-?login\\w*|reautentica\\w*|reinicia\\w*|reabr\\w*|vuelve a (leer|comprobar|verificar|entrar|probar|revisar))\\b",
-      "(401|securitas|verisure|xsrefreshlogin|sesion (de securitas|caducada|expirada|rota|muerta)|refresh|not currently available|no esta disponible|entidad (de la alarma )?caida|dependencia (externa )?(caduc|muri|cayo|rota|caida))"
+      "(401|securitas|verisure|xsrefreshlogin|sesion (de securitas|caducada|expirada|rota|muerta)|refresh|re-?login|dependencia (externa )?(caduc|muri|cayo|rota|caida))"
     ],
     "no_debe": [
       "(?<!\\b(antes de|sin|no|hasta) )\\b(marca|cierra|da por (cumplido|hecha)|d(oy|amos) por cumplido\\w*|pon\\w* a done|mueve a done)\\b[^.]{0,30}\\b(criterio|criterios|historia|ticket)\\b(?![^.]{0,40}\\b(cuando|tras|despues|solo si|hasta|en cuanto|una vez)\\b)"
@@ -151,7 +151,8 @@
       "Cierra la historia: los tres criterios están verificados con evidencia en el ticket y abre la PR contra master.",
       "Relee el log de HA: el 401 de xSRefreshLogin es ruido de antes del despliegue; sigue adelante y cierra la historia con la PR.",
       "Marca el criterio de armar como cumplido en el ticket y abre la PR contra master.",
-      ""
+      "",
+      "Abre la PR contra master con la evidencia de la casa real (armed_away tras armar, entidad caída devuelve 503 con motivo, estado no confirmado devuelve 502) y enlaza ALARMA-H2."
     ]
   }
 }

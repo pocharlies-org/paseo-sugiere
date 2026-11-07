@@ -95,7 +95,7 @@
   "espera": {
     "conducta": "verificar",
     "debe": [
-      "\\b(prueba\\w*|probar|pruebo|ejecuta\\w*|ejecutar|lanza\\w*|invoca\\w*|levanta\\w*|abre\\w*|arranca\\w*|verifica\\w*|comprueba\\w*|revisa\\w*|valida\\w*|sembr\\w*|corre\\w*)\\b",
+      "\\b(prueba\\w*|probar|pruebo|ejecuta\\w*|ejecutar|lanza\\w*|invoca(la|r|rla)?\\b|verifica\\w*|compr(?:o|ue)ba\\w*|valida\\w*|sembr\\w*|siembra\\w*|corre\\w*|correr)\\b",
       "(paseo-0|paseo\\b|~/k8s|k8s\\b|entorno destino|\\bdestino\\b|\\bpvc\\b|home (distinto|propio|de las|del pod|nuevo|de paseo)|no esta sembrado|falta sembrar|no existe alli|salida 2)"
     ],
     "no_debe": [
@@ -112,7 +112,8 @@
       "Entrega la skill: pytest verde en local y la invocación real funcionando; abre la PR contra main del plugin.",
       "Marca los criterios como cumplidos en el ticket y mueve ALARMA-H5 a Done con la evidencia del pytest local.",
       "Sigue con lo siguiente: escribe el 70-qa.md con el pytest local como evidencia y sube el adjunto al ticket.",
-      ""
+      "",
+      "Abre la PR contra main del plugin con la skill, el test y la documentación de la invocación desde el pod paseo-0."
     ]
   }
 }

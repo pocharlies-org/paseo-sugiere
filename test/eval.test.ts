@@ -81,6 +81,12 @@ describe("eval: el informe dice qué casos voltean, no solo la puntuación", () 
     assert.match(informe([caso], r("a", true), null), /línea base/);
   });
 
+  it("una corrida sin respuesta no es un volteo: se dice aparte", () => {
+    const caidas = { ...r("b", false), casos: { [caso.id]: Array.from({ length: VECES }, () => ({ ms: 0, error: "fetch failed: ECONNRESET" })) } };
+    assert.match(informe([caso], caidas, r("a", true)), /Voltean: ninguno/);
+    assert.match(informe([caso], caidas, r("a", true)), /sin respuesta/);
+  });
+
   it("es determinista: el mismo par de corridas da el mismo informe", () => {
     assert.equal(informe(CASOS, r("b", true), r("a", false)), informe(CASOS, r("b", true), r("a", false)));
   });
