@@ -105,7 +105,7 @@
   "espera": {
     "conducta": "verificar",
     "debe": [
-      "(verific|revis|comprob|cotej|contrasta|relee|repasa|confirma|valida)\\w*",
+      "(verific|revis|compr(?:o|ue)b|cotej|contrasta|relee|repasa|confirma|valida)\\w*",
       "(criterio|casilla|\\bspec\\b|especificaci|\\[ \\])",
       "(evidencia|70-qa|medido|salida|delta|comando)"
     ],
@@ -119,7 +119,8 @@
     "pasan": [
       "Antes de mover la épica a Done, repasa criterio a criterio contra el 70-qa.md: los siete de la spec siguen en «- [ ]». Marca con su evidencia los que estén medidos y abre un ticket delta para lo que falte; el gate verde no prueba los criterios.",
       "Verifica cada criterio de la spec con la evidencia del qa antes de cerrar nada: siete casillas siguen sin marcar. Marca los medidos y abre una historia delta para lo que no esté; el gate solo mira los adjuntos.",
-      "El gate no lee las casillas: los siete criterios siguen en «- [ ]» en la descripción. Contrasta uno a uno con el comando y la salida del 70-qa.md y márcalos con su evidencia; Done solo cuando estén todos marcados."
+      "El gate no lee las casillas: los siete criterios siguen en «- [ ]» en la descripción. Contrasta uno a uno con el comando y la salida del 70-qa.md y márcalos con su evidencia; Done solo cuando estén todos marcados.",
+      "Comprueba los 7 criterios uno a uno con la salida medida y abre un ticket delta con los que no se cumplen."
     ],
     "fallan": [
       "Pasa la épica a Done: el pm ya dio CUMPLE y el gate está verde.",

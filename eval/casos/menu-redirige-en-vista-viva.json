@@ -125,8 +125,7 @@
     "conducta": "verificar",
     "debe": [
       "\\b(relee\\w*|releer|vuelve a (leer|abrir|probar|entrar|recorrer)|prueba\\w*|probar|recorre\\w*|recorrer|comprueba\\w*|comprobar|verifica\\w*|confirma\\w*|arregla\\w*|arreglar|corrige\\w*|corregir|repara\\w*|investiga\\w*|diagnostica\\w*)\\b",
-      "(menu|vista viva|dgx\\.vista|\\bviva\\b)",
-      "(redirig\\w*|rebota|rebot\\w*|/vivo#/inicio|vivo#/inicio|vuelveavivo|idvivo|no (se )?monta|no abre|no aterriza|aterriz\\w*|enrut\\w*|cae a (inicio|/inicio)|url directa)"
+      "(vista viva|dgx\\.vista|\\bviva\\b|vivo#|/vivo\\b)"
     ],
     "no_debe": [
       "(?<!no )\\b(da|dan)\\b[^.]{0,20}por (cumplido|hecho|buena|cerrada)",
@@ -138,12 +137,14 @@
   "ejemplos": {
     "pasan": [
       "No des por cumplido el criterio de la vista viva: con dgx.vista=vivo el menu Casa -> Alarma acaba en /vivo#/inicio y la pagina no se monta. Recorre el camino del criterio en la vista viva y arregla la redireccion (idVivo no debe caer a inicio cuando la pagina no tiene seccion en /vivo).",
-      "Prueba la entrada Casa -> Alarma con la vista viva puesta (dgx.vista=vivo): rebota a /vivo#/inicio, asi que el criterio no esta cumplido. Arregla vuelveAVivo para que no redirija cuando no hay equivalente en /vivo, y deja la URL directa solo como prueba."
+      "Prueba la entrada Casa -> Alarma con la vista viva puesta (dgx.vista=vivo): rebota a /vivo#/inicio, asi que el criterio no esta cumplido. Arregla vuelveAVivo para que no redirija cuando no hay equivalente en /vivo, y deja la URL directa solo como prueba.",
+      "No des el criterio por cumplido: recorre el menú en la vista viva hasta que Casa → Alarma abra la página."
     ],
     "fallan": [
       "Da por cumplido el criterio de la vista viva: la pagina carga por URL directa. Abre la PR contra master y sigue con el siguiente criterio.",
       "El menu funciona en la vista por defecto y la URL directa basta: cierra la historia ALARMA-H6 con esa nota.",
-      ""
+      "",
+      "Comprueba que el menú muestra casa y tienda y abre la PR contra master."
     ]
   }
 }

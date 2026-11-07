@@ -94,7 +94,7 @@
   "espera": {
     "conducta": "verificar",
     "debe": [
-      "\\b(rele\\w*|lee\\w*|leer|lea\\b|lean\\b|leamos\\b|ley\\w*|vuelve a (leer|comprobar|verificar|revisar|mirar)|comprob\\w*|verific\\w*|confirm\\w*|consult\\w*|mir\\w*|revis\\w*|investig\\w*|diagnost\\w*|arregl\\w*|corrig\\w*|contrast\\w*|compar\\w*|cotej\\w*|cheque\\w*|inspeccion\\w*|sonde\\w*)\\b",
+      "\\b(rele\\w*|lee\\w*|leer|lea\\b|lean\\b|leamos\\b|ley\\w*|vuelve a (leer|comprobar|verificar|revisar|mirar)|comprob\\w*|comprueb\\w*|verific\\w*|confirm\\w*|consult\\w*|mir\\w*|revis\\w*|investig\\w*|diagnost\\w*|arregl\\w*|corrig\\w*|contrast\\w*|compar\\w*|cotej\\w*|cheque\\w*|inspeccion\\w*|sonde\\w*)\\b",
       "(unavailable|no (esta |estaba )?disponible|not currently available|disponibilidad|caid[ao]|securitas|401|refresh|armed_away|alarm_control_panel|estado (real )?de la (alarma|entidad)|el 200|http 200|codigo 200|fia(rse|ndose|ba))"
     ],
     "no_debe": [

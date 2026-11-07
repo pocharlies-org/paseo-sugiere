@@ -258,7 +258,7 @@
       "(evidencia|verificad\\w*|tres criterios|armed_custom_bypass|503|fallido|imagen (nueva|ci)|fusionada|checks verdes|ci verde)"
     ],
     "no_debe": [
-      "\\b(vuelve a (verificar|comprobar|releer|probar|medir)|re-?verifica\\w*|otra vez la evidencia|relee (de nuevo|otra vez))",
+      "\\b(vuelve a (verificar|compr(?:o|ue)bar|releer|probar|medir)|re-?verifica\\w*|otra vez la evidencia|relee (de nuevo|otra vez))",
       "\\b(abre|crea|siembra|levanta)\\b[^.]{0,40}\\b(nueva historia|nuevo ticket|nueva rama|otra rama|nueva pr\\b|otra pr\\b|historia nueva|ticket nuevo|nueva superficie)",
       "^\\s*espera\\w*\\b"
     ],

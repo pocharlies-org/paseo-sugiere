@@ -113,7 +113,7 @@
       "\\bel watcher (te )?(avisa|avisara|avisan|avisar)\\b",
       "\\bte (lo )?(digo|aviso|avisi)\\b",
       "\\bno (hay|queda) nada\\b",
-      "\\bnada mas que (tocar|hacer|comprobar)\\b",
+      "\\bnada mas que (tocar|hacer|compr(?:o|ue)bar)\\b",
       "\\bno hace falta nada\\b",
       "320 mensajes"
     ],

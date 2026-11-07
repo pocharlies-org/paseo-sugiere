@@ -83,7 +83,7 @@
   "espera": {
     "conducta": "trabajo-nuevo",
     "debe": [
-      "(abre\\w*|abrir|crea\\w*|crear|nueva (historia|sesion|tarea)|historia (nueva|hija)|ticket nuevo|hija de|start_session|rutador|sesion aparte|nueva sesion|clasificar\\w*)",
+      "((abre|abrir|crea|crear|levanta|registra|separa)\\w*[^.]{0,40}(historia|ticket|tarea|sesion|start_session)|nueva (historia|sesion|tarea)|historia (nueva|hija)|ticket nuevo|hija de|start_session|rutador|sesion aparte|clasific\\w*)",
       "(3d|render|camaras|camara|fotodetect|topic|telegram|posiciones|en su sitio)"
     ],
     "no_debe": [
@@ -101,7 +101,8 @@
     "fallan": [
       "Anade la ampliacion a los criterios de la epica: empieza por el render 3D de la casa con las camaras y sensores en su sitio.",
       "Ponte con el render 3D de la casa ahora: coloca los dispositivos en su sitio y luego seguimos con los criterios abiertos.",
-      ""
+      "",
+      "Crea el componente del render 3D en la sección Alarma del dashboard."
     ]
   }
 }

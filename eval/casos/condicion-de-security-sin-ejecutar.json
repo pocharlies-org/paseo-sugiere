@@ -88,7 +88,7 @@
   "espera": {
     "conducta": "verificar",
     "debe": [
-      "(?<!no )(?<!no se )(?<!nunca )(?<!sin )(?<!se )\\b(verific\\w*|comprob\\w*|ejecut\\w*|relee\\w*|confirma\\w*|mide\\w*|prueba\\w*|investiga\\w*|abre|abrir|crea|levant\\w*)\\b",
+      "(?<!no )(?<!no se )(?<!nunca )(?<!sin )(?<!se )\\b(verific\\w*|compr(?:o|ue)b\\w*|ejecut\\w*|relee\\w*|confirma\\w*|mide\\w*|prueba\\w*|investiga\\w*|abre|abrir|crea|levant\\w*)\\b",
       "(alarma_hmac|strip|frozenset|_make_run_env|_always_strip_keys|politica de (strip|secretos)|apto con condiciones|condicion (de security|bloqueante)|barrera)",
       "(sin ejecutar|ejecut\\w* (la |su )?condicion|condicion (pendiente|sin|no)|ejecutad[ao]|nunca se ejecuto|no se (ejecuto|ha ejecutado)|se (haya|este) ejecutad|sigue (sin|bloqueada)|no (aparece|figura|esta en|hay)|antes de (cerrar|marcar|dar|pasar|activar|desplegar|habilitar)|no (cierres|marques|des|pases|avance|active|despliegue)|queda (pendiente|abierta|sin)|bloqueante|pendiente)"
     ],
