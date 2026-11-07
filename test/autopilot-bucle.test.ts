@@ -37,11 +37,17 @@ globalThis.fetch = (async (url: string, init: any) => {
   const next = answers.shift() ?? { status: 503 };
   return new Response(JSON.stringify(next.body ?? {}), { status: next.status });
 }) as typeof fetch;
-// The reads are real file system calls (libuv's pool), so settling is by the clock — and by setImmediate, which mock.timers leaves alone.
-const settle = async () => {
-  const until = Date.now() + 150;
-  while (Date.now() < until) await new Promise((resolve) => setImmediate(resolve));
+// Switching on decides in the background (the RPC cannot wait 330 s), over real file reads: wait for what it leaves behind.
+// setImmediate, because mock.timers leaves it alone.
+const until = async (done: () => boolean, what: string) => {
+  const deadline = Date.now() + 10_000;
+  while (!done()) {
+    assert.ok(Date.now() < deadline, `timed out waiting: ${what}`);
+    await new Promise((resolve) => setImmediate(resolve));
+  }
 };
+const quiet = () => new Promise((resolve) => setImmediate(() => setImmediate(resolve))); // only where nothing must happen
+const estado = () => autopilot.get("a1").estado;
 const file = () => JSON.parse(readFileSync(join(HOME, ".local", "state", "paseo-sugiere", "autopilot.json"), "utf8"));
 
 describe("the autopilot loop of the plugin", () => {
@@ -62,7 +68,7 @@ describe("the autopilot loop of the plugin", () => {
     answers = [{ status: 200, body: { accion: "enviar", mensaje: "[AUTOPILOT] sigue con los tests", fase: "seguir", motivo: "ok" } }];
     autopilot.setTopes(15, 0);
     await autopilot.set("a1", true, paseo);
-    await settle();
+    await until(() => sent.length === 1, "the send");
     assert.equal(calls.length, 1);
     assert.match(calls[0].url, /\/v1\/autopilot$/);
     const { contexto, sid, turno, nativa } = calls[0].body;
@@ -81,7 +87,7 @@ describe("the autopilot loop of the plugin", () => {
     write(join(HOME, ".paseo", ".paseo", "suggest", "s1.json"), line({ text: "nativa", at: Date.now() }));
     answers = [{ status: 200, body: { accion: "esperar", motivo: "ESPERA: ci" } }];
     await autopilot.set("a1", true, paseo);
-    await settle();
+    await until(() => estado() === "esperando", "esperar");
     assert.equal(calls[0].body.contexto.key, "ticket-1");
     assert.equal(calls[0].body.contexto.plan.ticketKey, "ticket-1");
     assert.equal(calls[0].body.nativa, undefined);
@@ -97,7 +103,7 @@ describe("the autopilot loop of the plugin", () => {
   it("esperar leaves it gold with the reason; humano turns it red until the next turn starts", async () => {
     answers = [{ status: 200, body: { accion: "esperar", motivo: "ESPERA: ci" } }];
     await autopilot.set("a1", true, paseo);
-    await settle();
+    await until(() => estado() === "esperando", "esperar");
     assert.deepEqual(autopilot.get("a1"), { on: true, estado: "esperando", motivo: "ESPERA: ci" });
     assert.deepEqual(sent, []);
     suggest.cancel("a1");
@@ -111,7 +117,7 @@ describe("the autopilot loop of the plugin", () => {
   it("cerrar archives the agent and switches the autopilot off as delivered", async () => {
     answers = [{ status: 200, body: { accion: "cerrar", motivo: "entregado ticket-1: https://x" } }];
     await autopilot.set("a1", true, paseo);
-    await settle();
+    await until(() => archived.length === 1, "the archive");
     assert.deepEqual(archived, ["a1"]);
     assert.deepEqual(autopilot.get("a1"), { on: false, estado: "entregado", motivo: "entregado ticket-1: https://x" });
   });
@@ -124,17 +130,15 @@ describe("the autopilot loop of the plugin", () => {
     try {
       answers = [{ status: 503 }, { status: 200, body: { accion: "enviar", mensaje: "[AUTOPILOT] x", fase: "seguir", motivo: "" } }];
       const first = autopilot.decide("a1", "/w/repo", paseo);
-      await settle();
-      assert.equal(calls.length, 1, "waits 60 s before the retry");
-      mock.timers.tick(60_000);
+      await until(() => calls.length === 1, "the first ask");
+      await quiet();
+      assert.equal(calls.length, 1, "no retry before the 60 s");
+      await until(() => (mock.timers.tick(60_000), calls.length === 2), "the retry");
       await first;
-      await settle();
       suggest.cancel("a1");
       answers = [{ status: 503 }, { status: 503 }];
       const second = autopilot.decide("a1", "/w/repo", paseo);
-      await settle();
-      assert.equal(calls.length, 3);
-      mock.timers.tick(60_000);
+      await until(() => (mock.timers.tick(60_000), calls.length === 4), "the second retry");
       await second;
     } finally {
       mock.timers.reset();
@@ -162,7 +166,7 @@ describe("the autopilot loop of the plugin", () => {
   it("an invalid answer is humano, never a send", async () => {
     answers = [{ status: 200, body: { accion: "enviar", mensaje: "  " } }];
     await autopilot.set("a1", true, paseo);
-    await settle();
+    await until(() => estado() === "humano", "humano");
     assert.deepEqual(sent, []);
     assert.equal(autopilot.get("a1").estado, "humano");
   });
@@ -170,11 +174,11 @@ describe("the autopilot loop of the plugin", () => {
   it("does not ask when the last message is the user's (an unanswered RETOMA or [AUTOPILOT]) or the agent is running", async () => {
     write(join(HOME, ".claude", "projects", "p", "s1.jsonl"), transcript("user"));
     await autopilot.set("a1", true, paseo);
-    await settle();
+    await new Promise((resolve) => setTimeout(resolve, 300)); // shortcut: a fixed wait can only miss a call, never fail falsely
     write(join(HOME, ".claude", "projects", "p", "s1.jsonl"), transcript("assistant"));
     status = "running";
     await autopilot.set("a1", true, paseo);
-    await settle();
+    await new Promise((resolve) => setTimeout(resolve, 300));
     assert.equal(calls.length, 0);
   });
 
@@ -185,7 +189,6 @@ describe("the autopilot loop of the plugin", () => {
     status = "idle";
     await autopilot.resume(paseo);
     await autopilot.resume(paseo);
-    await settle();
     assert.equal(calls.length, 1);
   });
 });
