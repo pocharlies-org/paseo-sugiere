@@ -71,7 +71,7 @@ export function jsonl(caso: Caso): string[] {
 export const plano = (s: string) => s.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase();
 
 /** Lo que el modelo escribe a veces en vez de la línea vacía (medido 07-11: «No hay nada que recomendar.»): cuenta como callar. */
-const NADA = /^(no hay )?nada (mas )?que (recomendar|sugerir|proponer)\.?$/;
+const NADA = /^(no hay )?nada (mas )?que (recomendar|sugerir|proponer)\b/;
 
 /** ¿La corrida hace lo que el caso espera? La sugerencia vacía solo vale si el caso lo dice. */
 export function puntua(caso: Caso, c: Corrida): { pasa: boolean; motivo: string } {
@@ -169,6 +169,8 @@ function pasan(lista: Caso[], r: Resultado): Map<string, number> {
   return new Map(lista.filter((c) => r.casos[c.id]).map((c) => [c.id, r.casos[c.id].filter((x) => puntua(c, x).pasa).length]));
 }
 
+const sinRespuesta = (r: Resultado, id: string) => (r.casos[id] ?? []).filter((x) => x.error).length;
+
 export function informe(lista: Caso[], actual: Resultado, anterior: Resultado | null): string {
   const ahora = pasan(lista, actual);
   const antes = anterior ? pasan(lista, anterior) : new Map<string, number>();
@@ -178,10 +180,10 @@ export function informe(lista: Caso[], actual: Resultado, anterior: Resultado | 
     const a = antes.get(c.id), h = ahora.get(c.id);
     const pa = mayoria(a, anterior?.veces ?? VECES), ph = mayoria(h, actual.veces);
     // Sin respuesta no es conducta: un caso cuyas corridas fallaron todas no voltea, y las que fallaron se cuentan aparte.
-    const errores = (actual.casos[c.id] ?? []).filter((x) => x.error).length;
+    const errores = sinRespuesta(actual, c.id), erroresAntes = anterior ? sinRespuesta(anterior, c.id) : 0;
     const volteo = h === undefined ? "sin corrida" : errores === actual.veces ? "sin respuesta" : a === undefined ? (anterior ? "nuevo" : "")
-      : pa === ph ? "" : ph ? "▲ voltea a pasa" : "▼ voltea a falla";
-    const nota = errores && errores < actual.veces ? ` (${errores} sin respuesta)` : "";
+      : erroresAntes === anterior!.veces ? "antes sin respuesta" : pa === ph ? "" : ph ? "▲ voltea a pasa" : "▼ voltea a falla";
+    const nota = errores + erroresAntes ? ` (sin respuesta: ${errores} ahora, ${erroresAntes} antes)` : "";
     const fmt = (n: number | undefined, v: number) => (n === undefined ? "—" : `${n}/${v}`);
     return { c, volteo, linea: `${c.id.padEnd(34)} ${c.espera.conducta.padEnd(14)} ${fmt(a, anterior?.veces ?? VECES).padEnd(6)} ${fmt(h, actual.veces).padEnd(6)} ${volteo}${nota}` };
   });
