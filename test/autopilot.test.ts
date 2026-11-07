@@ -78,6 +78,13 @@ describe("el autopilot, fila a fila", () => {
     assert.match(d.mensaje!, /^\[AUTOPILOT\] .*clasificar-trabajo/);
   });
 
+  it("5 · con ticket conocido (aunque el ancla no tenga criterios) no hay arranque, y la clave llega a la entrega", async () => {
+    sinModelo();
+    const d = await decidir([u("monta X"), a("Hecho.\nESTADO: ENTREGA")], { ...ctx, plan: { ticket: "TAREA-1000005", criterios: [] } });
+    assert.equal(d.fase, "entregar");
+    assert.match(d.mensaje!, /al ticket TAREA-1000005/);
+  });
+
   it("7 · PARA DANI con importe → humano por dinero", async () => {
     sinModelo();
     const d = await decidir([...yaArrancado, a("PARA DANI (dinero): el dominio cuesta 120 € al año, ¿lo pago?")], ctx);

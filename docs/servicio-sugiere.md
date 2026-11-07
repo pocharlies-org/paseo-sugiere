@@ -325,7 +325,7 @@ Tabla de decisión, en orden (lo determinista antes que cualquier modelo):
 | 3 | alguna `ESPERA:` vigilable que no sea `fichero` | `esperar` (la despierta el `EVENTO:` del supervisor) |
 | 4 | `PARA IT:` / `PARA SECURITY:` / `PARA QA:` | `esperar` |
 | 5 | topes (`max_seguidos`, `max_total`) superados | `humano` |
-| 6 | primer paso del autopilot sin plan anclado | `enviar` · `arranque` (el ticket primero) |
+| 6 | primer paso del autopilot sin ticket (ni `contexto.key` ni el del ancla) | `enviar` · `arranque` (el ticket primero) |
 | 7 | `PARA DANI` sin dinero | `enviar` · `devolver` (elige la recomendada, `DECISIÓN TOMADA:`); si insiste justo después, `humano` |
 | 8 | `ESTADO: ENTREGA` sin plan, o plan con todos los criterios verificados | `enviar` · `entregar` (el prompt de la entrega, con los números del autopilot); pedida y no cerrada en el turno siguiente, `humano` |
 | 9 | lo demás | el modelo propone (`nativa` si viene) y la puerta dictamina: `ok` → `enviar` · `seguir`; `alto` → `enviar` · `desvio`, y un segundo veto seguido `humano`; `dinero` → `humano`; vacío o el mismo paso que el anterior → `humano` |

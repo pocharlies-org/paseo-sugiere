@@ -85,7 +85,7 @@ export async function decidir(lines: string[], ctx: Contexto, nativa = ""): Prom
   const r = racha(lines);
   const pasos = { seguidos: r.seguidos, total: r.total };
   const plan = criterios(ctx.plan).length ? ctx.plan! : null; // un plan sin criterios no ancla (decisión 2 de «Garantizar plan»)
-  const key = ctx.key || plan?.ticket || plan?.ticketKey || "";
+  const key = ctx.key || ctx.plan?.ticket || ctx.plan?.ticketKey || ""; // la clave vale aunque el ancla no tenga criterios
   const fin = (accion: Accion, motivo: string, extra: Partial<Decision> = {}): Decision => ({ accion, motivo, pasos, ...extra });
   const envia = (fase: Fase, mensaje: string, motivo: string, extra: Partial<Decision> = {}) =>
     fin("enviar", motivo, { fase, mensaje, ...extra });
@@ -115,7 +115,7 @@ export async function decidir(lines: string[], ctx: Contexto, nativa = ""): Prom
   const antes = r.seguidos ? r.ultimo : ""; // la fase anterior solo cuenta dentro de la racha: tras Dani o un EVENTO, no insiste nadie
 
   // 5. El primer paso sin plan anclado: el ticket primero (decisión 4).
-  if (!r.total && !plan) return envia("arranque", arranque(), "primer paso sin ticket anclado");
+  if (!r.total && !key) return envia("arranque", arranque(), "primer paso sin ticket");
 
   // 6. La pregunta a Dani que no es dinero vuelve a la sesión; si insiste justo después, la ve una persona.
   if (dani !== null) {
