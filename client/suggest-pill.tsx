@@ -1,13 +1,14 @@
 import type { PluginButtonContentProps, PluginButtonIconProps, PluginClientContext } from "@getpaseo/plugin/client";
 import { Icon, TextInput } from "@getpaseo/plugin/client/react-native";
+import { SettingsAction, SettingsSwitch } from "@getpaseo/plugin/client/ui";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Animated, Easing, Pressable, Text, View } from "react-native";
-import { suggestFeedback, suggestForce, suggestGet } from "../shared/contract.ts";
+import { AccessibilityInfo, Animated, Easing, Pressable, Text, View } from "react-native";
+import { autopilotSet, suggestFeedback, suggestForce, suggestGet } from "../shared/contract.ts";
 import { SUGGEST_WAIT_MS } from "../shared/suggest.ts";
 import { insertSuggestion, registerPillAnchor } from "./composer-bridge.ts";
 
-// One composer pill per idle agent: with a suggestion ready it opens the card, without one it is a small ✦ whose click forces a
-// generation now (Dani 19-10). Nothing reaches the prompt without a press: a generation that finishes while another window is in
+// One composer pill per idle agent: with a suggestion ready it opens the card, without one it is a small ✦ whose popover forces a
+// generation now (Dani 19-10) or switches the agent's autopilot on (Dani 07-11; then the ✦ is gold, or red when it needs a person). Nothing reaches the prompt without a press: a generation that finishes while another window is in
 // front stays on this pill (Dani 02-11). Tapping a suggestion puts the text in the agent's prompt (composer-bridge.ts, web and
 // desktop; Dani 18-10) and, where that cannot be done, opens the text already editable in place, and Enter sends it as the
 // next user message (Dani 16-10: «editar» must edit the suggestion in place; 17-10: the two buttons were dead weight — the field
@@ -22,7 +23,27 @@ const BADGE: Record<string, string> = { "en-plan": "▸", "trabajo-nuevo": "✚"
 // The recuadro of the icon says the pill's state (Dani 07-11): amarillo = generating (the star spins), verde = a suggestion is
 // ready, azul = it can be asked for, rojo = the last force failed. The host paints the pill's own frame with a global theme token
 // (`borderAccent`, no per-pill hook in the plugin API), so the state frame is the icon's box — it carries the color on every client.
-const ESTADO_COLOR: Record<string, string> = { generando: "#eab308", lista: "#22c55e", pedible: "#3b82f6", error: "#ef4444" };
+// With the autopilot on (Dani 07-11): dorado while it works or waits (the star spins while it asks the service), rojo brillante
+// pulsing when it needs a person.
+const ESTADO_COLOR: Record<string, string> = {
+  generando: "#eab308",
+  lista: "#22c55e",
+  pedible: "#3b82f6",
+  error: "#ef4444",
+  autopilot: "#d4a017",
+  pensando: "#d4a017",
+  humano: "#ff1744",
+};
+type Autopilot = { on: boolean; estado: string; motivo: string };
+const OFF: Autopilot = { on: false, estado: "apagado", motivo: "" };
+/** What the autopilot is doing, in one line: the pill's label and the popover's status. */
+export function autopilotLine({ estado, motivo }: Autopilot): string {
+  if (estado === "humano") return `necesita acción: ${motivo || "sin motivo"}`;
+  if (estado === "esperando") return `esperando: ${motivo || "un evento"}`;
+  if (estado === "pensando") return "autopilot: decidiendo el siguiente paso";
+  if (estado === "entregado") return "autopilot: entregado";
+  return "autopilot: trabajando";
+}
 const LINE = 18; // one row of the field; `rows` is not in the host's react-native types, so the height is set from here
 const MOBILE_LINE = 22;
 // Mobile field: sized ONCE from the text when the card opens (4 to 10 rows), never while editing — see SuggestCard.
@@ -46,8 +67,10 @@ function SuggestCard({
   send,
   agentId,
   onInserted,
+  autopilot,
+  toggle,
   layout: { compact },
-}: PluginButtonContentProps & { text: string; send: (text: string) => void; agentId: string; onInserted: () => void }) {
+}: PluginButtonContentProps & { text: string; send: (text: string) => void; agentId: string; onInserted: () => void; autopilot: Autopilot; toggle: (on: boolean) => Promise<Autopilot> }) {
   const [inserted, setInserted] = useState<boolean | null>(null); // null while the bridge decides
   useEffect(() => {
     const done = text !== "" && insertSuggestion(agentId, text);
@@ -81,12 +104,15 @@ function SuggestCard({
   };
   if (inserted !== false) return null;
   return (
-    <View style={styles.row}>
-      <TextInput accessibilityLabel="Suggested next message" multiline blurOnSubmit defaultValue={text} onChangeText={setSuggestion} onSubmitEditing={submit} style={styles.input} />
-      {overflows ? <Text style={styles.hint}>Desliza dentro del texto para ver el resto</Text> : null}
-      <Pressable accessibilityRole="button" accessibilityLabel="Send" onPress={submit} style={styles.send}>
-        <Text style={styles.arrow}>{compact ? "Send ↑" : "↑"}</Text>
-      </Pressable>
+    <View style={{ gap: 8 }}>
+      <View style={styles.row}>
+        <TextInput accessibilityLabel="Suggested next message" multiline blurOnSubmit defaultValue={text} onChangeText={setSuggestion} onSubmitEditing={submit} style={styles.input} />
+        {overflows ? <Text style={styles.hint}>Desliza dentro del texto para ver el resto</Text> : null}
+        <Pressable accessibilityRole="button" accessibilityLabel="Send" onPress={submit} style={styles.send}>
+          <Text style={styles.arrow}>{compact ? "Send ↑" : "↑"}</Text>
+        </Pressable>
+      </View>
+      <AutopilotPanel theme={theme} autopilot={autopilot} toggle={toggle} />
     </View>
   );
 }
@@ -98,6 +124,17 @@ const compactReported = new Map<string, (compact: boolean) => void>();
 // The state of each pill, set by show() before the host re-renders the icon (the icon component gets no props of its own).
 const estadoFor = new Map<string, string>();
 
+// Movement only when the user has not asked the system for less of it.
+function useReducedMotion(): boolean {
+  const [reduced, setReduced] = useState(false);
+  useEffect(() => {
+    void AccessibilityInfo.isReduceMotionEnabled().then(setReduced, () => {});
+    const subscription = AccessibilityInfo.addEventListener("reduceMotionChanged", setReduced);
+    return () => subscription?.remove();
+  }, []);
+  return reduced;
+}
+
 // The pill's icon is also the anchor of the composer bridge: the popover's content is portaled to body, the icon sits in the pane.
 function SuggestIcon(props: PluginButtonIconProps) {
   const node = useRef<View>(null);
@@ -106,6 +143,8 @@ function SuggestIcon(props: PluginButtonIconProps) {
   const estado = (agentId && estadoFor.get(agentId)) || "pedible";
   const color = ESTADO_COLOR[estado] ?? ESTADO_COLOR.pedible;
   const giro = useRef(new Animated.Value(0)).current;
+  const pulso = useRef(new Animated.Value(0)).current;
+  const reduced = useReducedMotion();
   useEffect(() => {
     if (agentId) compactReported.get(agentId)?.(compact);
   }, [agentId, compact]);
@@ -116,20 +155,71 @@ function SuggestIcon(props: PluginButtonIconProps) {
   }, [agentId, compact]);
   useEffect(() => {
     // Mientras genera, la estrella gira sin parar (Dani 07-11: «como un gif, moviéndose») — en vez de los puntos suspensivos.
-    if (estado !== "generando") {
+    if ((estado !== "generando" && estado !== "pensando") || reduced) {
       giro.setValue(0);
       return;
     }
     const loop = Animated.loop(Animated.timing(giro, { toValue: 1, duration: 1400, easing: Easing.linear, useNativeDriver: false }));
     loop.start();
     return () => loop.stop();
-  }, [estado, giro]);
+  }, [estado, giro, reduced]);
+  useEffect(() => {
+    // The red asks for a person: it beats until someone answers (Dani 07-11), still red without the beat for reduced motion.
+    if (estado !== "humano" || reduced) {
+      pulso.setValue(0);
+      return;
+    }
+    const beat = (toValue: number) => Animated.timing(pulso, { toValue, duration: 600, easing: Easing.inOut(Easing.ease), useNativeDriver: false });
+    const loop = Animated.loop(Animated.sequence([beat(1), beat(0)]));
+    loop.start();
+    return () => loop.stop();
+  }, [estado, pulso, reduced]);
   const angle = giro.interpolate({ inputRange: [0, 1], outputRange: ["0deg", "360deg"] });
+  const scale = pulso.interpolate({ inputRange: [0, 1], outputRange: [1, 1.18] });
+  const halo = pulso.interpolate({ inputRange: [0, 1], outputRange: ["rgba(255,23,68,0.15)", "rgba(255,23,68,0.45)"] });
   return (
-    <View ref={node} style={{ borderWidth: 1, borderRadius: props.size + 6, borderColor: color, padding: 2, alignItems: "center", justifyContent: "center" }}>
-      <Animated.View style={{ transform: [{ rotate: angle }] }}>
-        <Icon name="Sparkles" size={props.size} color={color} />
+    <View ref={node}>
+      <Animated.View
+        style={{
+          borderWidth: estado === "humano" ? 2 : 1,
+          borderRadius: props.size + 6,
+          borderColor: color,
+          padding: 2,
+          alignItems: "center",
+          justifyContent: "center",
+          ...(estado === "humano" ? { backgroundColor: halo, transform: [{ scale }] } : {}),
+        }}
+      >
+        <Animated.View style={{ transform: [{ rotate: angle }] }}>
+          <Icon name="Sparkles" size={props.size} color={color} />
+        </Animated.View>
       </Animated.View>
+    </View>
+  );
+}
+
+// The «Autopilot» switch (Dani 07-11): on, the session is piloted alone until it is done — at the end of every turn the sugiere
+// service says what to do and the plugin obeys. Not «Sugerir automáticamente», which only proposes messages for the user to send.
+// In the ✦'s popover (with «Sugerir ahora» while it is off) and in the mobile card.
+function AutopilotPanel({ theme, autopilot, toggle, suggestNow }: { theme: PluginButtonContentProps["theme"]; autopilot: Autopilot; toggle: (on: boolean) => Promise<Autopilot>; suggestNow?: () => void }) {
+  const [state, setState] = useState(autopilot);
+  const [busy, setBusy] = useState(false);
+  return (
+    <View style={{ gap: 4, minWidth: 260, maxWidth: 340 }}>
+      {suggestNow && !state.on ? <SettingsAction label="Sugerencia" hint="Propone ahora el siguiente mensaje; lo envías tú" actionLabel="Sugerir ahora" onPress={suggestNow} /> : null}
+      <SettingsSwitch
+        label="Autopilot"
+        hint="Pilota esta sesión sola hasta terminar: envía cada paso, espera los eventos y archiva al entregar. Se pone en rojo si necesita a una persona."
+        value={state.on}
+        disabled={busy}
+        onValueChange={(on) => {
+          setBusy(true);
+          void toggle(on).then(setState, () => {}).finally(() => setBusy(false));
+        }}
+      />
+      {state.on ? (
+        <Text style={{ color: state.estado === "humano" ? ESTADO_COLOR.humano : theme.colors.foregroundMuted, fontSize: 13 }}>{autopilotLine(state)}</Text>
+      ) : null}
     </View>
   );
 }
@@ -150,6 +240,14 @@ export function addSuggestPill(client: PluginClientContext): () => void {
   const anchors = new Map<string, { en_plan: string | null; criterio: string | null }>(); // badge and criterion of the anchored suggestion
   const muted = new Set<string>(); // three «no es esto» in a row: the ✦ says it is quiet until clicked
   const noPills = new Map<string, ReturnType<PluginClientContext["addComposerPill"]>>(); // «no es esto», next to an anchored suggestion
+  const autopilots = new Map<string, Autopilot>(); // the autopilot of each agent, as the server last reported it
+  const toggle = (agentId: string) => async (on: boolean) => {
+    const next = await client.rpc(autopilotSet, { agentId, on });
+    autopilots.set(agentId, next);
+    const current = agents.get(agentId);
+    if (current) show(current);
+    return next;
+  };
   const feedback = (agentId: string, verdict: "no-es-esto" | "usada") =>
     client.rpc(suggestFeedback, { agentId, verdict }).catch(() => ({ muted: false }));
   let stopped = false;
@@ -170,6 +268,7 @@ export function addSuggestPill(client: PluginClientContext): () => void {
     compactFor.delete(id);
     compactReported.delete(id);
     estadoFor.delete(id);
+    autopilots.delete(id);
   };
   const show = (agent: Agent) => {
     if (stopped) return;
@@ -184,7 +283,12 @@ export function addSuggestPill(client: PluginClientContext): () => void {
     const text = agent.status === "idle" ? (texts.get(agent.id) ?? null) : null;
     const pending = pendingFor.get(agent.id) ?? false;
     const error = errors.get(agent.id) ?? null;
-    estadoFor.set(agent.id, pending ? "generando" : text ? "lista" : error ? "error" : "pedible");
+    // While a turn runs the autopilot is working, whatever it last reported; idle, the poll brings what it decided.
+    const autopilot = autopilots.get(agent.id) ?? OFF;
+    const piloted = autopilot.on ? (agent.status === "idle" ? autopilot : { ...autopilot, estado: "activo", motivo: "" }) : null;
+    estadoFor.set(agent.id, piloted
+      ? (piloted.estado === "humano" || piloted.estado === "pensando" ? piloted.estado : "autopilot")
+      : pending ? "generando" : text ? "lista" : error ? "error" : "pedible");
     const pill = pills.get(agent.id);
     compactReported.set(agent.id, (next) => {
       if (compactFor.get(agent.id) === next) return;
@@ -199,15 +303,30 @@ export function addSuggestPill(client: PluginClientContext): () => void {
     const meta = text ? anchors.get(agent.id) : undefined;
     const badge = meta?.en_plan ? (BADGE[meta.en_plan] ?? "") : "";
     const quiet = !text && !pending && !error && muted.has(agent.id);
-    const button = {
+    const panel = (suggestNow?: () => void) => ({
+      kind: "popover" as const,
+      Content: (props: PluginButtonContentProps) => (
+        <AutopilotPanel theme={props.theme} autopilot={autopilot} toggle={toggle(agent.id)} suggestNow={suggestNow && (() => { props.close(); void suggestNow(); })} />
+      ),
+    });
+    // The autopilot speaks with the ✦ alone: gold while it works or waits, red when it needs a person, and its popover is the switch.
+    const button = piloted ? {
+      title: autopilotLine(piloted),
+      icon: SuggestIcon,
+      label: compact ? "✦" : piloted.estado === "humano" || piloted.estado === "esperando" ? autopilotLine(piloted).slice(0, 60) : "autopilot",
+      visible: true, // also while a turn runs: the switch must be reachable to stop it mid-turn
+      disabled: false,
+      behavior: panel(),
+    } : {
       title: text ? (badge ? `${badge} ${meta?.criterio ?? ""}`.trim() : "Suggested next message")
         : pending ? "Generating…" : error ? "Last suggestion failed"
         : quiet ? "La ✦ se calla: tres «no es esto» seguidos. Púlsala para pedir otra." : "Suggest now",
       icon: SuggestIcon,
       label: !compact && text ? (badge ? `${badge} ${meta?.criterio ? `${meta.criterio} · ` : ""}${text}` : text)
         : text && badge ? badge : pending ? "\u200b" : error ? "!" : quiet ? "✦ callada" : "✦", // sin «…»: la estrella amarilla gira (Dani 07-11); el host rechaza label vacía o en blanco (validation.ts requireText), el espacio de ancho cero la pasa y no se ve
-      // Idle agents always carry the pill: with a suggestion it opens the card, without one it is the small ✦ that forces a
-      // generation on click (Dani 19-10), spinning while it resolves and showing the failure once if it does not.
+      // Idle agents always carry the pill: with a suggestion it opens the card, without one the small ✦ opens «Sugerir ahora»,
+      // which forces a generation (Dani 19-10), next to the Autopilot switch (Dani 07-11); it spins while the generation resolves
+      // and shows the failure once if it does not.
       // Hidden while a turn runs — a suggestion is never asked for mid-turn.
       visible: agent.status === "idle",
       disabled: pending,
@@ -219,6 +338,8 @@ export function addSuggestPill(client: PluginClientContext): () => void {
                 {...props}
                 text={text}
                 agentId={agent.id}
+                autopilot={autopilot}
+                toggle={toggle(agent.id)}
                 onInserted={() => {
                   consumed.set(agent.id, text);
                   texts.set(agent.id, null);
@@ -240,9 +361,7 @@ export function addSuggestPill(client: PluginClientContext): () => void {
                 <SuggestError {...props} message={error} onSeen={() => { errors.delete(agent.id); show(agents.get(agent.id) ?? agent); }} />
               ),
             }
-          : {
-              kind: "action" as const,
-              onPress: async () => {
+          : panel(async () => {
                 const { started } = await client.rpc(suggestForce, { agentId: agent.id }).catch((error) => {
                   console.error("suggest: el rpc force falló", error);
                   return { started: false };
@@ -286,8 +405,7 @@ export function addSuggestPill(client: PluginClientContext): () => void {
                     () => {},
                   );
                 }, 2000);
-              },
-            },
+              }),
     };
     if (pill) pill.update(button);
     else pills.set(agent.id, client.addComposerPill({ id: "suggest", workspaceId: agent.workspaceId, agentId: agent.id, button }));
@@ -296,7 +414,7 @@ export function addSuggestPill(client: PluginClientContext): () => void {
       title: "No es esto: descarta la sugerencia (tres seguidos y la ✦ se calla)",
       icon: "ThumbsDown",
       label: "no es esto",
-      visible: agent.status === "idle" && badge !== "",
+      visible: agent.status === "idle" && badge !== "" && !piloted,
       behavior: {
         kind: "action" as const,
         onPress: async () => {
@@ -336,10 +454,13 @@ export function addSuggestPill(client: PluginClientContext): () => void {
     for (const agent of agents.values()) {
       if (agent.status !== "idle") continue;
       void client.rpc(suggestGet, { agentId: agent.id }).then(
-        ({ text, en_plan, criterio, muted: quiet }) => {
+        ({ text, en_plan, criterio, muted: quiet, autopilot = OFF }) => {
           if (stopped) return;
           const shown = text === consumed.get(agent.id) ? null : text;
-          const changed = texts.get(agent.id) !== shown || muted.has(agent.id) !== quiet;
+          const before = autopilots.get(agent.id) ?? OFF;
+          const changed = texts.get(agent.id) !== shown || muted.has(agent.id) !== quiet
+            || before.on !== autopilot.on || before.estado !== autopilot.estado || before.motivo !== autopilot.motivo;
+          autopilots.set(agent.id, autopilot);
           texts.set(agent.id, shown);
           anchors.set(agent.id, { en_plan, criterio });
           if (quiet) muted.add(agent.id);

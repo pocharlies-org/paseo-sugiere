@@ -35,13 +35,24 @@ no consume su contrato `file.claude-cuentas.v1`: la llamada va a LiteLLM con la 
   aparece. El envío es siempre un toque del usuario.
 - Configurable: pantalla propia «Sugerencia del siguiente mensaje» en los ajustes de Paseo — interruptor
   `enabled` (al desactivar se tiran las sugerencias pendientes y mostradas) y ventana de silencio
-  (30/60/120/300 s). El documento vive en el host (`shared/settings.ts`); el server lo obedece al vuelo.
+  (30/60/120/300 s) y los topes del autopilot (pasos seguidos y por sesión; 0 = sin tope, lo de fábrica). El documento vive en
+  el host (`shared/settings.ts`); el server lo obedece al vuelo.
 - La instrucción vive solo en el servicio `sugiere` (decisión 5 de Dani): el plugin no manda ninguna y
   `~/.local/state/paseo-sugiere/prompt.txt` ya no se lee. No hay editor en la píldora: la píldora es para enviar (Dani 17-10).
 - **Garantizar plan**: si `~/.local/state/paseo-plan/anchor-<agentId>.json` (lo escribe paseo-plan) tiene
   `guard: true` y criterios, al acabar cada turno de ese agente se pide la sugerencia con el plan, sin ventana de silencio y aunque
   `auto` esté apagado. La ✦ enseña la insignia (▸ paso del plan, ✚ trabajo nuevo, ✓ verificar) y el criterio; al lado sale
   «no es esto», y tres seguidos callan la ✦ hasta que la pulses. Enviar sigue siendo tu toque.
+- La ✦ sin sugerencia abre un popover: «Sugerir ahora» (el force de siempre) y el interruptor **Autopilot** de ese agente (también
+  en la tarjeta del móvil). Encendido, al acabar cada turno `completed` el plugin pregunta a `POST /v1/autopilot` del servicio
+  (`contexto.kind: "live"`, `cwd`, la `key` del ancla, el plan si hay guarda, `nativa` solo sin plan, y `topes` de los ajustes;
+  plazo 330 s) y obedece: `enviar` → manda el mensaje si no empezó otro turno (`seq`); `esperar` → ✦ dorada «esperando: …»;
+  `humano` → ✦ rojo brillante con pulso (sin animación con movimiento reducido) hasta el siguiente mensaje; `cerrar` → archiva el
+  agente. Un 503 o sin respuesta se reintenta una vez a los 60 s; si vuelve a fallar, rojo. Con el autopilot encendido no se genera
+  sugerencia (una sola llamada por turno). Estado en `~/.local/state/paseo-sugiere/autopilot.json`
+  (`{agentId: {on, desde, estado, motivo}}`). Al arrancar, una evaluación de los agentes con autopilot `idle` cuyo último mensaje es
+  del asistente (en la primera llamada que trae el host: la SDK no da `paseo` al arrancar). Es distinto de «Sugerir
+  automáticamente», que solo propone.
 
 ## Qué lee y envía
 
