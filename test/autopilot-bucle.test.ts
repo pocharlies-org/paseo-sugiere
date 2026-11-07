@@ -77,13 +77,13 @@ describe("the autopilot loop of the plugin", () => {
   });
 
   it("sends the anchor's key and plan, and no native suggestion with a guarded plan; the native one without it", async () => {
-    write(join(HOME, ".local", "state", "paseo-plan", "anchor-a1.json"), line({ ticketKey: "XX-1", guard: true, criterios: ["c"] }));
+    write(join(HOME, ".local", "state", "paseo-plan", "anchor-a1.json"), line({ ticketKey: "ticket-1", guard: true, criterios: ["c"] }));
     write(join(HOME, ".paseo", ".paseo", "suggest", "s1.json"), line({ text: "nativa", at: Date.now() }));
     answers = [{ status: 200, body: { accion: "esperar", motivo: "ESPERA: ci" } }];
     await autopilot.set("a1", true, paseo);
     await settle();
-    assert.equal(calls[0].body.contexto.key, "XX-1");
-    assert.equal(calls[0].body.contexto.plan.ticketKey, "XX-1");
+    assert.equal(calls[0].body.contexto.key, "ticket-1");
+    assert.equal(calls[0].body.contexto.plan.ticketKey, "ticket-1");
     assert.equal(calls[0].body.nativa, undefined);
     rmSync(join(HOME, ".local", "state", "paseo-plan"), { recursive: true, force: true });
     suggest.cancel("a1");
@@ -109,11 +109,11 @@ describe("the autopilot loop of the plugin", () => {
   });
 
   it("cerrar archives the agent and switches the autopilot off as delivered", async () => {
-    answers = [{ status: 200, body: { accion: "cerrar", motivo: "entregado XX-1: https://x" } }];
+    answers = [{ status: 200, body: { accion: "cerrar", motivo: "entregado ticket-1: https://x" } }];
     await autopilot.set("a1", true, paseo);
     await settle();
     assert.deepEqual(archived, ["a1"]);
-    assert.deepEqual(autopilot.get("a1"), { on: false, estado: "entregado", motivo: "entregado XX-1: https://x" });
+    assert.deepEqual(autopilot.get("a1"), { on: false, estado: "entregado", motivo: "entregado ticket-1: https://x" });
   });
 
   it("a 503 is retried once after 60 s; a second failure is humano", async () => {
