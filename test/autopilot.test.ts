@@ -55,20 +55,29 @@ describe("el autopilot, fila a fila", () => {
     assert.equal(d.accion, "esperar");
   });
 
-  it("4 · 15 pasos seguidos del autopilot → humano, sin llamar a nadie", async () => {
+  it("4 · con tope de 15 seguidos configurado, el 16.º → humano, sin llamar a nadie", async () => {
     sinModelo();
     const pasos = Array.from({ length: 15 }, (_, i) => [u(`[AUTOPILOT] paso ${i}`), a("hecho")]).flat();
-    const d = await decidir([u("hazlo"), ...pasos, a("ESTADO: ENTREGA")], ctx);
+    const d = await decidir([u("hazlo"), ...pasos, a("ESTADO: ENTREGA")], { ...ctx, topes: { max_seguidos: 15 } });
     assert.equal(d.accion, "humano");
     assert.match(d.motivo, /15 pasos seguidos/);
   });
 
-  it("4 · 40 pasos en la sesión → humano aunque Dani haya escrito entre medias", async () => {
+  it("4 · con tope de 40 por sesión configurado → humano aunque Dani haya escrito entre medias", async () => {
     sinModelo();
     const pasos = Array.from({ length: 40 }, (_, i) => [u(`[AUTOPILOT] paso ${i}`), a("hecho"), ...(i % 10 === 9 ? [u("sigue")] : [])]).flat();
-    const d = await decidir([...pasos, a("PARA DANI: ¿le cambio el nombre?")], ctx);
+    const d = await decidir([...pasos, a("PARA DANI: ¿le cambio el nombre?")], { ...ctx, topes: { max_total: 40 } });
     assert.equal(d.accion, "humano");
     assert.match(d.motivo, /40 pasos/);
+  });
+
+  it("4 · sin topes (0, o sin configurar) el autopilot no se para por contar pasos", async () => {
+    sinModelo();
+    const pasos = Array.from({ length: 60 }, (_, i) => [u(`[AUTOPILOT] paso ${i}`), a("hecho")]).flat();
+    for (const topes of [undefined, { max_seguidos: 0, max_total: 0 }]) {
+      const d = await decidir([u("hazlo"), ...pasos, a("ESTADO: ENTREGA")], { ...ctx, topes });
+      assert.deepEqual([d.accion, d.fase, d.pasos], ["enviar", "entregar", { seguidos: 60, total: 60 }]);
+    }
   });
 
   it("5 · el primer paso sin plan anclado → arranque (el ticket primero)", async () => {
@@ -204,12 +213,18 @@ describe("el autopilot, fila a fila", () => {
 });
 
 describe("los topes", () => {
-  it("se leen del fichero montado; ausente o con valores raros, los de Dani (15 y 40)", () => {
-    const dir = mkdtempSync(join(tmpdir(), "topes-"));
-    writeFileSync(join(dir, "ok.json"), JSON.stringify({ max_seguidos: 5, max_total: 9 }));
-    writeFileSync(join(dir, "raro.json"), JSON.stringify({ max_seguidos: -1, max_total: "x" }));
-    assert.deepEqual(topes(join(dir, "ok.json")), { max_seguidos: 5, max_total: 9 });
-    assert.deepEqual(topes(join(dir, "raro.json")), { max_seguidos: 15, max_total: 40 });
-    assert.deepEqual(topes(join(dir, "no-existe.json")), { max_seguidos: 15, max_total: 40 });
+  const dir = mkdtempSync(join(tmpdir(), "topes-"));
+  writeFileSync(join(dir, "ok.json"), JSON.stringify({ max_seguidos: 5, max_total: 9 }));
+  writeFileSync(join(dir, "raro.json"), JSON.stringify({ max_seguidos: -1, max_total: "x" }));
+
+  it("del fichero montado; ausente o con valores raros, sin tope (0)", () => {
+    assert.deepEqual(topes(null, join(dir, "ok.json")), { max_seguidos: 5, max_total: 9 });
+    assert.deepEqual(topes(null, join(dir, "raro.json")), { max_seguidos: 0, max_total: 0 });
+    assert.deepEqual(topes(null, join(dir, "no-existe.json")), { max_seguidos: 0, max_total: 0 });
+  });
+
+  it("los del llamante mandan sobre el fichero, también el 0; un valor raro cae al del fichero", () => {
+    assert.deepEqual(topes({ max_seguidos: 0, max_total: 100 }, join(dir, "ok.json")), { max_seguidos: 0, max_total: 100 });
+    assert.deepEqual(topes({ max_seguidos: -3 }, join(dir, "ok.json")), { max_seguidos: 5, max_total: 9 });
   });
 });

@@ -9,24 +9,27 @@ import { dictaminar, type Veredicto } from "./juez.ts";
 import { sugerir } from "./residente.ts";
 
 const RUTA_TOPES = process.env.AUTOPILOT_FICHERO || "/etc/sugiere/autopilot.json";
-const TOPES = { max_seguidos: 15, max_total: 40 }; // decisión 3 de Dani (07-11)
+// 0 = sin tope (Dani, 07-11: «si es autopilot es autopilot»); el que manda es el ajuste del llamante (`contexto.topes`).
+export type Topes = { max_seguidos: number; max_total: number };
+const SIN_TOPE: Topes = { max_seguidos: 0, max_total: 0 };
+const entero = (v: unknown, d: number) => (Number.isInteger(v) && (v as number) >= 0 ? (v as number) : d);
 
-/** Los topes, releídos del fichero montado en cada petición (como `brain.json`): cambiarlos no reinicia el pod. */
-export function topes(ruta: string = RUTA_TOPES): typeof TOPES {
+/** Los topes: los del llamante si los manda; si no, los del fichero montado, releído en cada petición (como `brain.json`);
+ * sin fichero, ninguno. Un valor que no sea un entero ≥ 0 cae al de la capa de debajo. */
+export function topes(delLlamante?: Partial<Topes> | null, ruta: string = RUTA_TOPES): Topes {
+  let base = SIN_TOPE;
   try {
     const j = JSON.parse(readFileSync(ruta, "utf8"));
-    const n = (v: unknown, d: number) => (Number.isInteger(v) && (v as number) > 0 ? (v as number) : d);
-    return { max_seguidos: n(j?.max_seguidos, TOPES.max_seguidos), max_total: n(j?.max_total, TOPES.max_total) };
-  } catch {
-    return { ...TOPES };
-  }
+    base = { max_seguidos: entero(j?.max_seguidos, 0), max_total: entero(j?.max_total, 0) };
+  } catch { /* sin fichero: sin tope */ }
+  return { max_seguidos: entero(delLlamante?.max_seguidos, base.max_seguidos), max_total: entero(delLlamante?.max_total, base.max_total) };
 }
 
 export type Accion = "enviar" | "esperar" | "humano" | "cerrar";
 export type Fase = "arranque" | "devolver" | "entregar" | "seguir" | "desvio";
 export type Decision = { accion: Accion; motivo: string; mensaje?: string; fase?: Fase; riesgo?: string; modelo?: string;
   via?: Veredicto["via"]; traza?: string[]; pasos: { seguidos: number; total: number } };
-export type Contexto = { kind?: string; cwd: string; key?: string; plan?: Plan | null };
+export type Contexto = { kind?: string; cwd: string; key?: string; plan?: Plan | null; topes?: Partial<Topes> | null };
 
 /** El modelo o la puerta no contestaron: el servidor responde 503 y el llamante reintenta una vez (no hay respaldo local). */
 export class SinServicio extends Error {}
@@ -108,10 +111,10 @@ export async function decidir(lines: string[], ctx: Contexto, nativa = ""): Prom
   const otros = parasDe(texto).filter((p) => p.quien !== "DANI");
   if (dani === null && otros.length) return fin("esperar", `PARA ${otros.map((p) => p.quien).join("/")}: lo despierta el supervisor`);
 
-  // 4. A partir de aquí se envía algo: antes, los topes (decisión 3).
-  const t = topes();
-  if (r.seguidos >= t.max_seguidos) return fin("humano", `tope: ${r.seguidos} pasos seguidos sin ESPERA, EVENTO ni entrega`);
-  if (r.total >= t.max_total) return fin("humano", `tope: ${r.total} pasos del autopilot en esta sesión`);
+  // 4. A partir de aquí se envía algo: antes, los topes que haya configurado quien llama (0 = sin tope).
+  const t = topes(ctx.topes);
+  if (t.max_seguidos && r.seguidos >= t.max_seguidos) return fin("humano", `tope: ${r.seguidos} pasos seguidos sin ESPERA, EVENTO ni entrega`);
+  if (t.max_total && r.total >= t.max_total) return fin("humano", `tope: ${r.total} pasos del autopilot en esta sesión`);
   const antes = r.seguidos ? r.ultimo : ""; // la fase anterior solo cuenta dentro de la racha: tras Dani o un EVENTO, no insiste nadie
 
   // 5. El primer paso sin plan anclado: el ticket primero (decisión 4).

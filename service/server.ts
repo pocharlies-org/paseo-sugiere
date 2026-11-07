@@ -110,10 +110,14 @@ async function autopilot(body: Cuerpo) {
   const plan = contexto.plan ?? null;
   if (plan !== null && (typeof plan !== "object" || Array.isArray(plan))) return [422, { error: "contexto.plan tiene que ser un objeto" }];
   if (nativa !== undefined && (typeof nativa !== "string" || nativa.length > MAX_SUGERENCIA)) return [422, { error: "nativa inválida" }];
+  const t = contexto.topes ?? null;
+  const tope = (v: unknown) => v === undefined || (Number.isInteger(v) && (v as number) >= 0);
+  if (t !== null && (typeof t !== "object" || Array.isArray(t) || !tope(t.max_seguidos) || !tope(t.max_total)))
+    return [422, { error: "contexto.topes: max_seguidos y max_total, enteros ≥ 0 (0 = sin tope)" }];
   const key = typeof contexto.key === "string" ? contexto.key : undefined;
   const t0 = Date.now();
   try {
-    const d = await decidir(lineas(transcript), { kind: contexto.kind, cwd: contexto.cwd, key, plan }, nativa ?? "");
+    const d = await decidir(lineas(transcript), { kind: contexto.kind, cwd: contexto.cwd, key, plan, topes: t }, nativa ?? "");
     const ms = Date.now() - t0;
     console.log(JSON.stringify({ modo: MODO, sid, turno, ms, autopilot: d.accion, fase: d.fase, motivo: d.motivo.slice(0, 120) }));
     registrar({ ts: new Date().toISOString(), sid, turno, ms, ok: d.accion === "enviar", riesgo: d.riesgo ?? "ninguno",
@@ -163,7 +167,7 @@ function config() {
     brain: { modo: modoBrain(), url: BRAIN_URL, banco: BANCO, token: Boolean(process.env.BRAIN_TOKEN) },
     clasificador: { pesos: pesos !== null, sin_entrenar: pesos ? sinEntrenar(pesos) : null, mide: false },
     limites: { max_transcript: MAX_TRANSCRIPT, max_sugerencia: MAX_SUGERENCIA },
-    autopilot: topes(),
+    autopilot: topes(),   // los del fichero; el llamante puede mandar los suyos
     auditoria: { ruta: RUTA, max_bytes: MAX_BYTES },
     token: Boolean(TOKEN),
   };
