@@ -6,10 +6,15 @@ import { suggestSettings } from "../shared/settings.ts";
 // save from the settings screen always conflicts («El host no aceptó el cambio»).
 describe("the settings document", () => {
   it("parses an empty document into the defaults", () => {
-    assert.deepEqual(suggestSettings.schema.parse({}), { enabled: true, auto: false, quietSeconds: 60 }); // auto off: no automatic calls (Dani 25-10)
+    assert.deepEqual(suggestSettings.schema.parse({}), { enabled: true, auto: false, quietSeconds: 60, autopilotMaxSeguidos: 0, autopilotMaxTotal: 0 }); // auto off; autopilot caps 0 = none (Dani 07-11): no automatic calls (Dani 25-10)
   });
   it("takes 0 seconds and refuses anything over 600", () => {
     assert.equal(suggestSettings.schema.parse({ enabled: true, quietSeconds: 0 }).quietSeconds, 0);
     assert.throws(() => suggestSettings.schema.parse({ enabled: true, quietSeconds: 601 }));
+  });
+  it("takes autopilot caps as integers ≥ 0", () => {
+    assert.equal(suggestSettings.schema.parse({ autopilotMaxSeguidos: 15 }).autopilotMaxSeguidos, 15);
+    assert.throws(() => suggestSettings.schema.parse({ autopilotMaxTotal: -1 }));
+    assert.throws(() => suggestSettings.schema.parse({ autopilotMaxTotal: 2.5 }));
   });
 });

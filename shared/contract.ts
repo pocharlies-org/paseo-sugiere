@@ -1,8 +1,12 @@
 import { defineRpc } from "@getpaseo/plugin";
 import { z } from "zod";
 
+/** The autopilot of an agent: on/off, and what it is doing (activo · pensando · esperando · humano · entregado) with its reason. */
+const autopilot = z.object({ on: z.boolean(), estado: z.string(), motivo: z.string() });
+
 /** The next-message suggestion of an agent, plus the state of the last force: the pill spins on `pending` and shows `error` once.
- * With «Garantizar plan» also what it pursues (`en_plan`, the badge) and the criterion, and `muted` after three «no es esto». */
+ * With «Garantizar plan» also what it pursues (`en_plan`, the badge) and the criterion, and `muted` after three «no es esto».
+ * And the agent's autopilot, which paints the ✦ gold, or red when it needs a person. */
 export const suggestGet = defineRpc({
   name: "suggest.get",
   input: z.object({ agentId: z.string().min(1).max(64) }).strict(),
@@ -13,7 +17,15 @@ export const suggestGet = defineRpc({
     en_plan: z.string().nullable(),
     criterio: z.string().nullable(),
     muted: z.boolean(),
+    autopilot,
   }),
+});
+
+/** The «Autopilot» switch of the ✦'s popover and the mobile card. */
+export const autopilotSet = defineRpc({
+  name: "autopilot.set",
+  input: z.object({ agentId: z.string().min(1).max(64), on: z.boolean() }).strict(),
+  output: autopilot,
 });
 
 /** «no es esto» on an anchored suggestion, or the suggestion was used: three «no es esto» in a row and the ✦ goes quiet. */

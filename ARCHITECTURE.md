@@ -25,6 +25,9 @@ al modelo de la sesión, sin compartir la caché de la sesión.
 - `server/session.ts` — localizar el transcript y la única llamada a LiteLLM (fetch).
 - `server/suggest.ts` — ventana de silencio de 60 s con `seq`: un turno nuevo mata la
   sugerencia pendiente y descarta una respuesta en vuelo.
+- `server/autopilot.ts` — el autopilot por agente: estado en `~/.local/state/paseo-sugiere/autopilot.json`, una llamada a
+  `/v1/autopilot` por turno `completed` y obediencia (enviar · esperar · humano · cerrar). Usa el mismo `seq` de `suggest.ts` para
+  descartar una respuesta tardía; no razona: toda la lógica es del servicio (spec §12).
 - `client/suggest-pill.tsx` — píldora en el composer; sondea 10 s solo agentes
   `idle`; el texto se tira al salir de idle, al enviar y al pasarlo al prompt. Su icono es el ancla del puente. Nada entra en el prompt
   por su cuenta: una generación terminada se queda en la píldora de su ventana hasta que se pulsa su botón (Dani 02-11). El popover intenta
@@ -47,17 +50,18 @@ al modelo de la sesión, sin compartir la caché de la sesión.
   `arm` deja de programar generaciones; `quietSeconds` es la ventana de silencio. La instrucción del modelo no
   pasa por aquí: vive solo en el servicio (decisión 5). Con «Garantizar plan» (`anchor-<agentId>.json` de paseo-plan con
   `guard` y criterios) `arm` genera al acabar el turno, sin ventana, y manda el ancla en `contexto.plan`; `suggest.feedback` cuenta
-  los «no es esto» (tres seguidos callan la ✦ hasta un clic).
+  los «no es esto» (tres seguidos callan la ✦ hasta un clic). Con el autopilot del agente encendido, `agent.turn_ended` va a
+  `autopilot.decide` en vez de a `arm` (una sola generación por turno), y `agent.turn_started` limpia su «esperando» y su rojo.
   Arranca además `scripts/autodeploy.sh` cada 5 min: el plugin se redespliega solo cuando el tronco de GitHub
   trae un commit nuevo (`deploy.sh` acepta un árbol sin git por `DEPLOY_SHA`).
 - `client/suggest-settings.tsx` — pantalla de ajustes propia (`addSettingsScreen` + `useSettings`):
-  interruptor y ventana; el documento compartido está en `shared/settings.ts`.
+  interruptor, ventana y topes del autopilot; el documento compartido está en `shared/settings.ts`.
 
 ## Superficie
 
 Los RPCs del plugin solo los consume su propio client. El servicio `sugiere` sí publica hacia otros repos: el supervisor de
 la compañía (x86-host-runtime, `libexec/sugiere_puerta.py`) consume `/v1/suggest` y `/v1/verdict`, y `/v1/autopilot` lo
-consumirán el plugin (F2 del autopilot) y el supervisor (F5). Esa superficie está en `CONTRACTS.yaml` de la raíz.
+consume el plugin (`server/autopilot.ts`) y lo consumirá el supervisor (F5). Esa superficie está en `CONTRACTS.yaml` de la raíz.
 `service/cierre.ts` es una copia declarada y permanente de la gramática del cierre del supervisor; el corpus
 `test/fixtures/cierre.json` lo genera su Python (spec §12).
 

@@ -24,9 +24,10 @@ test("suggestion card uses the sheet-aware input, edits before sending and has a
       useEffect(effect: () => void) { if (!states.length || states[0] === null) effects.push(effect); },
       useMemo: (factory: () => unknown) => factory(),
     },
-    "react-native": { View: "View", Text: "Text", Pressable: "Pressable", TextInput: "UnsafeInput" },
+    "react-native": { View: "View", Text: "Text", Pressable: "Pressable", TextInput: "UnsafeInput", AccessibilityInfo: {} },
+    "@getpaseo/plugin/client/ui": { SettingsAction: "SettingsAction", SettingsSwitch: "SettingsSwitch" },
     "@getpaseo/plugin/client/react-native": { Icon: "Icon", TextInput: "SheetAwareInput" },
-    "../shared/contract.ts": { suggestGet: "get", suggestForce: "force", suggestFeedback: "feedback" },
+    "../shared/contract.ts": { suggestGet: "get", suggestForce: "force", suggestFeedback: "feedback", autopilotSet: "autopilot" },
     "../shared/suggest.ts": { SUGGEST_WAIT_MS: 300_000 },
     "./composer-bridge.ts": { insertSuggestion: () => false },
   };
@@ -67,11 +68,13 @@ test("suggestion card uses the sheet-aware input, edits before sending and has a
     assert.equal(render(), null);
     effects.splice(0).forEach((effect) => effect());
     let card = render();
-    const [input, hint, send] = card.props.children;
+    const [row, autopilot] = card.props.children;
+    const [input, hint, send] = row.props.children;
+    assert.equal(autopilot.props.autopilot.on, false, "the card carries the Autopilot switch (the mobile card)");
     assert.equal(hint, null, "a short suggestion needs no scroll hint");
     assert.equal(input.type, "SheetAwareInput");
     assert.equal(closed, false);
-    assert.equal(card.props.style.flexDirection, compact ? "column" : "row");
+    assert.equal(row.props.style.flexDirection, compact ? "column" : "row");
     if (compact) {
       assert.ok(send.props.style.height >= 44);
       assert.ok(send.props.style.minWidth >= 44);
@@ -82,7 +85,7 @@ test("suggestion card uses the sheet-aware input, edits before sending and has a
     }
     input.props.onChangeText("Edited suggestion");
     card = render();
-    card.props.children[2].props.onPress();
+    card.props.children[0].props.children[2].props.onPress();
     assert.equal(sent.at(-1), "Edited suggestion");
     assert.equal(closed, true);
   }
@@ -105,9 +108,10 @@ test("a forced suggestion stays on the pill until its button is pressed", async 
   const modules: Record<string, unknown> = {
     "react/jsx-runtime": { jsx, jsxs: jsx },
     react: { useState: (i: unknown) => [typeof i === "function" ? (i as () => unknown)() : i, () => {}], useEffect: () => {}, useMemo: (f: () => unknown) => f(), useRef: () => ({ current: null }) },
-    "react-native": { View: "View", Text: "Text", Pressable: "Pressable" },
+    "react-native": { View: "View", Text: "Text", Pressable: "Pressable", AccessibilityInfo: {} },
+    "@getpaseo/plugin/client/ui": { SettingsAction: "SettingsAction", SettingsSwitch: "SettingsSwitch" },
     "@getpaseo/plugin/client/react-native": { Icon: "Icon", TextInput: "Input" },
-    "../shared/contract.ts": { suggestGet: "get", suggestForce: "force", suggestFeedback: "feedback" },
+    "../shared/contract.ts": { suggestGet: "get", suggestForce: "force", suggestFeedback: "feedback", autopilotSet: "autopilot" },
     "../shared/suggest.ts": { SUGGEST_WAIT_MS: 300_000 },
     "./composer-bridge.ts": {
       insertSuggestion: (agentId: string, text: string) => { inserted.push(`${agentId} ${text}`); return true; },
@@ -140,13 +144,90 @@ test("a forced suggestion stays on the pill until its button is pressed", async 
   });
   const settled = () => new Promise<void>((resolve) => setImmediate(resolve));
   await settled();
-  assert.equal(button.behavior.kind, "action", "an idle agent with no suggestion yet shows the plain ✦");
-  await button.behavior.onPress();
+  assert.equal(button.behavior.kind, "popover", "an idle agent with no suggestion yet shows the plain ✦, whose popover offers «Sugerir ahora»");
+  let closed = false;
+  const panel = button.behavior.Content({ theme: { colors: {} }, close: () => { closed = true; } });
+  assert.equal(panel.props.autopilot.on, false, "next to the Autopilot switch");
+  panel.props.suggestNow();
+  assert.ok(closed, "pressing it closes the popover");
+  await settled();
   await settled();
   assert.deepEqual(inserted, [], "the click only asks for a generation");
   tick(); // the resident answers
   await settled();
   assert.deepEqual(inserted, [], "the answer is not written into any prompt by itself");
   assert.equal(button.label, "Forzada", "it waits on the pill of its own window (the icon is already a Sparkles)");
+  stop();
+});
+
+// With the autopilot on (Dani 07-11) the ✦ only speaks for it: gold with «esperando: …», red with «necesita acción: …», its
+// popover is the switch, it stays reachable while a turn runs, and no suggestion or «no es esto» shows next to it.
+test("a piloted ✦ is gold while it waits, red when it needs a person, and its popover is the switch", async () => {
+  const source = readFileSync(new URL("../client/suggest-pill.tsx", import.meta.url), "utf8");
+  const { outputText } = ts.transpileModule(source, {
+    compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX },
+  });
+  const jsx = (type: unknown, props: unknown) => ({ type, props });
+  const modules: Record<string, unknown> = {
+    "react/jsx-runtime": { jsx, jsxs: jsx },
+    react: { useState: (i: unknown) => [i, () => {}], useEffect: () => {}, useMemo: (f: () => unknown) => f(), useRef: () => ({ current: null }) },
+    "react-native": { View: "View", Text: "Text", Pressable: "Pressable", AccessibilityInfo: {} },
+    "@getpaseo/plugin/client/ui": { SettingsAction: "SettingsAction", SettingsSwitch: "SettingsSwitch" },
+    "@getpaseo/plugin/client/react-native": { Icon: "Icon", TextInput: "Input" },
+    "../shared/contract.ts": { suggestGet: "get", suggestForce: "force", suggestFeedback: "feedback", autopilotSet: "autopilot" },
+    "../shared/suggest.ts": { SUGGEST_WAIT_MS: 300_000 },
+    "./composer-bridge.ts": { insertSuggestion: () => false, registerPillAnchor: () => () => {} },
+  };
+  let poll: () => void = () => {};
+  const exports: any = {};
+  new Function("require", "exports", "setInterval", "clearInterval", outputText)(
+    (name: string) => modules[name],
+    exports,
+    (callback: () => void) => { poll = callback; return 1; },
+    () => {},
+  );
+  let reply: any = { text: "una sugerencia vieja", en_plan: "en-plan", criterio: "c", muted: false, autopilot: { on: true, estado: "esperando", motivo: "ESPERA: ci" } };
+  const toggles: unknown[] = [];
+  const buttons: Record<string, any> = {};
+  let update: (agent: object) => void = () => {};
+  const stop = exports.addSuggestPill({
+    addComposerPill: ({ id, button }: any) => {
+      buttons[id] = button;
+      return { update: (next: unknown) => { buttons[id] = next; }, remove() {} };
+    },
+    rpc: async (name: string, input: any) => {
+      if (name !== "autopilot") return reply;
+      toggles.push(input);
+      return { on: input.on, estado: input.on ? "activo" : "apagado", motivo: "" };
+    },
+    paseo: { agents: {
+      list: async () => ({ subscription: { subscribe: ({ snapshot, update: u }: any) => {
+        update = (agent) => u({ type: "agent_update", payload: { kind: "upsert", agent } });
+        snapshot({ entries: [{ agent: { id: "a", workspaceId: "w", status: "idle" } }] });
+      } } }),
+      ref: () => ({ send: () => {} }),
+    } },
+  });
+  const settled = () => new Promise<void>((resolve) => setImmediate(resolve));
+  await settled();
+  poll();
+  await settled();
+  assert.equal(buttons.suggest.label, "esperando: ESPERA: ci", "gold, saying what it waits for — not the stale suggestion");
+  assert.equal(buttons["suggest-no"].visible, false, "no «no es esto» next to a piloted ✦");
+  const panel = buttons.suggest.behavior.Content({ theme: { colors: {} }, close() {} });
+  assert.equal(panel.props.autopilot.on, true);
+  assert.equal(panel.props.suggestNow, undefined, "no «Sugerir ahora» while it pilots: one generation per turn");
+  reply = { ...reply, autopilot: { on: true, estado: "humano", motivo: "dinero" } };
+  poll();
+  await settled();
+  assert.equal(buttons.suggest.label, "necesita acción: dinero");
+  update({ id: "a", workspaceId: "w", status: "running" });
+  assert.equal(buttons.suggest.visible, true, "reachable mid-turn, to switch it off");
+  assert.equal(buttons.suggest.label, "autopilot");
+  const next = await panel.props.toggle(false);
+  assert.deepEqual(toggles, [{ agentId: "a", on: false }]);
+  assert.equal(next.on, false);
+  assert.equal(buttons.suggest.visible, false, "off, the ✦ is the plain one again: hidden while the turn runs");
+  assert.equal(exports.autopilotLine({ on: true, estado: "pensando", motivo: "" }), "autopilot: decidiendo el siguiente paso");
   stop();
 });

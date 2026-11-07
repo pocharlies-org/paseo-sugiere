@@ -3,8 +3,9 @@ import { existsSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import type { PluginServerContext } from "@getpaseo/plugin/server";
-import { suggestFeedback, suggestForce, suggestGet } from "./shared/contract.ts";
+import { autopilotSet, suggestFeedback, suggestForce, suggestGet } from "./shared/contract.ts";
 import { suggestSettings, type SuggestValues } from "./shared/settings.ts";
+import * as autopilot from "./server/autopilot.ts";
 import * as suggest from "./server/suggest.ts";
 
 // What is merged to trunk is what runs: the plugin checks GitHub every 5 min and, on a new commit, deploys that tree and reloads
@@ -21,13 +22,28 @@ export default function contribute(server: PluginServerContext) {
     if (state.status === "ready" && state.values) {
       suggest.setAuto(state.values.auto);
       suggest.setQuietSeconds(state.values.quietSeconds);
+      autopilot.setTopes(state.values.autopilotMaxSeguidos, state.values.autopilotMaxTotal);
     }
   };
   settings.subscribe(apply);
   void settings.read().then(apply, () => apply({ status: "invalid" }));
-  server.on("agent.turn_ended", ({ agent, outcome }, context) => (outcome.kind === "completed" ? suggest.arm(agent.id, context) : suggest.cancel(agent.id)));
-  server.on("agent.turn_started", ({ agent }) => suggest.cancel(agent.id));
-  server.handle(suggestGet, (input) => ({ text: suggest.get(input.agentId), ...suggest.state(input.agentId), ...suggest.anchor(input.agentId) }));
+  // With the autopilot on, the turn's one generation is the autopilot's: no suggestion is armed (and no race for the native file).
+  // A failed or canceled turn does nothing either way: the supervisor's RETOMA covers cuts, and an Esc pauses without switching off.
+  server.on("agent.turn_ended", ({ agent, turnId, outcome }, context) => {
+    autopilot.background(autopilot.resume(context.paseo));
+    if (outcome.kind !== "completed") return suggest.cancel(agent.id);
+    if (autopilot.on(agent.id)) return autopilot.background(autopilot.decide(agent.id, agent.cwd, context.paseo, turnId));
+    suggest.arm(agent.id, context);
+  });
+  server.on("agent.turn_started", ({ agent }) => {
+    suggest.cancel(agent.id);
+    autopilot.turnStarted(agent.id);
+  });
+  server.handle(suggestGet, (input, context) => {
+    autopilot.background(autopilot.resume(context.paseo));
+    return { text: suggest.get(input.agentId), ...suggest.state(input.agentId), ...suggest.anchor(input.agentId), autopilot: autopilot.get(input.agentId) };
+  });
+  server.handle(autopilotSet, (input, context) => autopilot.set(input.agentId, input.on, context.paseo));
   server.handle(suggestFeedback, (input) => suggest.feedback(input.agentId, input.verdict));
   server.handle(suggestForce, (input, context) => ({ started: suggest.force(input.agentId, context) }));
   const check = () => spawn("bash", [AUTODEPLOY], { detached: true, stdio: "ignore" }).unref();

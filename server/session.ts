@@ -59,24 +59,30 @@ export async function sugiereRequest(
   lines: string[],
   plan: object | null,
 ): Promise<{ status: number; sugerencia: string; modelo: string; en_plan: string | null; criterio: string | null }> {
+  const contexto = { kind: "live", ...(plan ? { plan } : {}) };
+  const { status, out } = await sugierePost("/v1/suggest", { sid, turno, transcript: lines.join("\n"), contexto }, SUGIERE_TIMEOUT_MS);
+  return {
+    status,
+    sugerencia: typeof out.sugerencia === "string" ? out.sugerencia.trim() : "",
+    modelo: typeof out.modelo === "string" ? out.modelo : "",
+    en_plan: typeof out.en_plan === "string" ? out.en_plan : null,
+    criterio: typeof out.criterio === "string" && out.criterio ? out.criterio : null,
+  };
+}
+
+/** One POST to the `sugiere` service: the status and the JSON body (empty unless 2xx). No answer in time is `SessionError("servicio")`. */
+export async function sugierePost(path: string, body: object, timeoutMs: number): Promise<{ status: number; out: Record<string, unknown> }> {
   const base = (process.env.SUGIERE_URL || "http://sugiere.llm.svc:8080").replace(/\/+$/, "");
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), SUGIERE_TIMEOUT_MS);
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
-    const response = await fetch(`${base}/v1/suggest`, {
+    const response = await fetch(`${base}${path}`, {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ sid, turno, transcript: lines.join("\n"), contexto: { kind: "live", ...(plan ? { plan } : {}) } }),
+      body: JSON.stringify(body),
       signal: controller.signal,
     });
-    const out = response.ok ? ((await response.json().catch(() => ({}))) as Record<string, unknown>) : {};
-    return {
-      status: response.status,
-      sugerencia: typeof out.sugerencia === "string" ? out.sugerencia.trim() : "",
-      modelo: typeof out.modelo === "string" ? out.modelo : "",
-      en_plan: typeof out.en_plan === "string" ? out.en_plan : null,
-      criterio: typeof out.criterio === "string" && out.criterio ? out.criterio : null,
-    };
+    return { status: response.status, out: response.ok ? ((await response.json().catch(() => ({}))) as Record<string, unknown>) : {} };
   } catch {
     throw new SessionError("servicio");
   } finally {

@@ -5,14 +5,15 @@ import { Text } from "react-native";
 import { suggestSettings, type SuggestValues } from "../shared/settings.ts";
 
 const QUIET_OPTIONS = [0, 30, 60, 120, 300].map((s) => ({ label: s === 0 ? "0 segundos (instantáneo)" : `${s} segundos`, value: String(s) }));
+const CAP_OPTIONS = [0, 5, 10, 15, 20, 30, 40, 60, 100].map((n) => ({ label: n === 0 ? "Sin tope" : `${n} pasos`, value: String(n) }));
 
-// The plugin's own configuration screen: on/off and the silence window. Values live in the host settings document —
+// The plugin's own configuration screen: on/off, the silence window and the autopilot's caps. Values live in the host settings document —
 // this screen edits it and the server obeys; nothing is kept here beyond the revision the screen displays.
 export function SuggestSettings({ theme }: PluginSurfaceProps) {
   const state = useSettings(suggestSettings);
   if (state.status === "loading") return <Text style={{ color: theme.colors.foregroundMuted }}>Cargando…</Text>;
   if (state.status === "error") return <Text style={{ color: theme.colors.statusDanger }}>No se pudieron leer los ajustes</Text>;
-  const values: SuggestValues = state.status === "ready" ? state.values : { enabled: true, auto: false, quietSeconds: 60 };
+  const values: SuggestValues = state.status === "ready" ? state.values : suggestSettings.schema.parse({});
   const revision = state.status === "ready" ? state.revision : "0";
   const busy = state.saving;
   const change = (patch: Partial<SuggestValues>) => void state.save({ ...values, ...patch }, revision);
@@ -42,6 +43,26 @@ export function SuggestSettings({ theme }: PluginSurfaceProps) {
             options={QUIET_OPTIONS}
             disabled={busy || !values.enabled || !values.auto}
             onValueChange={(quietSeconds) => change({ quietSeconds: Number(quietSeconds) })}
+          />
+        </SettingsCard>
+      </SettingsSection>
+      <SettingsSection title="Autopilot">
+        <SettingsCard>
+          <SettingsSelect
+            label="Pasos seguidos máximos"
+            hint="Mensajes del autopilot sin ESPERA, EVENTO ni mensaje tuyo antes de ponerse en rojo y pedirte paso"
+            value={String(values.autopilotMaxSeguidos)}
+            options={CAP_OPTIONS}
+            disabled={busy}
+            onValueChange={(n) => change({ autopilotMaxSeguidos: Number(n) })}
+          />
+          <SettingsSelect
+            label="Pasos por sesión máximos"
+            hint="Mensajes del autopilot en toda la sesión antes de ponerse en rojo"
+            value={String(values.autopilotMaxTotal)}
+            options={CAP_OPTIONS}
+            disabled={busy}
+            onValueChange={(n) => change({ autopilotMaxTotal: Number(n) })}
           />
         </SettingsCard>
       </SettingsSection>

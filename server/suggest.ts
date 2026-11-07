@@ -32,15 +32,25 @@ export function setQuietSeconds(seconds: number): void {
 // plan» switched in the pill takes effect on the next turn without restarting the host.
 const ANCHOR_DIR = join(homedir(), ".local", "state", "paseo-plan");
 
-/** The anchored plan of an agent, only with `guard` on and at least one criterion (Dani's decision 2: a guard without criteria does
- * not arm). Null on anything else — no file, unreadable, guard off — and then everything is as before plans existed. */
-function guardedPlan(agentId: string): object | null {
+function anchorOf(agentId: string): Record<string, unknown> | null {
   try {
-    const anchor = JSON.parse(readFileSync(join(ANCHOR_DIR, `anchor-${agentId}.json`), "utf8"));
-    return anchor?.guard === true && Array.isArray(anchor.criterios) && anchor.criterios.length ? anchor : null;
+    return JSON.parse(readFileSync(join(ANCHOR_DIR, `anchor-${agentId}.json`), "utf8"));
   } catch {
     return null;
   }
+}
+
+/** The anchored plan of an agent, only with `guard` on and at least one criterion (Dani's decision 2: a guard without criteria does
+ * not arm). Null on anything else — no file, unreadable, guard off — and then everything is as before plans existed. */
+export function guardedPlan(agentId: string): object | null {
+  const anchor = anchorOf(agentId);
+  return anchor?.guard === true && Array.isArray(anchor.criterios) && anchor.criterios.length ? anchor : null;
+}
+
+/** The ticket the agent is anchored to, guard or not: the autopilot sends it as `contexto.key`. */
+export function anchorKey(agentId: string): string {
+  const key = anchorOf(agentId)?.ticketKey;
+  return typeof key === "string" ? key : "";
 }
 
 /** Three «no es esto» in a row and the ✦ goes quiet: no guarded generation until the user clicks it (the plan, «Deriva»).
@@ -96,6 +106,13 @@ export function cancel(agentId: string): void {
   entry.timer = undefined;
   entry.seq += 1;
   clear(entry);
+}
+
+/** The agent's turn counter (the `seq`): every turn start bumps it, so the autopilot drops an answer that lands after one. */
+export function turn(agentId: string): number {
+  const entry = agents.get(agentId) ?? fresh();
+  agents.set(agentId, entry);
+  return entry.seq;
 }
 
 export function get(agentId: string): string | null {

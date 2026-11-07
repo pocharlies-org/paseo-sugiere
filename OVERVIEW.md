@@ -21,8 +21,13 @@ prompt, ready to edit and send with Enter.
   not the one in front it writes nothing rather than into the one you are looking at. Where it cannot reach the prompt (phones,
   narrow layouts, or a prompt it cannot tell apart from another pane's), the pill opens a small editable card instead, with a send
   button.
-- A new turn drops the pending suggestion. Nothing is ever sent for you: sending is always your tap or Enter.
-- Settings (plugin settings screen): on/off, and the quiet window.
+- A new turn drops the pending suggestion. Nothing is sent for you unless you switch on the agent's **Autopilot**.
+- **Autopilot** (a switch in the ✦'s popover and in the mobile card, per agent; off by default): every completed turn asks the
+  cluster's `sugiere` service (`POST /v1/autopilot`) what to do and the plugin obeys — it sends the next message, waits (gold ✦,
+  «esperando: …»), turns the ✦ bright red and pulsing when a person is needed (no motion with reduced motion; your next message
+  clears it), or archives the agent once it is delivered. It is not the «suggest automatically» setting, which only proposes.
+  While it is on, no suggestion is generated: one model call per turn. Its state lives in `~/.local/state/paseo-sugiere/autopilot.json`.
+- Settings (plugin settings screen): on/off, the quiet window, and the autopilot's caps (steps in a row and per session; 0 = no cap).
 
 ## Requirements
 
