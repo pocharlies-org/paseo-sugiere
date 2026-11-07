@@ -8,7 +8,9 @@ const KEY = process.env.RESIDENTE_KEY || "";
 /** El residente local: el modelo de la compañía y la reserva cuando la clave no sirve el alias de una sesión (Dani 06-11). */
 export const RESERVA = process.env.SUGIERE_MODELO_RESERVA || "qwen38-flash-next";
 
-/** El cuerpo de la sugerencia en la forma del chat: el `system` del cuerpo Anthropic (dos bloques) pasa a un mensaje de sistema. */
+/** El cuerpo de la sugerencia en la forma del chat: el `system` del cuerpo Anthropic (dos bloques) pasa a un mensaje de sistema
+ * que CONSERVA los bloques: las cuentas de suscripción de Claude responden 429 «Error» si la línea de Claude Code no es un bloque
+ * propio (medido 07-11: el texto junto, 429; en bloques, 200 en claude-*, qwen, alibaba y gpt). */
 export function cuerpoSugerencia(lines: string[], instruccion = "", modelo = ""): string | null {
   const s = suggestBody(lines, instruccion, modelo);
   if (!s) return null; // la sesión no tiene modelo real todavía: no hay nada que llamar, y no hay modelo de reserva
@@ -17,7 +19,7 @@ export function cuerpoSugerencia(lines: string[], instruccion = "", modelo = "")
     model: a.model,
     max_tokens: a.max_tokens,
     reasoning_effort: a.reasoning_effort,
-    messages: [{ role: "system", content: a.system.map((b: any) => b.text).join("\n\n") },
+    messages: [{ role: "system", content: a.system.map((b: any) => ({ type: "text", text: b.text })) },
       ...a.messages.map((m: any) => ({ role: m.role, content: m.content.map((b: any) => b.text).join("\n") }))],
   });
 }
