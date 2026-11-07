@@ -30,9 +30,9 @@ export default function contribute(server: PluginServerContext) {
   // With the autopilot on, the turn's one generation is the autopilot's: no suggestion is armed (and no race for the native file).
   // A failed or canceled turn does nothing either way: the supervisor's RETOMA covers cuts, and an Esc pauses without switching off.
   server.on("agent.turn_ended", ({ agent, turnId, outcome }, context) => {
-    void autopilot.resume(context.paseo);
+    autopilot.background(autopilot.resume(context.paseo));
     if (outcome.kind !== "completed") return suggest.cancel(agent.id);
-    if (autopilot.on(agent.id)) return void autopilot.decide(agent.id, agent.cwd, context.paseo, turnId);
+    if (autopilot.on(agent.id)) return autopilot.background(autopilot.decide(agent.id, agent.cwd, context.paseo, turnId));
     suggest.arm(agent.id, context);
   });
   server.on("agent.turn_started", ({ agent }) => {
@@ -40,7 +40,7 @@ export default function contribute(server: PluginServerContext) {
     autopilot.turnStarted(agent.id);
   });
   server.handle(suggestGet, (input, context) => {
-    void autopilot.resume(context.paseo);
+    autopilot.background(autopilot.resume(context.paseo));
     return { text: suggest.get(input.agentId), ...suggest.state(input.agentId), ...suggest.anchor(input.agentId), autopilot: autopilot.get(input.agentId) };
   });
   server.handle(autopilotSet, (input, context) => autopilot.set(input.agentId, input.on, context.paseo));

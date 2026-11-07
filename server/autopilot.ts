@@ -40,6 +40,11 @@ function put(agentId: string, patch: Partial<Estado>): void {
   writeFileSync(file(), JSON.stringify(next, null, 2));
 }
 
+/** Fire and forget, never an unhandled rejection: one would bring the plugin's process down. */
+export function background(work: Promise<void>): void {
+  work.catch((error) => console.warn(`autopilot: ${(error as Error).message}`));
+}
+
 export const on = (agentId: string): boolean => all()[agentId]?.on === true;
 export function get(agentId: string): { on: boolean; estado: string; motivo: string } {
   const { on = false, estado = "apagado", motivo = "" } = all()[agentId] ?? {};
@@ -60,7 +65,7 @@ export async function set(agentId: string, value: boolean, paseo: Paseo): Promis
   if (value) {
     const { entries } = await paseo.agents.list({ page: { limit: 200 } });
     const agent = entries.find(({ agent }) => agent.id === agentId)?.agent as Agent | undefined;
-    if (agent) void decideIfWaiting(agent, paseo);
+    if (agent) background(decideIfWaiting(agent, paseo));
   }
   return get(agentId);
 }
