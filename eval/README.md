@@ -18,7 +18,7 @@ lo pide. Para medir un cambio antes de desplegarlo: el servicio de la rama en lo
 | Campo | Qué es |
 |---|---|
 | `id`, `origen` | nombre del fichero; de dónde sale el caso (el ticket real, descrito sin su clave) |
-| `plan` | el ancla del ticket: `ticket`, `objetivo`, `criterios` (`texto`, `como_se_verifica`, `status`, `evidencia`), `fuera_de_alcance`. Viaja en `contexto.plan`; el trunk de hoy la ignora |
+| `plan` | el ancla del ticket: `ticket`, `objetivo`, `criterios` (`texto`, `como_se_verifica`, `status`, `evidencia`), `fuera_de_alcance`. Viaja en `contexto.plan`, que el servicio usa desde «Garantizar plan» (uno anterior lo ignora) |
 | `contexto` | lo que recibe `/v1/verdict`: `cwd` y, si toca, `key`, `resumen`, `criterio` |
 | `transcript` | la sesión hasta el momento decisivo: `{usuario}`, `{asistente, herramientas: [{Nombre: entrada}]}` y `{resultados: [...]}` (uno por herramienta del turno anterior). Se convierte al `.jsonl` de Claude Code |
 | `espera` | `conducta` (`verificar`, `en-plan`, `trabajo-nuevo`, `entregar`, `esperar`); `debe`: regex que deben casar TODAS; `no_debe`: ninguna; `vacia`: si la sugerencia vacía es correcta; `autoenvio` (opcional): el `ok` que debe dar la puerta |
