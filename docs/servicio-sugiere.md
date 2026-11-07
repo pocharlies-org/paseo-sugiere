@@ -50,8 +50,8 @@ Salida (`200`):
 
 - `sugerencia` vacía es una respuesta **válida**: el turno ha terminado o no hay nada que proponer (la
   píldora no aparece; el supervisor no la usa). No es un error.
-- El modelo es **el de la sesión** (Dani 22-10), no un alias fijo: `shared/suggest.ts` lo saca del transcript y LiteLLM lo enruta. `max_tokens` 32 000 (el máximo que aceptan los tres backends) y `reasoning_effort: none`, que LiteLLM traduce a `enable_thinking: false`. Sin modelo real en la sesión no hay llamada y `sugerencia` sale vacía.
-- La clave del servicio solo sirve unos alias (`/key/info` de LiteLLM: `models: [qwen38-flash-next]`), así que un `403` por modelo no disponible reintenta **una vez** con `SUGIERE_MODELO_RESERVA` (por defecto `qwen38-flash-next`) y `modelo` informa del que contestó; cualquier otro error sube tal cual (05-11).
+- El modelo depende de quién llama (Dani 06-11): con `contexto.kind: "live"` (Paseo en vivo) es **el de la sesión** (Dani 22-10), que `shared/suggest.ts` saca del transcript y LiteLLM enruta; sin `kind` o con `"company"`, el residente local (`SUGIERE_MODELO_RESERVA`, por defecto `qwen38-flash-next`). El `reasoning_effort` sigue al modelo que se llama. `max_tokens` 32 000 (el máximo que aceptan los tres backends) y `reasoning_effort: none`, que LiteLLM traduce a `enable_thinking: false`. Sin modelo real en la sesión no hay llamada y `sugerencia` sale vacía.
+- La clave del servicio sirve todos los modelos (Dani 06-11); si aun así un alias no está, un `403` por modelo no disponible reintenta **una vez** con `SUGIERE_MODELO_RESERVA` (por defecto `qwen38-flash-next`) y `modelo` informa del que contestó; cualquier otro error sube tal cual (05-11).
 - Sin caché: cada transcript es distinto.
 - Códigos: `422` cuerpo inválido · `503` el residente no contesta → el llamante se queda como está
   (píldora que no sale; `RETOMA` en la compañía).
@@ -92,7 +92,7 @@ Códigos: `422` cuerpo inválido o falta `contexto.cwd` · `200` en todo lo dem�
 residente no contesta, se agota o no da JSON, responde `{"ok": false, "riesgo": "alto", "motivo": "puerta no
 disponible"}` con la traza del fallo, y el llamante cae a `RETOMA`.
 
-Presupuesto: `/v1/suggest` espera al residente hasta **300 s** (Dani, 06-11: con transcript de ticket tarda 60-120 s y la mitad de las propuestas se perdían contra un plazo de 60 s); `/v1/verdict` mantiene 60 s para la rúbrica, que es un prompt corto. Por eso
+Presupuesto: `/v1/suggest` espera al residente hasta **300 s** (`SUGGEST_WAIT_MS`; Dani, 06-11: con transcript de ticket tarda 60-120 s y la mitad de las propuestas se perdían contra un plazo de 60 s), y el plugin de Paseo espera algo más que eso; `/v1/verdict` mantiene 60 s para la rúbrica, que es un prompt corto. Por eso
 el veredicto es asíncrono: un llamante síncrono con presupuesto de 30 s no lo puede
 esperar entero y debe tratar el silencio como fail-closed. Caché: `sha256(sid|turno|sugerencia)` →
 veredicto de modelo, 24 h, LRU 1000. Las reglas duras **no** se cachean: se evalúan siempre y ganan al

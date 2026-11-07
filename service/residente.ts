@@ -1,15 +1,16 @@
-// La única llamada al residente, por LiteLLM: /v1/chat/completions con el MISMO modelo que corre la sesión (Dani 22-10), el
+// La única llamada al modelo, por LiteLLM: /v1/chat/completions con el MISMO modelo que corre la sesión si llama Paseo en vivo
+// (Dani 22-10 y 06-11) y con el residente local si llama la compañía (Dani 06-11); el
 // cuerpo que ya arma `shared/suggest.ts` y `reasoning_effort: none`, que LiteLLM traduce a `enable_thinking: false` en cualquier alias.
-import { suggestBody, suggestionAnswer, lastAssistantText } from "../shared/suggest.ts";
+import { SUGGEST_WAIT_MS, suggestBody, suggestionAnswer, lastAssistantText } from "../shared/suggest.ts";
 
 export const LITELLM = process.env.RESIDENTE_URL || "http://litellm.litellm.svc:4000";
 const KEY = process.env.RESIDENTE_KEY || "";
-/** Alias que la clave del servicio sí puede usar (`/key/info` de LiteLLM: `models: [qwen38-flash-next]`, 05-11). */
+/** El residente local: el modelo de la compañía y la reserva cuando la clave no sirve el alias de una sesión (Dani 06-11). */
 export const RESERVA = process.env.SUGIERE_MODELO_RESERVA || "qwen38-flash-next";
 
 /** El cuerpo de la sugerencia en la forma del chat: el `system` del cuerpo Anthropic (dos bloques) pasa a un mensaje de sistema. */
-export function cuerpoSugerencia(lines: string[], instruccion = ""): string | null {
-  const s = suggestBody(lines, instruccion);
+export function cuerpoSugerencia(lines: string[], instruccion = "", modelo = ""): string | null {
+  const s = suggestBody(lines, instruccion, modelo);
   if (!s) return null; // la sesión no tiene modelo real todavía: no hay nada que llamar, y no hay modelo de reserva
   const a = JSON.parse(s.body);
   return JSON.stringify({
@@ -34,19 +35,20 @@ async function llamar(cuerpo: string, timeoutMs: number): Promise<any> {
 /** Completions como respuesta Anthropic: lo que come `suggestionAnswer`, que ya descarta preguntas y ecos. */
 const comoAnthropic = (r: any) => ({ content: [{ type: "text", text: r?.choices?.[0]?.message?.content ?? "" }] });
 
-/** La sugerencia del siguiente mensaje: "" cuando no hay nada que proponer. */
-export async function sugerir(lines: string[], instruccion = "", timeoutMs = 300_000): Promise<{ texto: string; modelo: string }> {
-  const cuerpo = cuerpoSugerencia(lines, instruccion);
+/** La sugerencia del siguiente mensaje: "" cuando no hay nada que proponer. `kind: "live"` (Paseo en vivo) usa el modelo de la
+ * sesión; cualquier otro llamante —la compañía, o quien no lo diga— el residente local (Dani 06-11). */
+export async function sugerir(lines: string[], instruccion = "", timeoutMs = SUGGEST_WAIT_MS, kind = ""): Promise<{ texto: string; modelo: string }> {
+  const cuerpo = cuerpoSugerencia(lines, instruccion, kind === "live" ? "" : RESERVA);
   if (!cuerpo) return { texto: "", modelo: "" };
   const modelo = JSON.parse(cuerpo).model;
   const pedir = async (c: string) => suggestionAnswer(comoAnthropic(await llamar(c, timeoutMs)), lastAssistantText(lines));
   try {
     return { texto: await pedir(cuerpo), modelo };
   } catch (e) {
-    // La clave del servicio no sirve todos los alias (LiteLLM: `models: [qwen38-flash-next]`), así que una sesión en otro
-    // modelo —Alibaba, `claude-*`— recibía un 403 y la píldora salía vacía (Dani 05-11). Una sola reserva, y solo para el 403.
+    // Un alias que la clave no sirve da 403 y la píldora salía vacía (Dani 05-11): una sola reserva, y solo para el 403. El cuerpo
+    // se rehace para el residente, con su `reasoning_effort` y no el del modelo de la sesión.
     if ((e as { status?: number }).status !== 403 || modelo === RESERVA) throw e;
-    return { texto: await pedir(JSON.stringify({ ...JSON.parse(cuerpo), model: RESERVA })), modelo: RESERVA };
+    return { texto: await pedir(cuerpoSugerencia(lines, instruccion, RESERVA)!), modelo: RESERVA };
   }
 }
 

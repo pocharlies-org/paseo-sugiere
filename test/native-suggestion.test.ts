@@ -5,12 +5,12 @@ import { join } from "node:path";
 import { after, before, describe, it } from "node:test";
 import { nativeSuggestion } from "../server/session.ts";
 
-// The file contract of the patched daemon : $PASEO_HOME/suggest/<claude-session-id>.json, consumed on read, fresh 15 min.
+// The file contract of the patched daemon : $PASEO_HOME/.paseo/suggest/<claude-session-id>.json, consumed on read, fresh 15 min.
 const HOME = join(tmpdir(), `paseo-native-${process.pid}`);
 const paseo = { agents: { list: async () => ({ entries: [{ agent: { id: "a1", persistence: { sessionId: "s1" } } }] }) } } as never;
 const put = (name: string, body: object) => {
-  mkdirSync(join(HOME, "suggest"), { recursive: true });
-  writeFileSync(join(HOME, "suggest", `${name}.json`), JSON.stringify(body));
+  mkdirSync(join(HOME, ".paseo", "suggest"), { recursive: true });
+  writeFileSync(join(HOME, ".paseo", "suggest", `${name}.json`), JSON.stringify(body));
 };
 
 describe("the native suggestion of the patched daemon", () => {
@@ -36,7 +36,7 @@ describe("the native suggestion of the patched daemon", () => {
     assert.equal(await nativeSuggestion("a1", paseo), null);
     put("s1", { text: "   ", at: Date.now() });
     assert.equal(await nativeSuggestion("a1", paseo), null);
-    rmSync(join(HOME, "suggest", "s1.json"), { force: true });
+    rmSync(join(HOME, ".paseo", "suggest", "s1.json"), { force: true });
     assert.equal(await nativeSuggestion("a1", paseo), null);
   });
 });

@@ -9,6 +9,12 @@ import { transcriptMessages } from "./transcript.ts";
 null da 400/500 en Anthropic y ChatGPT (medido; null solo lo acepta vLLM), así que va el máximo que los tres backends aceptan. */
 export const SUGGEST_MAX_TOKENS = 32_000;
 
+/** Lo que el servicio espera al residente por una sugerencia (Dani 06-11: con transcript largo tarda 60-240 s; medido 06-11 en una
+sesión Opus, 243 s con el residente en cola). El server del plugin y la píldora esperan algo más que esto: con plazos propios
+menores (150 y 130 s) tiraban sugerencias que el servicio sí entregaba.
+shortcut: el fetch de Node (undici) corta a los 300 s sin cabeceras pase lo que pase; subir esto por encima pide un dispatcher propio en el servicio y en el plugin. */
+export const SUGGEST_WAIT_MS = 300_000;
+
 /** Fixed. Dani 14-10: the pill recommends the next step toward the task's GOAL — the model was continuing the assistant's last
 turn instead of recommending (measured: «PR #14 en vigilancia…» came out). Sendable rule kept: if what comes next is the user's
 in the real world (measure, buy, approve, pay), there is no suggestion (measured 14-10: «mide la longitud del cañón»). */
@@ -45,9 +51,10 @@ export const CLAUDE_CODE_SYSTEM = "You are Claude Code, Anthropic's official CLI
 /** The whole call: the session's own model, and the body — the conversation (no tool noise), the instruction in `system` after the
 Claude Code line (the configured one, or the built-in when it is empty), the constant trigger last, no tools. Null when the session has no real model
 (no assistant message yet, or only `<synthetic>` ones): there is nothing to call and no fallback model (Dani 22-10). */
-export function suggestBody(lines: string[], prompt = ""): { model: string; body: string } | null {
-  const { messages, model } = transcriptMessages(lines);
-  if (!model) return null;
+export function suggestBody(lines: string[], prompt = "", modelOverride = ""): { model: string; body: string } | null {
+  const { messages, model: sessionModel } = transcriptMessages(lines);
+  if (!sessionModel) return null;
+  const model = modelOverride || sessionModel; // the caller may pin the model (the company: the local resident); the effort follows it
   const body = JSON.stringify({
     model,
     max_tokens: SUGGEST_MAX_TOKENS,
