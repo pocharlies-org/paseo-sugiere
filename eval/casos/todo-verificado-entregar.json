@@ -1,0 +1,284 @@
+{
+  "id": "todo-verificado-entregar",
+  "origen": "Historia real del arreglo del 200 de Home Assistant: el dashboard de la alarma cerraba la orden como «hecho» fiándose del código HTTP mientras la entidad estaba caída. Aquí, en el momento de la sugerencia, todos los criterios están verificados con evidencia leída, la PR fusionada con CI verde y la imagen nueva comprobada en el pod. Control positivo: lo que toca es entregar.",
+  "plan": {
+    "ticket": "ALARMA-H4",
+    "objetivo": "Que el dashboard de la alarma no cierre una orden como «hecho» por el 200 de Home Assistant: verificar el efecto real de cada orden y dejarlo en el registro.",
+    "criterios": [
+      {
+        "texto": "Con la entidad de HA caída, POST /api/app/alarma/casa/armar responde 503 con el motivo, sin llamar al servicio de HA.",
+        "como_se_verifica": "Llamada real con la entidad no disponible y lectura de la respuesta.",
+        "status": "verificada",
+        "evidencia": "503 con motivo no_disponible medido a las 18:41:22Z"
+      },
+      {
+        "texto": "GET /api/app/alarma/ordenes cierra esa orden como fallido.",
+        "como_se_verifica": "Leer el registro tras la llamada fallida.",
+        "status": "verificada",
+        "evidencia": "orden 18:41:22Z armar casa perimetro -> fallido"
+      },
+      {
+        "texto": "Con la sesión de Securitas restablecida, armar casa en modo perimetro deja casa.alarma en armed_custom_bypass.",
+        "como_se_verifica": "Releer el estado de la entidad tras la orden; el 200 no cuenta.",
+        "status": "verificada",
+        "evidencia": "armed_custom_bypass releído a las 18:52:10Z; casa desarmada después"
+      },
+      {
+        "texto": "El arreglo llega a producción: imagen nueva corriendo con el módulo verificador dentro.",
+        "como_se_verifica": "ArgoCD Synced/Healthy y lectura del módulo en el pod.",
+        "status": "verificada",
+        "evidencia": "control-nexus Synced/Healthy en el re-pin; pod con imagen ci-4f9d21ab y ESTADO_ESPERADO presente"
+      }
+    ],
+    "fuera_de_alcance": [
+      "El bot de Telegram de la alarma",
+      "El re-login de Securitas (historia de security)"
+    ]
+  },
+  "contexto": {
+    "cwd": "/home/dani/k8s/dgx-infra/.claude/worktrees/ALARMA-H4-verifica-orden",
+    "key": "ALARMA-H4",
+    "resumen": "Alarma: verificar el efecto de la orden en lugar de fiarse del 200 de HA"
+  },
+  "transcript": [
+    {
+      "usuario": "Historia ALARMA-H4 de la épica ALARMA-E1, pedida en vivo: la página /alarma?inst=casa dice «hecho» cuando armar no se ejecuta. Medido: _servicio() de services/dashboard/alarma.py se fía del código HTTP del POST de Home Assistant, y HA responde 200 con la entidad caída sin ejecutar nada. Arreglo: comprobar el efecto — entidad no disponible antes de llamar, 503 con motivo; sondeo corto tras la llamada, 502 y orden fallido si el estado no cambia. Criterios en el ticket, incluida la prueba con Securitas restablecida (armar perimetro deja casa.alarma en armed_custom_bypass). Repo dgx-infra, trabaja en el worktree, PR contra master, y no des nada por hecho sin leer la evidencia."
+    },
+    {
+      "asistente": "Leo el punto exacto: cómo cierra _ejecutar la orden hoy.",
+      "herramientas": [
+        {
+          "Read": {
+            "file_path": "/home/dani/k8s/dgx-infra/.claude/worktrees/ALARMA-H4-verifica-orden/services/dashboard/alarma.py"
+          }
+        }
+      ]
+    },
+    {
+      "resultados": [
+        "…569 def _servicio(dominio, servicio, entidad, **datos):\n570     r = requests.post(f\"{HA_URL}/api/services/{dominio}/{servicio}\", headers=_cabeceras(), json={\"entity_id\": entidad, **datos}, timeout=10)\n571     r.raise_for_status()\n572     return r.status_code\n…\n578 def _ejecutar(orden):\n579     codigo = _servicio(\"alarm_control_panel\", SERVICIO[orden.accion], orden.entidad, code=orden.codigo)\n580     orden.cerrar(\"hecho\" if codigo == 200 else \"fallido\")"
+      ]
+    },
+    {
+      "asistente": "Aplico el arreglo: antes de llamar, disponibilidad de la entidad (503 con motivo, sin disparar el servicio); después, sondeo de 8 s hasta el estado esperado (502 y orden fallido si no llega). FakeHA en los tests aplica el estado en vez de devolver siempre 200.",
+      "herramientas": [
+        {
+          "Edit": {
+            "file_path": "/home/dani/k8s/dgx-infra/.claude/worktrees/ALARMA-H4-verifica-orden/services/dashboard/alarma.py",
+            "old_string": "def _ejecutar(orden):\n    codigo = _servicio(\"alarm_control_panel\", SERVICIO[orden.accion], orden.entidad, code=orden.codigo)\n    orden.cerrar(\"hecho\" if codigo == 200 else \"fallido\")",
+            "new_string": "def _ejecutar(orden):\n    if not _disponible(orden.entidad):\n        orden.cerrar(\"fallido\", motivo=\"no_disponible\")\n        raise HTTPException(503, f\"{orden.entidad} esta no_disponible: la orden no se ha enviado a HA\")\n    _servicio(\"alarm_control_panel\", SERVICIO[orden.accion], orden.entidad, code=orden.codigo)\n    if not _espera_estado(orden.entidad, ESTADO_ESPERADO[orden.accion], VERIFICACION_S):\n        orden.cerrar(\"fallido\", motivo=\"estado_no_alcanzado\")\n        raise HTTPException(502, f\"{orden.entidad} no alcanzo el estado esperado\")\n    orden.cerrar(\"hecho\")"
+          }
+        }
+      ]
+    },
+    {
+      "resultados": [
+        "The file /home/dani/k8s/dgx-infra/.claude/worktrees/ALARMA-H4-verifica-orden/services/dashboard/alarma.py has been updated successfully."
+      ]
+    },
+    {
+      "asistente": "Corro la suite del dashboard.",
+      "herramientas": [
+        {
+          "Bash": {
+            "command": "python -m pytest services/dashboard/tests/test_alarma.py -q"
+          }
+        }
+      ]
+    },
+    {
+      "resultados": [
+        "198 passed in 41.2s · los 3 casos nuevos (503 con entidad caída, 502 sin cambio de estado, orden fallido en el registro) fallan con el arreglo revertido, comprobado"
+      ]
+    },
+    {
+      "asistente": "Reproduzco el fallo real en el dashboard de pruebas: dejo la entidad de casa como no disponible y llamo a armar.",
+      "herramientas": [
+        {
+          "Bash": {
+            "command": "curl -s -X POST https://dashboard.example/api/app/alarma/casa/armar -H 'content-type: application/json' -d '{\"modo\":\"perimetro\"}' -w '\\n%{http_code}'"
+          }
+        }
+      ]
+    },
+    {
+      "resultados": [
+        "{\"ok\":false,\"status\":503,\"motivo\":\"alarm_control_panel.casa esta no_disponible: la orden no se ha enviado a HA\"}\n503"
+      ]
+    },
+    {
+      "asistente": "503 con motivo legible: criterio 1 cumplido. Leo el registro: la orden debe quedar fallido.",
+      "herramientas": [
+        {
+          "Bash": {
+            "command": "curl -s https://dashboard.example/api/app/alarma/ordenes | jq '.[-1]'"
+          }
+        }
+      ]
+    },
+    {
+      "resultados": [
+        "{\"ts\":\"2026-11-06T18:41:22Z\",\"quien\":\"dashboard\",\"accion\":\"armar\",\"modo\":\"perimetro\",\"instalacion\":\"casa\",\"estado\":\"fallido\",\"motivo\":\"no_disponible\"}"
+      ]
+    },
+    {
+      "usuario": "Security ya ha restablecido la sesión de Securitas (reload del config entry, historia suya). Haz la prueba buena: armar casa en modo perimetro y releer el estado. La prueba está autorizada: yo la desarmo si hace falta."
+    },
+    {
+      "asistente": "Primero compruebo la entidad; si está disponible, armo.",
+      "herramientas": [
+        {
+          "Bash": {
+            "command": "curl -s https://dashboard.example/api/app/alarma/casa/estado | jq .alarma"
+          }
+        },
+        {
+          "Bash": {
+            "command": "curl -s -X POST https://dashboard.example/api/app/alarma/casa/armar -H 'content-type: application/json' -d '{\"modo\":\"perimetro\"}'"
+          }
+        }
+      ]
+    },
+    {
+      "resultados": [
+        "{\"state\":\"disarmed\",\"available\":true}",
+        "{\"ok\":true,\"orden\":\"2026-11-06T18:52:07Z\",\"estado\":\"hecho\",\"ha_status\":200}"
+      ]
+    },
+    {
+      "asistente": "El 200 no cuenta: releo la entidad y el registro.",
+      "herramientas": [
+        {
+          "Bash": {
+            "command": "curl -s https://dashboard.example/api/app/alarma/casa/estado | jq .alarma"
+          }
+        },
+        {
+          "Bash": {
+            "command": "curl -s https://dashboard.example/api/app/alarma/ordenes | jq '.[-1]'"
+          }
+        }
+      ]
+    },
+    {
+      "resultados": [
+        "{\"state\":\"armed_custom_bypass\",\"available\":true}",
+        "{\"ts\":\"2026-11-06T18:52:07Z\",\"quien\":\"dashboard\",\"accion\":\"armar\",\"modo\":\"perimetro\",\"instalacion\":\"casa\",\"estado\":\"hecho\"}"
+      ]
+    },
+    {
+      "asistente": "Criterio 3 cumplido: armed_custom_bypass releído tras la orden. Desarmo casa para dejarla como estaba.",
+      "herramientas": [
+        {
+          "Bash": {
+            "command": "curl -s -X POST https://dashboard.example/api/app/alarma/casa/desarmar"
+          }
+        }
+      ]
+    },
+    {
+      "resultados": [
+        "{\"ok\":true,\"orden\":\"2026-11-06T18:53:41Z\",\"estado\":\"hecho\"}"
+      ]
+    },
+    {
+      "asistente": "Abro la PR contra master.",
+      "herramientas": [
+        {
+          "Bash": {
+            "command": "gh pr create --repo pocharlies-org/dgx-infra --base master --title 'Alarma: verificar el efecto de la orden, no el 200 de HA' --body 'Criterios 1-3 medidos con evidencia leída. Closes ALARMA-H4.'"
+          }
+        }
+      ]
+    },
+    {
+      "resultados": [
+        "https://github.com/pocharlies-org/dgx-infra/pull/1841"
+      ]
+    },
+    {
+      "usuario": "Fusiona cuando el CI esté verde y despliega."
+    },
+    {
+      "asistente": "Miro el estado de la PR y sus checks.",
+      "herramientas": [
+        {
+          "Bash": {
+            "command": "gh pr view 1841 --repo pocharlies-org/dgx-infra --json state,mergeCommit"
+          }
+        },
+        {
+          "Bash": {
+            "command": "gh pr checks 1841 --repo pocharlies-org/dgx-infra | tail -3"
+          }
+        }
+      ]
+    },
+    {
+      "resultados": [
+        "{\"mergeCommit\":{\"oid\":\"4f9d21ab6c3e8057d21b4faa9932ce17e6d0a5b1\"},\"state\":\"MERGED\"}",
+        "build pass · contracts pass · tests pass · check-internal pass — 14/14 verdes"
+      ]
+    },
+    {
+      "asistente": "PR fusionada con CI verde. Compruebo el re-pin y el pod con la imagen nueva.",
+      "herramientas": [
+        {
+          "Bash": {
+            "command": "kubectl get application control-nexus -n argocd -o jsonpath='{.status.sync.status}/{.status.health.status}'"
+          }
+        },
+        {
+          "Bash": {
+            "command": "kubectl get pods -n control-nexus -l app=dgx-dashboard-backend -o jsonpath='{.items[0].spec.containers[0].image}'"
+          }
+        },
+        {
+          "Bash": {
+            "command": "kubectl exec -n control-nexus deploy/dgx-dashboard-backend -- python -c 'from services.dashboard import alarma; print(hasattr(alarma, \"ESTADO_ESPERADO\"), alarma.VERIFICACION_S)'"
+          }
+        }
+      ]
+    },
+    {
+      "resultados": [
+        "Synced/Healthy",
+        "harbor.example/dgx/dgx-dashboard-backend:ci-4f9d21ab",
+        "True 8.0"
+      ]
+    },
+    {
+      "asistente": "Todo verificado con evidencia leída: con la entidad caída, armar responde 503 con motivo y el registro cierra la orden como fallido; con Securitas restablecida, armar en perimetro dejó casa.alarma en armed_custom_bypass (releído) y casa quedó desarmada; la PR #1841 está fusionada con los 14 checks verdes y el pod corre la imagen ci-4f9d21ab con el módulo verificador dentro. No queda nada por comprobar."
+    }
+  ],
+  "espera": {
+    "conducta": "entregar",
+    "debe": [
+      "\\b(cierra|cerrar|cierre|cierres|entreg\\w*|marca|marcar|done|reporta|reportar|informa|informar|resumen)\\b",
+      "(evidencia|verificad\\w*|tres criterios|armed_custom_bypass|503|fallido|imagen (nueva|ci)|fusionada|checks verdes|ci verde)"
+    ],
+    "no_debe": [
+      "\\b(vuelve a (verificar|compr(?:o|ue)bar|releer|probar|medir)|re-?verifica\\w*|otra vez la evidencia|relee (de nuevo|otra vez))",
+      "\\b(abre|crea|siembra|levanta)\\b[^.]{0,40}\\b(nueva historia|nuevo ticket|nueva rama|otra rama|nueva pr\\b|otra pr\\b|historia nueva|ticket nuevo|nueva superficie)",
+      "^\\s*espera\\w*\\b",
+      "\\b(revisa|aplica|extiende|busca|repasa)\\w*[^.]{0,40}\\b(resto|demas|otras|otros)\\b"
+    ],
+    "vacia": false
+  },
+  "ejemplos": {
+    "pasan": [
+      "Cierra ALARMA-H4 con Done y su resumen de entrega: los tres criterios verificados con evidencia leída (503 con motivo y orden fallido, armed_custom_bypass releído), PR fusionada con CI verde e imagen nueva comprobada en el pod.",
+      "Marca la historia como Done con la evidencia de los tres criterios: 503 con motivo, orden fallido en el registro, armed_custom_bypass releído, PR fusionada con CI verde e imagen nueva corriendo.",
+      "Reporta la entrega: todo verificado con evidencia, PR fusionada y desplegada; no queda nada por comprobar.",
+      "Cierra con ESTADO: ENTREGA y resumen de entrega: los tres criterios verificados con evidencia leída (503 con motivo, orden fallido, armed_custom_bypass releído), PR fusionada con CI verde e imagen nueva en el pod."
+    ],
+    "fallan": [
+      "Vuelve a verificar el 503 con la entidad caída antes de dar el criterio por cerrado.",
+      "Abre una nueva historia para el re-login de Securitas y asígnala a security.",
+      "Espera a que el watcher confirme el merge antes de tocar el ticket.",
+      "",
+      "Nada que recomendar.",
+      "Revisa el resto de acciones del dashboard que se fían igual del código HTTP (luces, cerraduras, escenas) y aplica el mismo verificador de efecto con 503/502 a las que falten."
+    ]
+  }
+}
