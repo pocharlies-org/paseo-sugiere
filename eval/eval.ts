@@ -12,9 +12,9 @@ import { join } from "node:path";
 import { BLANCOS, CASOS as CORPUS_REGLAS, CWD as CWD_SONDAS } from "../test/rules-fixtures.ts";
 
 const DIR = new URL(".", import.meta.url).pathname;
-export const DIR_CASOS = join(DIR, "casos");
-export const DIR_RESULTADOS = join(DIR, "resultados");
-export const RUTA_REGLAS = join(DIR, "..", "service", "rules.ts");
+const DIR_CASOS = join(DIR, "casos");
+const DIR_RESULTADOS = join(DIR, "resultados");
+const RUTA_REGLAS = join(DIR, "..", "service", "rules.ts");
 export const VECES = 3;
 const PARALELO = 4;
 const SID = "eval-sugeridor"; // así se distinguen sus líneas en la auditoría del servicio
@@ -27,7 +27,7 @@ type Paso =
   | { asistente: string; herramientas?: Record<string, unknown>[] }
   | { resultados: string[] };
 
-export type Caso = {
+type Caso = {
   id: string;
   origen: string;
   plan: { ticket: string; objetivo: string; criterios: { texto: string; como_se_verifica: string; status: string; evidencia?: string }[]; fuera_de_alcance: string[] };
@@ -37,8 +37,8 @@ export type Caso = {
   ejemplos: { pasan: string[]; fallan: string[] };
 };
 
-export type Veredicto = { ok?: boolean; riesgo?: string; motivo?: string; via?: string; error?: string };
-export type Corrida = { sugerencia?: string; modelo?: string; ms: number; veredicto?: Veredicto | null; error?: string; pasa?: boolean; motivo?: string };
+type Veredicto = { ok?: boolean; riesgo?: string; motivo?: string; via?: string; error?: string };
+type Corrida = { sugerencia?: string; modelo?: string; ms: number; veredicto?: Veredicto | null; error?: string; pasa?: boolean; motivo?: string };
 export type Resultado = { fecha: string; servicio: string; veces: number; casos: Record<string, Corrida[]>; reglas: Record<string, string> };
 
 export const leerJson = (ruta: string) => JSON.parse(readFileSync(ruta, "utf8"));
@@ -143,7 +143,7 @@ async function corrida(base: string, caso: Caso, turno: string): Promise<Corrida
   return { sugerencia: s.sugerencia, modelo: s.modelo, ms, veredicto };
 }
 
-export async function vivo(base: string, fecha: string, lista = casos()): Promise<Resultado> {
+async function vivo(base: string, fecha: string, lista: Caso[]): Promise<Resultado> {
   const tareas = lista.flatMap((caso) => Array.from({ length: VECES }, (_, i) => ({ caso, i })));
   const salida: Record<string, Corrida[]> = Object.fromEntries(lista.map((c) => [c.id, []]));
   let siguiente = 0;
