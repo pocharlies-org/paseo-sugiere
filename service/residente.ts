@@ -45,9 +45,11 @@ export async function sugerir(lines: string[], instruccion = "", timeoutMs = SUG
   try {
     return { texto: await pedir(cuerpo), modelo };
   } catch (e) {
-    // Un alias que la clave no sirve da 403 y la píldora salía vacía (Dani 05-11): una sola reserva, y solo para el 403. El cuerpo
-    // se rehace para el residente, con su `reasoning_effort` y no el del modelo de la sesión.
-    if ((e as { status?: number }).status !== 403 || modelo === RESERVA) throw e;
+    // Un alias que la clave no sirve da 403 y la píldora salía vacía (Dani 05-11); un 429 (las cuentas de la sesión agotadas o
+    // sin asignar, medido 07-11) también: una sola reserva, solo para esos dos. El cuerpo se rehace para el residente, con su
+    // `reasoning_effort` y no el del modelo de la sesión.
+    const status = (e as { status?: number }).status;
+    if ((status !== 403 && status !== 429) || modelo === RESERVA) throw e;
     return { texto: await pedir(cuerpoSugerencia(lines, instruccion, RESERVA)!), modelo: RESERVA };
   }
 }
