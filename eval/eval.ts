@@ -18,9 +18,8 @@ export const RUTA_REGLAS = join(DIR, "..", "service", "rules.ts");
 export const VECES = 3;
 const PARALELO = 4;
 const SID = "eval-sugeridor"; // así se distinguen sus líneas en la auditoría del servicio
-/** El modelo de las sesiones del eval: el que de verdad contesta al servicio (su clave solo sirve este alias; con el de una
- * sesión de Paseo, `claude-opus-5-5`, cae aquí tras un 403, y con un 429 ni eso). Fijo, para que entre corridas solo cambie
- * el sugeridor. */
+/** El modelo de las sesiones del eval: el residente, el de la compañía y la reserva del servicio. Fijo, para que entre corridas
+ * solo cambie el sugeridor y no el modelo que contesta (con `claude-opus-5-5` dependía de lo que LiteLLM sirviera ese día). */
 export const MODELO = "qwen38-flash-next";
 
 type Paso =
@@ -71,12 +70,15 @@ export function jsonl(caso: Caso): string[] {
 /** Sin acentos y en minúsculas: los patrones de `espera` se escriben así y no dependen de cómo acentúe el modelo. */
 export const plano = (s: string) => s.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase();
 
+/** Lo que el modelo escribe a veces en vez de la línea vacía (medido 07-11: «No hay nada que recomendar.»): cuenta como callar. */
+const NADA = /^(no hay )?nada (mas )?que (recomendar|sugerir|proponer)\.?$/;
+
 /** ¿La corrida hace lo que el caso espera? La sugerencia vacía solo vale si el caso lo dice. */
 export function puntua(caso: Caso, c: Corrida): { pasa: boolean; motivo: string } {
   if (c.error) return { pasa: false, motivo: `error: ${c.error}` };
   const e = caso.espera;
   const s = plano(c.sugerencia ?? "");
-  if (!s) return { pasa: e.vacia, motivo: e.vacia ? "vacía, y vale" : "vacía" };
+  if (!s || NADA.test(s)) return { pasa: e.vacia, motivo: e.vacia ? "vacía, y vale" : "vacía" };
   const falta = e.debe.find((p) => !new RegExp(p, "i").test(s));
   if (falta) return { pasa: false, motivo: `falta /${falta}/` };
   const sobra = e.no_debe.find((p) => new RegExp(p, "i").test(s));

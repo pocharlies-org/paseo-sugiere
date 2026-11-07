@@ -115,7 +115,8 @@
       "\\bno (hay|queda) nada\\b",
       "\\bnada mas que (tocar|hacer|compr(?:o|ue)bar)\\b",
       "\\bno hace falta nada\\b",
-      "320 mensajes"
+      "320 mensajes",
+      "\\b(ejecuta|lanza|arranca|activa)\\w*\\s+el watcher\\b|\\bwatcher para que (espere|vigile|fusione)"
     ],
     "vacia": true
   },
@@ -123,12 +124,14 @@
     "pasan": [
       "Fusiona la PR con squash cuando el watcher confirme el CI verde y mide la píldora con el cuerpo nuevo.",
       "Revisa el diff de la PR #14 mientras corre el CI y anota en la historia lo que falte.",
-      ""
+      "",
+      "No hay nada que recomendar."
     ],
     "fallan": [
       "PR #14 en vigilancia: el watcher avisará cuando acabe el CI y te lo digo.",
       "El watcher avisa cuando acabe el CI; no hace falta nada más.",
-      "Sigue en vigilancia la PR hasta que termine el CI."
+      "Sigue en vigilancia la PR hasta que termine el CI.",
+      "Ejecuta el watcher para que espere el CI de la PR #14 y la fusione con squash cuando pase."
     ]
   }
 }

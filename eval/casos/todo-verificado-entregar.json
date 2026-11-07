@@ -275,7 +275,8 @@
       "Vuelve a verificar el 503 con la entidad caída antes de dar el criterio por cerrado.",
       "Abre una nueva historia para el re-login de Securitas y asígnala a security.",
       "Espera a que el watcher confirme el merge antes de tocar el ticket.",
-      ""
+      "",
+      "Nada que recomendar."
     ]
   }
 }

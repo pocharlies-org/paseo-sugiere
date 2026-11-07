@@ -89,7 +89,7 @@
     "no_debe": [
       "(?<!no )(?<!sin )(?<!ni )\\b(ampliar|amplia\\w*|anadir|anade\\w*|sumar|suma\\w*|enriquec\\w*)\\b[^.]{0,30}(criterios|spec|espec|epica|plan)",
       "(haz|empieza|comienza|arranca|ponte|ponerte)\\w*[^.]{0,25}(render|3d|casa en 3d|camaras)",
-      "(criterio (8|nueve|octavo)|octavo criterio)[^.]{0,60}(00-spec|spec|espec|descripcion|epica)|(00-spec|spec|espec|descripcion|epica)[^.]{0,60}criterio (8|nueve|octavo)"
+      "(criterio (8|nueve|octavo)|octavo criterio).{0,60}(00-spec|spec|espec|descripcion|epica)|(00-spec|spec|espec|descripcion|epica).{0,60}criterio (8|nueve|octavo)"
     ],
     "vacia": false
   },
@@ -102,7 +102,8 @@
       "Anade la ampliacion a los criterios de la epica: empieza por el render 3D de la casa con las camaras y sensores en su sitio.",
       "Ponte con el render 3D de la casa ahora: coloca los dispositivos en su sitio y luego seguimos con los criterios abiertos.",
       "",
-      "Crea el componente del render 3D en la sección Alarma del dashboard."
+      "Crea el componente del render 3D en la sección Alarma del dashboard.",
+      "Actualiza 00-spec.md añadiendo el criterio 8 con la casa 3D interactiva y abre la historia del render 3D con sus criterios."
     ]
   }
 }
