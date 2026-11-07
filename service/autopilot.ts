@@ -125,7 +125,7 @@ export async function decidir(lines: string[], ctx: Contexto, nativa = ""): Prom
 
   // 7. Hecho: con plan, solo si todos sus criterios están verificados.
   const modelo = transcriptMessages(lines).model ?? "";
-  if ((etiqueta === "ENTREGA" && (!plan || todoVerificado(plan))) || todoVerificado(plan)) {
+  if ((etiqueta === "ENTREGA" && !plan) || todoVerificado(plan)) {
     if (antes.startsWith(ENTREGAR)) return fin("humano", "la entrega se pidió y el turno no la cerró con AUTOPILOT: ENTREGADO");
     return envia("entregar", entregar(r, modelo, key), plan ? "todos los criterios verificados" : "ESTADO: ENTREGA");
   }

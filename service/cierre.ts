@@ -4,7 +4,7 @@
 // `CIERRE_PASEO`; `test/fixtures/cierre.json` es el corpus que las dos suites deben pasar igual (plan del autopilot, §3.2).
 // Puro: texto dentro, datos fuera.
 
-export type Espera = { tipo: string; args: string[]; linea: string; accion: string };
+export type Espera = { tipo: string; linea: string };
 
 const ESPERA_RE = /^[ \t]*(?:[-*>•]+[ \t]*)?[`*_]*ESPERA[`*_]*[ \t]*:[`*_]*[ \t]*(ci|merge|review|run|argocd|fichero|jira)[ \t]+([^\n→]+?)[ \t]*(?:(?:→|->)[ \t]*(.*?))?[ \t]*$/gim;
 const FECHA_RE = /^[ \t]*(?:[-*>•]+[ \t]*)?[`*_]*ESPERA[`*_]*[ \t]*:[`*_]*[ \t]*fecha[ \t]+(\d{4}-\d{2}-\d{2}|\d{2}-\d{2})(?:[ T](\d{1,2}):(\d{2}))?Z?[ \t]*(?:(?:→|->)[ \t]*(.*?))?[ \t]*$/gim;
@@ -42,7 +42,7 @@ export function esperasDe(texto: string): Espera[] {
     const linea = `${tipo} ${args.join(" ")}`;
     if (vistos.has(linea)) continue;
     vistos.add(linea);
-    out.push({ tipo, args, linea, accion: limpia(m[3] ?? "", "`*_ ").slice(0, 300) });
+    out.push({ tipo, linea });
   }
   for (const m of (texto || "").matchAll(FECHA_RE)) {
     const [dia, hh, mm] = [m[1]!, m[2], m[3]];
@@ -51,8 +51,7 @@ export function esperasDe(texto: string): Espera[] {
     const f = new Date(Date.UTC(a, mes - 1, d, Number(hh ?? 0), Number(mm ?? 0)));
     // `datetime(...)` de Python rechaza un día o una hora imposibles; Date los desborda: se comprueba a la vuelta.
     if (f.getUTCMonth() !== mes - 1 || f.getUTCDate() !== d || Number(hh ?? 0) > 23 || Number(mm ?? 0) > 59) continue;
-    out.push({ tipo: "fecha", args: [String(f.getTime() / 1000)], accion: (m[4] ?? "").slice(0, 300),
-      linea: `fecha ${dia}${hh ? ` ${hh}:${mm}Z` : ""}` });
+    out.push({ tipo: "fecha", linea: `fecha ${dia}${hh ? ` ${hh}:${mm}Z` : ""}` });
   }
   return out;
 }
