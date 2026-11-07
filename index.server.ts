@@ -3,7 +3,7 @@ import { existsSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import type { PluginServerContext } from "@getpaseo/plugin/server";
-import { suggestForce, suggestGet } from "./shared/contract.ts";
+import { suggestFeedback, suggestForce, suggestGet } from "./shared/contract.ts";
 import { suggestSettings, type SuggestValues } from "./shared/settings.ts";
 import * as suggest from "./server/suggest.ts";
 
@@ -27,7 +27,8 @@ export default function contribute(server: PluginServerContext) {
   void settings.read().then(apply, () => apply({ status: "invalid" }));
   server.on("agent.turn_ended", ({ agent, outcome }, context) => (outcome.kind === "completed" ? suggest.arm(agent.id, context) : suggest.cancel(agent.id)));
   server.on("agent.turn_started", ({ agent }) => suggest.cancel(agent.id));
-  server.handle(suggestGet, (input) => ({ text: suggest.get(input.agentId), ...suggest.state(input.agentId) }));
+  server.handle(suggestGet, (input) => ({ text: suggest.get(input.agentId), ...suggest.state(input.agentId), ...suggest.anchor(input.agentId) }));
+  server.handle(suggestFeedback, (input) => suggest.feedback(input.agentId, input.verdict));
   server.handle(suggestForce, (input, context) => ({ started: suggest.force(input.agentId, context) }));
   const check = () => spawn("bash", [AUTODEPLOY], { detached: true, stdio: "ignore" }).unref();
   let autodeploy: ReturnType<typeof setInterval> | undefined;

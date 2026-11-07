@@ -48,11 +48,14 @@ async function suggest(body: Cuerpo) {
   const { sid, turno, transcript, contexto } = body;
   if (!sid || !turno || typeof transcript !== "string" || !transcript.trim()) return [422, { error: "faltan sid, turno o transcript" }];
   if (transcript.length > MAX_TRANSCRIPT) return [422, { error: `transcript > ${MAX_TRANSCRIPT} caracteres` }];
+  // El ancla del plan es aditiva: sin ella, la llamada y la respuesta son las de siempre; con ella, la respuesta añade `en_plan` y `criterio`.
+  const plan = contexto?.plan ?? null;
+  if (plan !== null && (typeof plan !== "object" || Array.isArray(plan))) return [422, { error: "contexto.plan tiene que ser un objeto" }];
   try {
-    // La instrucción llega del llamante (ConfigMap en el pod): una sola instrucción para todos, editable sin reiniciar.
-    const { texto: sugerencia, modelo } = await sugerir(lineas(transcript), contexto?.instruccion ?? "", undefined, contexto?.kind ?? "");
-    console.log(JSON.stringify({ modo: MODO, sid, turno, sugerencia: sugerencia.slice(0, 120) }));
-    return [200, { sugerencia, modelo, ms: 0 }];
+    // La instrucción vive aquí y en ningún otro sitio (decisión 5 de Dani): la de fábrica, o la anclada con plan.
+    const { texto: sugerencia, modelo, ...ancla } = await sugerir(lineas(transcript), undefined, contexto?.kind ?? "", plan);
+    console.log(JSON.stringify({ modo: MODO, sid, turno, ...ancla, sugerencia: sugerencia.slice(0, 120) }));
+    return [200, { sugerencia, modelo, ms: 0, ...ancla }];
   } catch (error) {
     console.warn(JSON.stringify({ sid, turno, error: String((error as Error).message).slice(0, 200) }));
     return [503, { error: "el residente no contestó" }];

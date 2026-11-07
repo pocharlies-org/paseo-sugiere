@@ -52,14 +52,6 @@ describe("the body of the suggestion call", () => {
     assert.equal(suggestBody([user("hola"), line({ type: "assistant", message: { role: "assistant", content: "x" } })]), null); // no model field at all
   });
 
-  it("takes the configured prompt as system, and the built-in one when it is blank (Dani 16-10: editable prompt)", () => {
-    const body = JSON.parse(suggestBody([user("monta el pill"), as([{ type: "text", text: "listo" }])], "recomienda en una línea, en inglés")!.body);
-    assert.equal(body.system[0].text, CLAUDE_CODE_SYSTEM);
-    assert.equal(body.system.length, 2);
-    assert.equal(body.system[1].text, "recomienda en una línea, en inglés");
-    assert.equal(JSON.parse(suggestBody([user("monta el pill"), as([{ type: "text", text: "listo" }])], "   ")!.body).system[1].text, SUGGESTION_INSTRUCTION);
-  });
-
   it("keeps the guard that a step the USER takes outside the conversation means no suggestion (measured 14-10: «mide la longitud del cañón»)", () => {
     assert.match(SUGGESTION_INSTRUCTION, /fuera de la conversación/);
     assert.match(SUGGESTION_INSTRUCTION, /lo que falta es acción o decisión del usuario[\s\S]*línea vacía/);

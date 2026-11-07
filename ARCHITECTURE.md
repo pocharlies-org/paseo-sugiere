@@ -45,7 +45,9 @@ al modelo de la sesión, sin compartir la caché de la sesión.
   `agent.turn_started`, al RPC `suggest.get` y al ajuste `enabled`
   (`registerSettings`, host): al desactivar, `setEnabled(false)` tira pendientes y mostradas y
   `arm` deja de programar generaciones; `quietSeconds` es la ventana de silencio. La instrucción del modelo no
-  pasa por aquí: es `~/.local/state/paseo-sugiere/prompt.txt`, leído con cada generación en `server/suggest.ts`.
+  pasa por aquí: vive solo en el servicio (decisión 5). Con «Garantizar plan» (`anchor-<agentId>.json` de paseo-plan con
+  `guard` y criterios) `arm` genera al acabar el turno, sin ventana, y manda el ancla en `contexto.plan`; `suggest.feedback` cuenta
+  los «no es esto» (tres seguidos callan la ✦ hasta un clic).
   Arranca además `scripts/autodeploy.sh` cada 5 min: el plugin se redespliega solo cuando el tronco de GitHub
   trae un commit nuevo (`deploy.sh` acepta un árbol sin git por `DEPLOY_SHA`).
 - `client/suggest-settings.tsx` — pantalla de ajustes propia (`addSettingsScreen` + `useSettings`):

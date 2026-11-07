@@ -18,9 +18,9 @@ Este documento es la especificación. No hay implementación en este ticket: ni 
 - **Solo interno**: Service de clúster y token. Sin ingress, sin `*.lan`, sin publicar en internet.
 - Alcance de red: LiteLLM (residente) por Service, y el brain (§9) solo si está encendido. Se va el router local, el bearer de
   la cuenta y el tope de 60 s del RPC del host.
-- Tres endpoints: `/v1/suggest` (propone), `/v1/verdict` (dictamina) y `/v1/auditoria` (lee el registro). La instrucción del residente y la
-  rúbrica del juez viven aquí y en ningún otro sitio: un ConfigMap montado y releído en cada petición,
-  sin reinicio.
+- Tres endpoints: `/v1/suggest` (propone), `/v1/verdict` (dictamina) y `/v1/auditoria` (lee el registro). La instrucción de la
+  sugerencia y la rúbrica del juez viven aquí, en el código del servicio, y en ningún otro sitio (decisión 5 de Dani: el
+  plugin ya no lee `~/.local/state/paseo-sugiere/prompt.txt` ni el servicio acepta una instrucción del llamante).
 
 ## 2. `POST /v1/suggest`
 
@@ -32,7 +32,10 @@ Entrada:
 ```json
 {"sid": "<id de sesión>", "turno": "<id del turno cerrado>",
  "transcript": "<transcript aplanado>",
- "contexto": {"kind": "company|live", "key": "<clave del ticket>", "rol": "developer"}}
+ "contexto": {"kind": "company|live", "key": "<clave del ticket>", "rol": "developer",
+              "plan": {"ticket": "<clave>", "objetivo": "…",
+                       "criterios": [{"texto": "…", "como_se_verifica": "…", "status": "abierta|verificada|…", "evidencia": "…"}],
+                       "fuera_de_alcance": ["…"], "tareas": ["…"]}}}
 ```
 
 | Campo | Tipo | Regla |
@@ -40,13 +43,32 @@ Entrada:
 | `sid` | string | no vacío; solo para trazas |
 | `turno` | string | no vacío; solo para trazas y para que el llamante case la respuesta |
 | `transcript` | string | 1..32 MiB (un `.jsonl` de sesión real pasa de 6): el `.jsonl` de la sesión tal cual. El servicio lo aplana con `shared/transcript.ts` (tool calls, una línea; nunca su contenido), así que el llamante solo lee un fichero |
-| `contexto` | objeto | opcional; `kind` obligatorio si viene. `key`/`rol` solo si es de compañía. `instruccion` sustituye a la de fábrica, para editar el prompt desde el ConfigMap sin reiniciar |
+| `contexto` | objeto | opcional; `kind` obligatorio si viene. `key`/`rol` solo si es de compañía |
+| `contexto.plan` | objeto | opcional y aditivo («Garantizar plan»): el ancla del ticket que escribe paseo-plan (`anchor-<agentId>.json`; acepta `ticket` o `ticketKey`, y `evidencia` texto u objeto). Si no es un objeto, `422`. Sin plan, o con un plan sin criterios (decisión 2 de Dani), la llamada al modelo es **byte a byte** la de antes (`test/fixtures/cuerpo-sin-plan.json`) |
 
 Salida (`200`):
 
 ```json
 {"sugerencia": "Abre el PR contra deploy/prod y espera CI", "modelo": "claude-opus-5-5", "ms": 812}
 ```
+
+Con `contexto.plan` (y al menos un criterio) la salida añade qué persigue la sugerencia:
+
+```json
+{"sugerencia": "Relee alarm_control_panel.casa con GET /api/states/…: el log dice «not currently available»…",
+ "modelo": "claude-opus-5-5", "ms": 9012, "en_plan": "verificar", "criterio": "C1 — armar deja armed_away"}
+```
+
+- `en_plan` ∈ `en-plan` (un paso del plan; `criterio: "entrega"` cuando todo está verificado) · `trabajo-nuevo` (lo nuevo no es del
+  plan: el prompt es abrir historia hija + sesión del rutador) · `verificar` (lo hecho no tiene evidencia válida, o un hecho la
+  contradice). `null` si el modelo no lo da o la sugerencia sale vacía. La píldora lo enseña como insignia ▸ / ✚ / ✓.
+- Qué recibe el modelo con plan: la instrucción anclada (`PLAN_INSTRUCTION` en `shared/suggest.ts`) en `system`; la conversación sin
+  ruido de herramientas, como siempre; y un último turno con `<plan>` (objetivo, criterios numerados C1..Cn con estado y evidencia,
+  fuera de alcance, tareas) y `<hechos>`: los resultados de herramientas desde el último mensaje real del usuario, recortados (2 000
+  caracteres cada uno, 12 000 en total, los más nuevos), aparte y no como turnos para que el modelo no imite los marcadores. Plan y
+  hechos al final, así `system` y la conversación siguen siendo un prefijo estable entre sugerencias de la misma sesión.
+- El modelo responde un JSON `{en_plan, criterio, sugerencia}`; la sugerencia pasa por los mismos filtros (pregunta, eco, marcador)
+  y, si no llega JSON, el texto entero es la sugerencia, sin insignia.
 
 - `sugerencia` vacía es una respuesta **válida**: el turno ha terminado o no hay nada que proponer (la
   píldora no aparece; el supervisor no la usa). No es un error.
@@ -140,6 +162,10 @@ p 0,57-0,58 y una llamada caída) y solo añadía 24-38 s por veredicto delante 
 El estado que ve el modelo va envuelto en `<dato-xxxx>` con nonce (el `_dato()` de `company_revalidar.py`):
 la sugerencia es **dato no confiable**, y una que diga "ignora tus instrucciones" no puede cambiar la
 rúbrica. Incluye resumen y criterio de aceptación del ticket y el mensaje propuesto.
+
+La rúbrica no cambia con «Garantizar plan»: D0-D14 y estos pasos juzgan igual una sugerencia anclada que una sin plan, y
+`en_plan`/`criterio` no entran en el veredicto. Del lado de `/v1/suggest`, `<plan>` y `<hechos>` son igual de **dato**: la
+instrucción anclada lo dice, y un cierre de bloque dentro del dato (`</plan>`, `</hechos>`) se neutraliza para que no cierre el bloque.
 
 Antes del modelo corre el **tamiz léxico** (`service/tamiz.ts`), barato y determinista. Su invariante: sobre
 vocabulario de riesgo —dinero, credenciales, publicación fuera, lo irreversible— el `seguir` del residente

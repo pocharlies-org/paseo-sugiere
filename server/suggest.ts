@@ -25,32 +25,67 @@ export function setQuietSeconds(seconds: number): void {
   quietMs = seconds * 1000;
 }
 
-// The instruction the model gets, in a file the plugin owns — the only way to change it (Dani 17-10: the in-pill editor was
-// dead weight, the pill is for sending). "" = the built-in SUGGESTION_INSTRUCTION. Read with every generation, so a hand edit
-// takes effect without restarting the host.
-const PROMPT_FILE = join(homedir(), ".local", "state", "paseo-sugiere", "prompt.txt");
+// The instruction is the service's alone (Dani's decision 5): the plugin sends none. The old hand-edited
+// ~/.local/state/paseo-sugiere/prompt.txt is no longer read.
+
+// The plan anchor paseo-plan writes per agent (paseo-plan's file contract). Read with every turn end and generation, so «Garantizar
+// plan» switched in the pill takes effect on the next turn without restarting the host.
+const ANCHOR_DIR = join(homedir(), ".local", "state", "paseo-plan");
+
+/** The anchored plan of an agent, only with `guard` on and at least one criterion (Dani's decision 2: a guard without criteria does
+ * not arm). Null on anything else — no file, unreadable, guard off — and then everything is as before plans existed. */
+export function guardedPlan(agentId: string): object | null {
+  try {
+    const anchor = JSON.parse(readFileSync(join(ANCHOR_DIR, `anchor-${agentId}.json`), "utf8"));
+    return anchor?.guard === true && Array.isArray(anchor.criterios) && anchor.criterios.length ? anchor : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Three «no es esto» in a row and the ✦ goes quiet: no guarded generation until the user clicks it (the plan, «Deriva»).
+ * shortcut: the count lives in memory, so a host restart forgets it; persist it if that turns out to matter. */
+const MAX_NOES = 3;
 
 // pending/error describe only the last FORCE (the pill spins on pending and shows error once); the quiet window stays silent by design.
-type Entry = { timer?: ReturnType<typeof setTimeout>; seq: number; text: string | null; pending: boolean; error: string | null };
+// en_plan/criterio come with an anchored suggestion; noes/muted survive turns (the streak is across turns) and only reset on use or click.
+type Entry = {
+  timer?: ReturnType<typeof setTimeout>;
+  seq: number;
+  text: string | null;
+  en_plan: string | null;
+  criterio: string | null;
+  pending: boolean;
+  error: string | null;
+  noes: number;
+  muted: boolean;
+};
 const agents = new Map<string, Entry>();
-const fresh = (): Entry => ({ seq: 0, text: null, pending: false, error: null });
+const fresh = (): Entry => ({ seq: 0, text: null, en_plan: null, criterio: null, pending: false, error: null, noes: 0, muted: false });
+const clear = (entry: Entry) => Object.assign(entry, { text: null, en_plan: null, criterio: null, pending: false, error: null });
 
 /** A turn ended completed: after the quiet window, one generation, unless anything happens first. Only with `auto` —
-off by default (Dani 25-10): each automatic suggestion pays the whole transcript of its session; without auto the user's click forces it. */
+off by default (Dani 25-10): each automatic suggestion pays the whole transcript of its session; without auto the user's click forces it.
+With «Garantizar plan» on for this agent it generates right away at every turn end, auto or not; sending stays the user's tap. */
 export function arm(agentId: string, context: PluginHookContext): void {
-  if (!enabled || !auto) return;
+  const guarded = guardedPlan(agentId) !== null;
+  if (!enabled || (!auto && !guarded)) return;
   const entry = agents.get(agentId) ?? fresh();
+  agents.set(agentId, entry);
+  if (entry.muted) return;
   if (entry.timer) clearTimeout(entry.timer);
+  entry.timer = undefined;
   entry.seq += 1;
-  entry.text = null;
-  entry.pending = false;
-  entry.error = null;
+  clear(entry);
   const seq = entry.seq;
+  if (guarded) {
+    void generate(agentId, seq, context);
+    return;
+  }
   entry.timer = setTimeout(() => {
     entry.timer = undefined;
     void generate(agentId, seq, context);
   }, quietMs);
-  agents.set(agentId, entry);
 }
 
 /** Anything new — a turn started, a failed end, a dismissal: the pending suggestion is gone and an in-flight answer will not land. */
@@ -60,9 +95,7 @@ export function cancel(agentId: string): void {
   if (entry.timer) clearTimeout(entry.timer);
   entry.timer = undefined;
   entry.seq += 1;
-  entry.text = null;
-  entry.pending = false;
-  entry.error = null;
+  clear(entry);
 }
 
 export function get(agentId: string): string | null {
@@ -75,6 +108,25 @@ export function state(agentId: string): { pending: boolean; error: string | null
   return { pending: entry?.pending ?? false, error: entry?.error ?? null };
 }
 
+/** With «Garantizar plan»: the badge and criterion of the suggestion shown, and whether the ✦ went quiet. */
+export function anchor(agentId: string): { en_plan: string | null; criterio: string | null; muted: boolean } {
+  const entry = enabled ? agents.get(agentId) : undefined;
+  return { en_plan: entry?.text ? entry.en_plan : null, criterio: entry?.text ? entry.criterio : null, muted: entry?.muted ?? false };
+}
+
+/** «no es esto» drops the suggestion and counts toward going quiet; a used suggestion breaks the streak. */
+export function feedback(agentId: string, verdict: "no-es-esto" | "usada"): { muted: boolean } {
+  const entry = agents.get(agentId) ?? fresh();
+  agents.set(agentId, entry);
+  if (verdict === "usada") entry.noes = 0;
+  else {
+    entry.noes += 1;
+    entry.muted = entry.noes >= MAX_NOES;
+    entry.text = entry.en_plan = entry.criterio = null;
+  }
+  return { muted: entry.muted };
+}
+
 /** The user clicked the pill with nothing suggested: generate now, no quiet window. Never waits for the answer: the
  * generation can take longer than the host's 60 s RPC timeout (measured 19-10: «Plugin RPC timed out» on every slow router). */
 export function force(agentId: string, context: PluginHandlerContext): boolean {
@@ -84,9 +136,10 @@ export function force(agentId: string, context: PluginHandlerContext): boolean {
   if (entry.timer) clearTimeout(entry.timer);
   entry.timer = undefined;
   entry.seq += 1;
-  entry.text = null;
+  clear(entry);
   entry.pending = true;
-  entry.error = null;
+  entry.noes = 0; // the user asked: a quiet ✦ speaks again
+  entry.muted = false;
   agents.set(agentId, entry);
   void generate(agentId, entry.seq, context, true);
   return true;
@@ -108,8 +161,10 @@ async function generate(agentId: string, seq: number, context: PluginHandlerCont
   };
   try {
     // The daemon's native suggestion  first: it is the CLI's own fork, which hits the session's cached prefix and
-    // costs only the decode. Without the patched daemon there is no file and the call below is the normal path.
-    const native = await nativeSuggestion(agentId, context.paseo);
+    // costs only the decode. Without the patched daemon there is no file and the call below is the normal path. With a guarded
+    // plan it is skipped: the native one never saw the plan. Sync read, so the seq guard stays built on the awaits below.
+    const plan = guardedPlan(agentId);
+    const native = plan ? null : await nativeSuggestion(agentId, context.paseo);
     if (native) {
       const entry = settle(null);
       if (entry && entry.seq === seq) {
@@ -121,14 +176,8 @@ async function generate(agentId: string, seq: number, context: PluginHandlerCont
     const lines = await locateSession(agentId, context.paseo);
     // Sin modelo real (sin turno del asistente, o solo `<synthetic>`) no hay nada que pedir: ni llamada ni reserva (Dani 22-10).
     if (!transcriptMessages(lines).model) throw new Error("la sesión aún no tiene modelo");
-    // Sync and read per generation: no override file is the normal case (built-in instruction), and the read adds no await, so the
-    // seq guard stays built on the two awaits below. A hand edit of the file takes effect on the next suggestion.
-    let instruction = "";
-    try {
-      instruction = readFileSync(PROMPT_FILE, "utf8");
-    } catch {}
     // La sugerencia la genera el servicio `sugiere` del clúster, el mismo sitio que usa la compañía (Dani, 05-11).
-    const answer = await sugiereRequest(agentId, seq, lines, instruction);
+    const answer = await sugiereRequest(agentId, seq, lines, plan);
     if (answer.status !== 200) {
       console.warn(`suggest: el servicio sugiere respondió ${answer.status} para ${agentId}`);
       settle("el servicio sugiere no respondió bien");
@@ -138,8 +187,10 @@ async function generate(agentId: string, seq: number, context: PluginHandlerCont
     if (!text) console.log(`suggest: respuesta vacía (nada que sugerir) para ${agentId}`);
     const entry = settle(text ? null : "nada que sugerir");
     if (entry && entry.seq === seq && text) {
-      console.log(`suggest: generada para ${agentId} con ${answer.modelo}: ${JSON.stringify(text.slice(0, 60))}`);
+      console.log(`suggest: generada para ${agentId} con ${answer.modelo}${plan ? ` (${answer.en_plan} · ${answer.criterio})` : ""}: ${JSON.stringify(text.slice(0, 60))}`);
       entry.text = text;
+      entry.en_plan = answer.en_plan;
+      entry.criterio = answer.criterio;
     } else if (forced && entry && !entry.pending && !entry.text) {
       console.log(`suggest: respuesta descartada para ${agentId} (la sesión se movió)`);
       entry.error = "la sesión se movió mientras se generaba"; // only if no newer generation is in flight to settle itself
