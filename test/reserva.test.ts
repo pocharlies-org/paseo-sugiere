@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { afterEach, describe, it } from "node:test";
 import { sugerir } from "../service/residente.ts";
+import { CLAUDE_CODE_SYSTEM } from "../shared/suggest.ts";
 
 // Paseo en vivo pide el modelo de la sesión; si la clave no sirve ese alias (403) o no le quedan cuentas (429), reintenta una sola vez con el residente.
 // La compañía (o quien no diga `kind`) va directa al residente local (Dani 06-11).
@@ -62,6 +63,17 @@ describe("el modelo de reserva", () => {
     const cuerpos = stub((c) => (c.model === "gpt-6-luna" ? new Response("no", { status: 403 }) : ok("sigue")));
     await sugerir(gpt, "", 5_000, "live");
     assert.deepEqual(cuerpos.map((c) => [c.model, c.reasoning_effort]), [["gpt-6-luna", "minimal"], ["qwen38-flash-next", "none"]]);
+  });
+});
+
+describe("la forma del system", () => {
+  it("la línea de Claude Code va como primer bloque propio, no junta con la instrucción (si no, Claude da 429)", async () => {
+    const cuerpos = stub(() => ok("revisa el CI"));
+    await sugerir(TRANSCRIPT, "", 5_000, "live");
+    const sistema = cuerpos[0].messages[0];
+    assert.equal(sistema.role, "system");
+    assert.ok(Array.isArray(sistema.content) && sistema.content.length === 2);
+    assert.deepEqual(sistema.content[0], { type: "text", text: CLAUDE_CODE_SYSTEM });
   });
 });
 
