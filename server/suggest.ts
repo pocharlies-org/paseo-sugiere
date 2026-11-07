@@ -191,7 +191,8 @@ async function generate(agentId: string, seq: number, context: PluginHandlerCont
       entry.text = text;
       entry.en_plan = answer.en_plan;
       entry.criterio = answer.criterio;
-    } else if (forced && entry && !entry.pending && !entry.text) {
+    } else if (forced && entry && entry.seq !== seq && !entry.pending && !entry.text) {
+      // Solo si de verdad empezó otro turno (seq nuevo): una respuesta vacía de esta misma generación ya dejó «nada que sugerir».
       console.log(`suggest: respuesta descartada para ${agentId} (la sesión se movió)`);
       entry.error = "la sesión se movió mientras se generaba"; // only if no newer generation is in flight to settle itself
     }
