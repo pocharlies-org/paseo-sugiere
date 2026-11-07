@@ -27,7 +27,7 @@
         "texto": "El arreglo llega a producción: imagen nueva corriendo con el módulo verificador dentro.",
         "como_se_verifica": "ArgoCD Synced/Healthy y lectura del módulo en el pod.",
         "status": "verificada",
-        "evidencia": "control-nexus Synced/Healthy en el re-pin; pod con imagen ci-8975134d y ESTADO_ESPERADO presente"
+        "evidencia": "control-nexus Synced/Healthy en el re-pin; pod con imagen ci-4f9d21ab y ESTADO_ESPERADO presente"
       }
     ],
     "fuera_de_alcance": [
@@ -216,7 +216,7 @@
     },
     {
       "resultados": [
-        "{\"mergeCommit\":{\"oid\":\"8975134d8f04a35d1ca7faa122e1256f7f29b1f9\"},\"state\":\"MERGED\"}",
+        "{\"mergeCommit\":{\"oid\":\"4f9d21ab6c3e8057d21b4faa9932ce17e6d0a5b1\"},\"state\":\"MERGED\"}",
         "build pass · contracts pass · tests pass · check-internal pass — 14/14 verdes"
       ]
     },
@@ -243,18 +243,18 @@
     {
       "resultados": [
         "Synced/Healthy",
-        "harbor.example/dgx/dgx-dashboard-backend:ci-8975134d",
+        "harbor.example/dgx/dgx-dashboard-backend:ci-4f9d21ab",
         "True 8.0"
       ]
     },
     {
-      "asistente": "Todo verificado con evidencia leída: con la entidad caída, armar responde 503 con motivo y el registro cierra la orden como fallido; con Securitas restablecida, armar en perimetro dejó casa.alarma en armed_custom_bypass (releído) y casa quedó desarmada; la PR #1841 está fusionada con los 14 checks verdes y el pod corre la imagen ci-8975134d con el módulo verificador dentro. No queda nada por comprobar."
+      "asistente": "Todo verificado con evidencia leída: con la entidad caída, armar responde 503 con motivo y el registro cierra la orden como fallido; con Securitas restablecida, armar en perimetro dejó casa.alarma en armed_custom_bypass (releído) y casa quedó desarmada; la PR #1841 está fusionada con los 14 checks verdes y el pod corre la imagen ci-4f9d21ab con el módulo verificador dentro. No queda nada por comprobar."
     }
   ],
   "espera": {
     "conducta": "entregar",
     "debe": [
-      "\\b(entreg\\w*|cierr\\w*|marc\\w*|done|report\\w*|inform\\w*)\\b",
+      "\\b(cerr\\w*|cierr\\w*|marc\\w*|entreg\\w*|report\\w*|inform\\w*|done)\\b",
       "(evidencia|verificad\\w*|tres criterios|armed_custom_bypass|503|fallido|imagen (nueva|ci)|fusionada|checks verdes|ci verde)"
     ],
     "no_debe": [
@@ -268,7 +268,8 @@
     "pasan": [
       "Cierra ALARMA-H4 con Done y su resumen de entrega: los tres criterios verificados con evidencia leída (503 con motivo y orden fallido, armed_custom_bypass releído), PR fusionada con CI verde e imagen nueva comprobada en el pod.",
       "Marca la historia como Done con la evidencia de los tres criterios: 503 con motivo, orden fallido en el registro, armed_custom_bypass releído, PR fusionada con CI verde e imagen nueva corriendo.",
-      "Reporta la entrega: todo verificado con evidencia, PR fusionada y desplegada; no queda nada por comprobar."
+      "Reporta la entrega: todo verificado con evidencia, PR fusionada y desplegada; no queda nada por comprobar.",
+      "Cierra con ESTADO: ENTREGA y resumen de entrega: los tres criterios verificados con evidencia leída (503 con motivo, orden fallido, armed_custom_bypass releído), PR fusionada con CI verde e imagen nueva en el pod."
     ],
     "fallan": [
       "Vuelve a verificar el 503 con la entidad caída antes de dar el criterio por cerrado.",
