@@ -26,7 +26,7 @@ test("suggestion card uses the sheet-aware input, edits before sending and has a
     },
     "react-native": { View: "View", Text: "Text", Pressable: "Pressable", TextInput: "UnsafeInput" },
     "@getpaseo/plugin/client/react-native": { Icon: "Icon", TextInput: "SheetAwareInput" },
-    "../shared/contract.ts": { suggestGet: "get", suggestForce: "force" },
+    "../shared/contract.ts": { suggestGet: "get", suggestForce: "force", suggestFeedback: "feedback" },
     "../shared/suggest.ts": { SUGGEST_WAIT_MS: 300_000 },
     "./composer-bridge.ts": { insertSuggestion: () => false },
   };
@@ -41,7 +41,8 @@ test("suggestion card uses the sheet-aware input, edits before sending and has a
   let button: any;
   const sent: string[] = [];
   const stop = exports.addSuggestPill({
-    addComposerPill: ({ button: next }: any) => {
+    addComposerPill: ({ id, button: next }: any) => {
+      if (id !== "suggest") return { update() {}, remove() {} }; // «no es esto» lives in its own pill
       button = next;
       return { update: (next: unknown) => { button = next; }, remove() {} };
     },
@@ -106,7 +107,7 @@ test("a forced suggestion stays on the pill until its button is pressed", async 
     react: { useState: (i: unknown) => [typeof i === "function" ? (i as () => unknown)() : i, () => {}], useEffect: () => {}, useMemo: (f: () => unknown) => f(), useRef: () => ({ current: null }) },
     "react-native": { View: "View", Text: "Text", Pressable: "Pressable" },
     "@getpaseo/plugin/client/react-native": { Icon: "Icon", TextInput: "Input" },
-    "../shared/contract.ts": { suggestGet: "get", suggestForce: "force" },
+    "../shared/contract.ts": { suggestGet: "get", suggestForce: "force", suggestFeedback: "feedback" },
     "../shared/suggest.ts": { SUGGEST_WAIT_MS: 300_000 },
     "./composer-bridge.ts": {
       insertSuggestion: (agentId: string, text: string) => { inserted.push(`${agentId} ${text}`); return true; },
@@ -124,8 +125,8 @@ test("a forced suggestion stays on the pill until its button is pressed", async 
   let button: any;
   const stop = exports.addSuggestPill({
     // The host's rule (validation.ts requireText): a label is undefined or non-blank, or the pill is never drawn.
-    addComposerPill: ({ button: next }: any) => {
-      const accept = (b: any) => { assert.ok(b.label === undefined || b.label.trim(), `the host refuses label ${JSON.stringify(b.label)}`); button = b; };
+    addComposerPill: ({ id, button: next }: any) => {
+      const accept = (b: any) => { assert.ok(b.label === undefined || b.label.trim(), `the host refuses label ${JSON.stringify(b.label)}`); if (id === "suggest") button = b; };
       accept(next);
       return { update: accept, remove() {} };
     },

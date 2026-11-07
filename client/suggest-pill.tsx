@@ -2,7 +2,7 @@ import type { PluginButtonContentProps, PluginButtonIconProps, PluginClientConte
 import { Icon, TextInput } from "@getpaseo/plugin/client/react-native";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Pressable, Text, View } from "react-native";
-import { suggestForce, suggestGet } from "../shared/contract.ts";
+import { suggestFeedback, suggestForce, suggestGet } from "../shared/contract.ts";
 import { SUGGEST_WAIT_MS } from "../shared/suggest.ts";
 import { insertSuggestion, registerPillAnchor } from "./composer-bridge.ts";
 
@@ -16,6 +16,8 @@ import { insertSuggestion, registerPillAnchor } from "./composer-bridge.ts";
 type Agent = { id: string; workspaceId?: string | null; status: string; archivedAt?: string | null };
 
 const POLL_MS = 10_000;
+// «Garantizar plan»: what the anchored suggestion pursues — a step of the plan, new work for its own story and session, or verifying.
+const BADGE: Record<string, string> = { "en-plan": "▸", "trabajo-nuevo": "✚", verificar: "✓" };
 const LINE = 18; // one row of the field; `rows` is not in the host's react-native types, so the height is set from here
 const MOBILE_LINE = 22;
 // Mobile field: sized ONCE from the text when the card opens (4 to 10 rows), never while editing — see SuggestCard.
@@ -122,12 +124,21 @@ export function addSuggestPill(client: PluginClientContext): () => void {
   const consumed = new Map<string, string>(); // the suggestion already put in the prompt: the poll must not bring it back until the next turn
   const pendingFor = new Map<string, boolean>(); // a force in flight: the pill shows «…» and is disabled until it settles
   const errors = new Map<string, string>(); // the last force's failure, shown once by the popover
+  const anchors = new Map<string, { en_plan: string | null; criterio: string | null }>(); // badge and criterion of the anchored suggestion
+  const muted = new Set<string>(); // three «no es esto» in a row: the ✦ says it is quiet until clicked
+  const noPills = new Map<string, ReturnType<PluginClientContext["addComposerPill"]>>(); // «no es esto», next to an anchored suggestion
+  const feedback = (agentId: string, verdict: "no-es-esto" | "usada") =>
+    client.rpc(suggestFeedback, { agentId, verdict }).catch(() => ({ muted: false }));
   let stopped = false;
   const lifetime = new AbortController();
 
   const remove = (id: string) => {
     pills.get(id)?.remove();
     pills.delete(id);
+    noPills.get(id)?.remove();
+    noPills.delete(id);
+    anchors.delete(id);
+    muted.delete(id);
     agents.delete(id);
     texts.delete(id);
     consumed.delete(id);
@@ -159,10 +170,17 @@ export function addSuggestPill(client: PluginClientContext): () => void {
     // The suggestion's text goes without a ✦ of its own (the icon is already a Sparkles). The host refuses an empty label
     // («Plugin button needs label», so no pill at all: Dani 02-11, «no sale el botón»): idle and compact fall back to the ✦.
     const compact = compactFor.get(agent.id) ?? false;
+    // An anchored suggestion carries its badge and the criterion it pursues; only the text goes into the prompt.
+    const meta = text ? anchors.get(agent.id) : undefined;
+    const badge = meta?.en_plan ? (BADGE[meta.en_plan] ?? "") : "";
+    const quiet = !text && !pending && !error && muted.has(agent.id);
     const button = {
-      title: text ? "Suggested next message" : pending ? "Generating…" : error ? "Last suggestion failed" : "Suggest now",
+      title: text ? (badge ? `${badge} ${meta?.criterio ?? ""}`.trim() : "Suggested next message")
+        : pending ? "Generating…" : error ? "Last suggestion failed"
+        : quiet ? "La ✦ se calla: tres «no es esto» seguidos. Púlsala para pedir otra." : "Suggest now",
       icon: SuggestIcon,
-      label: !compact && text ? text : pending ? "…" : error ? "!" : "✦",
+      label: !compact && text ? (badge ? `${badge} ${meta?.criterio ? `${meta.criterio} · ` : ""}${text}` : text)
+        : text && badge ? badge : pending ? "…" : error ? "!" : quiet ? "✦ callada" : "✦",
       // Idle agents always carry the pill: with a suggestion it opens the card, without one it is the small ✦ that forces a
       // generation on click (Dani 19-10), spinning while it resolves and showing the failure once if it does not.
       // Hidden while a turn runs — a suggestion is never asked for mid-turn.
@@ -179,10 +197,12 @@ export function addSuggestPill(client: PluginClientContext): () => void {
                 onInserted={() => {
                   consumed.set(agent.id, text);
                   texts.set(agent.id, null);
+                  void feedback(agent.id, "usada");
                   show(agents.get(agent.id) ?? agent); // back to the plain ✦
                 }}
                 send={(t) => {
                   texts.delete(agent.id);
+                  void feedback(agent.id, "usada");
                   void client.paseo.agents.ref(agent.id).send(t);
                 }}
               />
@@ -203,6 +223,7 @@ export function addSuggestPill(client: PluginClientContext): () => void {
                   return { started: false };
                 });
                 if (stopped || !started) return; // off switch
+                muted.delete(agent.id); // the click speaks for the user: the server reset the streak too
                 // The click cannot wait for the answer: the generation outlives the host's 60 s RPC timeout (measured 19-10).
                 // Fast-poll until it settles: the text waits on the pill until its button is pressed, error shows once; the pill spins meanwhile (Dani 19-10, 02-11).
                 pendingFor.set(agent.id, true);
@@ -225,7 +246,7 @@ export function addSuggestPill(client: PluginClientContext): () => void {
                     return;
                   }
                   void client.rpc(suggestGet, { agentId: agent.id }).then(
-                    ({ text: forced, error: failed }) => {
+                    ({ text: forced, error: failed, en_plan, criterio }) => {
                       if (!forced && !failed) return; // still generating: keep spinning
                       clearInterval(id);
                       pendingFor.delete(agent.id);
@@ -233,6 +254,7 @@ export function addSuggestPill(client: PluginClientContext): () => void {
                         errors.set(agent.id, failed);
                       } else {
                         texts.set(agent.id, forced!); // it waits on this pill's button: injecting it here would write into whichever window is in front (Dani 02-11)
+                        anchors.set(agent.id, { en_plan, criterio });
                       }
                       show(agents.get(agent.id) ?? current);
                     },
@@ -244,6 +266,26 @@ export function addSuggestPill(client: PluginClientContext): () => void {
     };
     if (pill) pill.update(button);
     else pills.set(agent.id, client.addComposerPill({ id: "suggest", workspaceId: agent.workspaceId, agentId: agent.id, button }));
+    // «no es esto» only next to an anchored suggestion; three in a row and the server stops generating until the ✦ is clicked.
+    const no = {
+      title: "No es esto: descarta la sugerencia (tres seguidos y la ✦ se calla)",
+      icon: "ThumbsDown",
+      label: "no es esto",
+      visible: agent.status === "idle" && badge !== "",
+      behavior: {
+        kind: "action" as const,
+        onPress: async () => {
+          const { muted: quieted } = await feedback(agent.id, "no-es-esto");
+          texts.set(agent.id, null);
+          anchors.delete(agent.id);
+          if (quieted) muted.add(agent.id);
+          show(agents.get(agent.id) ?? agent);
+        },
+      },
+    };
+    const noPill = noPills.get(agent.id);
+    if (noPill) noPill.update(no);
+    else noPills.set(agent.id, client.addComposerPill({ id: "suggest-no", workspaceId: agent.workspaceId, agentId: agent.id, button: no }));
   };
 
   void client.paseo.agents
@@ -269,11 +311,14 @@ export function addSuggestPill(client: PluginClientContext): () => void {
     for (const agent of agents.values()) {
       if (agent.status !== "idle") continue;
       void client.rpc(suggestGet, { agentId: agent.id }).then(
-        ({ text }) => {
+        ({ text, en_plan, criterio, muted: quiet }) => {
           if (stopped) return;
           const shown = text === consumed.get(agent.id) ? null : text;
-          const changed = texts.get(agent.id) !== shown;
+          const changed = texts.get(agent.id) !== shown || muted.has(agent.id) !== quiet;
           texts.set(agent.id, shown);
+          anchors.set(agent.id, { en_plan, criterio });
+          if (quiet) muted.add(agent.id);
+          else muted.delete(agent.id);
           if (changed) show(agent);
         },
         () => {},

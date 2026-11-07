@@ -35,16 +35,15 @@ This plugin was built for one setup and is published as it runs there. Read this
   a session with no real model yet gets no call. Without the endpoint no pill ever appears (`paseo plugin logs paseo-sugiere`
   says "the model door (LiteLLM) did not answer").
 - **Cost.** Each suggestion sends the conversation (up to ~100k tokens) to the session's model, without sharing the session's cache.
-- **Spanish by default.** The built-in instruction asks for the suggestion in Spanish and the settings screen is in Spanish. For
-  another language or style, put your own instruction in `~/.local/state/paseo-sugiere/prompt.txt`: it is read on every
-  suggestion, and a missing or empty file means the built-in one.
+- **Spanish by default.** The instruction asks for the suggestion in Spanish and the settings screen is in Spanish. The
+  instruction lives in the `sugiere` service only; the plugin sends none.
 - Paseo `>=0.11.2 <0.12.0`.
 
 ## What it reads, sends and writes
 
 - **Reads** the agent's transcript (`<CLAUDE_CONFIG_DIR or ~/.claude>/projects/*/<session>.jsonl`, located through the Claude
-  providers in `$PASEO_HOME/config.json`), and, optionally, `~/.local/state/paseo-sugiere/prompt.txt`, a file that replaces
-  the built-in instruction.
+  providers in `$PASEO_HOME/config.json`), and, if present, `~/.local/state/paseo-plan/anchor-<agentId>.json`, the ticket's plan anchor
+  written by paseo-plan (used only with its `guard` on).
 - **Sends** the text of the conversation (your messages and the assistant's replies since the last compaction; past about
   400,000 characters the oldest are left out), the instruction and one closing question to that endpoint and nowhere else,
   with the key from `~/.config/claude-local/env`. Tool calls, tool results and thinking are removed before the call. From

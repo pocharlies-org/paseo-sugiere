@@ -57,8 +57,8 @@ export async function sugiereRequest(
   sid: string,
   turno: number,
   lines: string[],
-  instruccion: string,
-): Promise<{ status: number; sugerencia: string; modelo: string }> {
+  plan: object | null,
+): Promise<{ status: number; sugerencia: string; modelo: string; en_plan: string | null; criterio: string | null }> {
   const base = (process.env.SUGIERE_URL || "http://sugiere.llm.svc:8080").replace(/\/+$/, "");
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), SUGIERE_TIMEOUT_MS);
@@ -66,7 +66,7 @@ export async function sugiereRequest(
     const response = await fetch(`${base}/v1/suggest`, {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ sid, turno, transcript: lines.join("\n"), contexto: { kind: "live", ...(instruccion ? { instruccion } : {}) } }),
+      body: JSON.stringify({ sid, turno, transcript: lines.join("\n"), contexto: { kind: "live", ...(plan ? { plan } : {}) } }),
       signal: controller.signal,
     });
     const out = response.ok ? ((await response.json().catch(() => ({}))) as Record<string, unknown>) : {};
@@ -74,6 +74,8 @@ export async function sugiereRequest(
       status: response.status,
       sugerencia: typeof out.sugerencia === "string" ? out.sugerencia.trim() : "",
       modelo: typeof out.modelo === "string" ? out.modelo : "",
+      en_plan: typeof out.en_plan === "string" ? out.en_plan : null,
+      criterio: typeof out.criterio === "string" && out.criterio ? out.criterio : null,
     };
   } catch {
     throw new SessionError("servicio");

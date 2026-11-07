@@ -36,8 +36,12 @@ no consume su contrato `file.claude-cuentas.v1`: la llamada va a LiteLLM con la 
 - Configurable: pantalla propia «Sugerencia del siguiente mensaje» en los ajustes de Paseo — interruptor
   `enabled` (al desactivar se tiran las sugerencias pendientes y mostradas) y ventana de silencio
   (30/60/120/300 s). El documento vive en el host (`shared/settings.ts`); el server lo obedece al vuelo.
-- La instrucción que recibe el modelo se cambia a mano en `~/.local/state/paseo-sugiere/prompt.txt` (vacío = la del plugin; se
-  lee con cada generación, no hace falta reiniciar). No hay editor en la píldora: la píldora es para enviar (Dani 17-10).
+- La instrucción vive solo en el servicio `sugiere` (decisión 5 de Dani): el plugin no manda ninguna y
+  `~/.local/state/paseo-sugiere/prompt.txt` ya no se lee. No hay editor en la píldora: la píldora es para enviar (Dani 17-10).
+- **Garantizar plan**: si `~/.local/state/paseo-plan/anchor-<agentId>.json` (lo escribe paseo-plan) tiene
+  `guard: true` y criterios, al acabar cada turno de ese agente se pide la sugerencia con el plan, sin ventana de silencio y aunque
+  `auto` esté apagado. La ✦ enseña la insignia (▸ paso del plan, ✚ trabajo nuevo, ✓ verificar) y el criterio; al lado sale
+  «no es esto», y tres seguidos callan la ✦ hasta que la pulses. Enviar sigue siendo tu toque.
 
 ## Qué lee y envía
 
