@@ -52,6 +52,7 @@ describe("con plan", () => {
     assert.match(PLAN_INSTRUCTION, /TODOS los criterios están verificados[\s\S]*entregar[\s\S]*Con un solo criterio abierto, el ticket no se cierra/);
     assert.match(PLAN_INSTRUCTION, /Un error en <hechos> posterior a una evidencia la invalida/);
     assert.match(PLAN_INSTRUCTION, /rutas, el error literal, la PR, el comando/);
+    assert.match(PLAN_INSTRUCTION, /la PR fusionada y el resumen puesto[\s\S]*cerrar la sesión y archivarla[\s\S]*"cerrar"/);
   });
 
   it("acepta la forma del ancla de paseo-plan (ticketKey, evidencia objeto) y las tareas", () => {
@@ -93,6 +94,11 @@ describe("la respuesta anclada", () => {
   it("un en_plan fuera de la lista no pinta insignia; sin JSON, el texto es la sugerencia", () => {
     assert.equal(planAnswer(r('{"en_plan":"otro","criterio":"C1","sugerencia":"sigue"}')).en_plan, null);
     assert.deepEqual(planAnswer(r("Abre la PR")), { texto: "Abre la PR", en_plan: null, criterio: "" });
+  });
+
+  it("«cerrar» es un en_plan válido: con la entrega hecha la sugerencia es cerrar y archivar", () => {
+    assert.deepEqual(planAnswer(r('{"en_plan":"cerrar","criterio":"cierre","sugerencia":"Cierra la sesión y archívala"}')),
+      { texto: "Cierra la sesión y archívala", en_plan: "cerrar", criterio: "cierre" });
   });
 
   it("los filtros de siempre: una pregunta o la sugerencia vacía no llevan insignia", () => {

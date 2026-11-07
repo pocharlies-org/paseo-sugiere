@@ -1,7 +1,7 @@
 import type { PluginButtonContentProps, PluginButtonIconProps, PluginClientContext } from "@getpaseo/plugin/client";
 import { Icon, TextInput } from "@getpaseo/plugin/client/react-native";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Pressable, Text, View } from "react-native";
+import { Animated, Easing, Pressable, Text, View } from "react-native";
 import { suggestFeedback, suggestForce, suggestGet } from "../shared/contract.ts";
 import { SUGGEST_WAIT_MS } from "../shared/suggest.ts";
 import { insertSuggestion, registerPillAnchor } from "./composer-bridge.ts";
@@ -16,8 +16,13 @@ import { insertSuggestion, registerPillAnchor } from "./composer-bridge.ts";
 type Agent = { id: string; workspaceId?: string | null; status: string; archivedAt?: string | null };
 
 const POLL_MS = 10_000;
-// «Garantizar plan»: what the anchored suggestion pursues — a step of the plan, new work for its own story and session, or verifying.
-const BADGE: Record<string, string> = { "en-plan": "▸", "trabajo-nuevo": "✚", verificar: "✓" };
+// «Garantizar plan»: what the anchored suggestion pursues — a step of the plan, new work for its own story and session, verifying,
+// or closing the session once the plan is delivered.
+const BADGE: Record<string, string> = { "en-plan": "▸", "trabajo-nuevo": "✚", verificar: "✓", cerrar: "■" };
+// The recuadro of the icon says the pill's state (Dani 07-11): amarillo = generating (the star spins), verde = a suggestion is
+// ready, azul = it can be asked for, rojo = the last force failed. The host paints the pill's own frame with a global theme token
+// (`borderAccent`, no per-pill hook in the plugin API), so the state frame is the icon's box — it carries the color on every client.
+const ESTADO_COLOR: Record<string, string> = { generando: "#eab308", lista: "#22c55e", pedible: "#3b82f6", error: "#ef4444" };
 const LINE = 18; // one row of the field; `rows` is not in the host's react-native types, so the height is set from here
 const MOBILE_LINE = 22;
 // Mobile field: sized ONCE from the text when the card opens (4 to 10 rows), never while editing — see SuggestCard.
@@ -90,12 +95,17 @@ function SuggestCard({
 // amontonados»): the icon, the pill's only component, hands it over here and the label drops the text from there.
 const compactFor = new Map<string, boolean>();
 const compactReported = new Map<string, (compact: boolean) => void>();
+// The state of each pill, set by show() before the host re-renders the icon (the icon component gets no props of its own).
+const estadoFor = new Map<string, string>();
 
 // The pill's icon is also the anchor of the composer bridge: the popover's content is portaled to body, the icon sits in the pane.
 function SuggestIcon(props: PluginButtonIconProps) {
   const node = useRef<View>(null);
   const agentId = props.context === "agent" ? props.agentId : null;
   const { compact } = props.layout;
+  const estado = (agentId && estadoFor.get(agentId)) || "pedible";
+  const color = ESTADO_COLOR[estado] ?? ESTADO_COLOR.pedible;
+  const giro = useRef(new Animated.Value(0)).current;
   useEffect(() => {
     if (agentId) compactReported.get(agentId)?.(compact);
   }, [agentId, compact]);
@@ -104,9 +114,22 @@ function SuggestIcon(props: PluginButtonIconProps) {
     if (!agentId || compact || !node.current) return;
     return registerPillAnchor(agentId, node.current as unknown as Element);
   }, [agentId, compact]);
+  useEffect(() => {
+    // Mientras genera, la estrella gira sin parar (Dani 07-11: «como un gif, moviéndose») — en vez de los puntos suspensivos.
+    if (estado !== "generando") {
+      giro.setValue(0);
+      return;
+    }
+    const loop = Animated.loop(Animated.timing(giro, { toValue: 1, duration: 1400, easing: Easing.linear, useNativeDriver: false }));
+    loop.start();
+    return () => loop.stop();
+  }, [estado, giro]);
+  const angle = giro.interpolate({ inputRange: [0, 1], outputRange: ["0deg", "360deg"] });
   return (
-    <View ref={node}>
-      <Icon name="Sparkles" size={props.size} color={props.color} />
+    <View ref={node} style={{ borderWidth: 1, borderRadius: props.size + 6, borderColor: color, padding: 2, alignItems: "center", justifyContent: "center" }}>
+      <Animated.View style={{ transform: [{ rotate: angle }] }}>
+        <Icon name="Sparkles" size={props.size} color={color} />
+      </Animated.View>
     </View>
   );
 }
@@ -122,7 +145,7 @@ export function addSuggestPill(client: PluginClientContext): () => void {
   const pills = new Map<string, ReturnType<PluginClientContext["addComposerPill"]>>();
   const texts = new Map<string, string | null>();
   const consumed = new Map<string, string>(); // the suggestion already put in the prompt: the poll must not bring it back until the next turn
-  const pendingFor = new Map<string, boolean>(); // a force in flight: the pill shows «…» and is disabled until it settles
+  const pendingFor = new Map<string, boolean>(); // a force in flight: the pill's star spins in a yellow frame, disabled until it settles
   const errors = new Map<string, string>(); // the last force's failure, shown once by the popover
   const anchors = new Map<string, { en_plan: string | null; criterio: string | null }>(); // badge and criterion of the anchored suggestion
   const muted = new Set<string>(); // three «no es esto» in a row: the ✦ says it is quiet until clicked
@@ -146,6 +169,7 @@ export function addSuggestPill(client: PluginClientContext): () => void {
     errors.delete(id);
     compactFor.delete(id);
     compactReported.delete(id);
+    estadoFor.delete(id);
   };
   const show = (agent: Agent) => {
     if (stopped) return;
@@ -160,6 +184,7 @@ export function addSuggestPill(client: PluginClientContext): () => void {
     const text = agent.status === "idle" ? (texts.get(agent.id) ?? null) : null;
     const pending = pendingFor.get(agent.id) ?? false;
     const error = errors.get(agent.id) ?? null;
+    estadoFor.set(agent.id, pending ? "generando" : text ? "lista" : error ? "error" : "pedible");
     const pill = pills.get(agent.id);
     compactReported.set(agent.id, (next) => {
       if (compactFor.get(agent.id) === next) return;
@@ -180,7 +205,7 @@ export function addSuggestPill(client: PluginClientContext): () => void {
         : quiet ? "La ✦ se calla: tres «no es esto» seguidos. Púlsala para pedir otra." : "Suggest now",
       icon: SuggestIcon,
       label: !compact && text ? (badge ? `${badge} ${meta?.criterio ? `${meta.criterio} · ` : ""}${text}` : text)
-        : text && badge ? badge : pending ? "…" : error ? "!" : quiet ? "✦ callada" : "✦",
+        : text && badge ? badge : pending ? "\u200b" : error ? "!" : quiet ? "✦ callada" : "✦", // sin «…»: la estrella amarilla gira (Dani 07-11); el host rechaza label vacía o en blanco (validation.ts requireText), el espacio de ancho cero la pasa y no se ve
       // Idle agents always carry the pill: with a suggestion it opens the card, without one it is the small ✦ that forces a
       // generation on click (Dani 19-10), spinning while it resolves and showing the failure once if it does not.
       // Hidden while a turn runs — a suggestion is never asked for mid-turn.
