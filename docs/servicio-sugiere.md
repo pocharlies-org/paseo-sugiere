@@ -301,12 +301,13 @@ Entrada:
 
 ```json
 {"sid": "…", "turno": "…", "transcript": "<.jsonl tal cual>",
- "contexto": {"cwd": "/home/<usuario>/k8s/<repo>", "kind": "live|company", "key": "<clave del ticket>", "plan": {"…ancla de paseo-plan…"}},
+ "contexto": {"cwd": "/home/<usuario>/k8s/<repo>", "kind": "live|company", "key": "<clave del ticket>", "plan": {"…ancla de paseo-plan…"},
+              "topes": {"max_seguidos": 0, "max_total": 0}},
  "nativa": "<sugerencia nativa del daemon; no se manda si hay ancla de plan>"}
 ```
 
-`sid`, `turno`, `transcript` y `contexto.cwd` son obligatorios (`422` si faltan); `plan` es el mismo objeto de §2 y `nativa`
-un texto de como mucho 4000 caracteres.
+`sid`, `turno`, `transcript` y `contexto.cwd` son obligatorios (`422` si faltan); `plan` es el mismo objeto de §2, `nativa`
+un texto de como mucho 4000 caracteres y `topes` (opcional) dos enteros ≥ 0, donde 0 es sin tope (`422` si no).
 
 Salida (`200`):
 
@@ -327,7 +328,7 @@ Tabla de decisión, en orden (lo determinista antes que cualquier modelo):
 | 2 | `PARA DANI` (o `ESTADO: PREGUNTA/BLOQUEO`) con importe (`DINERO_RE` del supervisor) o `PARA DANI (alcance):` | `humano` |
 | 3 | alguna `ESPERA:` vigilable que no sea `fichero` | `esperar` (la despierta el `EVENTO:` del supervisor) |
 | 4 | `PARA IT:` / `PARA SECURITY:` / `PARA QA:` | `esperar` |
-| 5 | topes (`max_seguidos`, `max_total`) superados | `humano` |
+| 5 | un tope configurado (`max_seguidos`, `max_total`, distinto de 0) superado | `humano` |
 | 6 | primer paso del autopilot sin ticket (ni `contexto.key` ni el del ancla) | `enviar` · `arranque` (el ticket primero) |
 | 7 | `PARA DANI` sin dinero | `enviar` · `devolver` (elige la recomendada, `DECISIÓN TOMADA:`); si insiste justo después, `humano` |
 | 8 | `ESTADO: ENTREGA` sin plan, o plan con todos los criterios verificados | `enviar` · `entregar` (el prompt de la entrega, con los números del autopilot); pedida y no cerrada en el turno siguiente, `humano` |
@@ -339,8 +340,10 @@ Tabla de decisión, en orden (lo determinista antes que cualquier modelo):
 - La racha: los mensajes de usuario que empiezan por `[AUTOPILOT]` son del autopilot; un `EVENTO:` o un mensaje humano ponen
   `seguidos` a 0; lo que manda el sistema (`RETOMA:`, `[SUPERVISOR]`, el feedback del hook `Stop`, recordatorios) no cuenta.
   La fase anterior (devolver, entregar, desvío) solo cuenta dentro de la racha.
-- Topes: `max_seguidos` 15 y `max_total` 40 (decisión 3 de Dani), en `/etc/sugiere/autopilot.json` (`AUTOPILOT_FICHERO`), el
-  ConfigMap montado `sugiere-clasificador`, releído en cada petición como `brain.json`. Ausente o ilegible, esos valores.
+- Topes: **0 = sin tope, y es lo de fábrica** (Dani, 07-11: «si es autopilot es autopilot»). Manda `contexto.topes`, que el plugin
+  saca de sus ajustes; si el llamante no los manda, los de `/etc/sugiere/autopilot.json` (`AUTOPILOT_FICHERO`, el ConfigMap montado
+  `sugiere-clasificador`, releído en cada petición como `brain.json`); sin fichero, sin tope. Sin topes siguen los cortes que no
+  cuentan pasos: el mismo paso dos veces, insistir en preguntar a Dani, un segundo veto seguido y la entrega pedida y no cerrada.
 - Todo lo que propone el autopilot va prefijado `[AUTOPILOT] `. Las plantillas (`arranque`, `devolver`, `desvio`, `entregar`)
   son texto fijo y no pasan por la puerta; el paso del modelo (`seguir`) sí, siempre.
 - **Desviación declarada de la regla transversal de §6** («el servicio nunca deja un ticket en silencio»): en `live`,
