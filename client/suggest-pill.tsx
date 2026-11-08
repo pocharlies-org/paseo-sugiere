@@ -6,6 +6,7 @@ import { AccessibilityInfo, Animated, Easing, Pressable, Text, View } from "reac
 import { autopilotSet, suggestFeedback, suggestForce, suggestGet } from "../shared/contract.ts";
 import { SUGGEST_WAIT_MS } from "../shared/suggest.ts";
 import { insertSuggestion, registerPillAnchor } from "./composer-bridge.ts";
+import { marco } from "./marco.ts";
 
 // One composer pill per idle agent (with the autopilot on, also mid-turn): with a suggestion ready it opens the card, without one it is a small ✦ whose popover forces a
 // generation now (Dani 19-10) or switches the agent's autopilot on (Dani 07-11; then the ✦ is gold, or red when it needs a person). Nothing reaches the prompt without a press: a generation that finishes while another window is in
@@ -174,23 +175,26 @@ function SuggestIcon(props: PluginButtonIconProps) {
     return () => loop.stop();
   }, [estado, pulso, reduced]);
   const angle = giro.interpolate({ inputRange: [0, 1], outputRange: ["0deg", "360deg"] });
-  const scale = pulso.interpolate({ inputRange: [0, 1], outputRange: [1, 1.18] });
+  const m = marco(props.size, estado);
+  const scale = pulso.interpolate({ inputRange: [0, 1], outputRange: [1, m.latido] });
   const halo = pulso.interpolate({ inputRange: [0, 1], outputRange: ["rgba(255,23,68,0.15)", "rgba(255,23,68,0.45)"] });
   return (
     <View ref={node}>
       <Animated.View
         style={{
-          borderWidth: estado === "humano" ? 2 : 1,
-          borderRadius: props.size + 6,
+          width: m.lado,
+          height: m.lado,
+          borderWidth: m.borde,
+          borderRadius: m.lado / 2,
           borderColor: color,
-          padding: 2,
+          padding: m.padding,
           alignItems: "center",
           justifyContent: "center",
           ...(estado === "humano" ? { backgroundColor: halo, transform: [{ scale }] } : {}),
         }}
       >
         <Animated.View style={{ transform: [{ rotate: angle }] }}>
-          <Icon name="Sparkles" size={props.size} color={color} />
+          <Icon name="Sparkles" size={m.icono} color={color} />
         </Animated.View>
       </Animated.View>
     </View>
