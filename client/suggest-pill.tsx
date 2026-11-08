@@ -6,6 +6,7 @@ import { AccessibilityInfo, Animated, Easing, Pressable, Text, View } from "reac
 import { autopilotSet, suggestFeedback, suggestForce, suggestGet } from "../shared/contract.ts";
 import { SUGGEST_WAIT_MS } from "../shared/suggest.ts";
 import { insertSuggestion, registerPillAnchor } from "./composer-bridge.ts";
+import { gira } from "./estrella.ts";
 
 // One composer pill per idle agent (with the autopilot on, also mid-turn): with a suggestion ready it opens the card, without one it is a small ✦ whose popover forces a
 // generation now (Dani 19-10) or switches the agent's autopilot on (Dani 07-11; then the ✦ is gold, or red when it needs a person). Nothing reaches the prompt without a press: a generation that finishes while another window is in
@@ -23,15 +24,15 @@ const BADGE: Record<string, string> = { "en-plan": "▸", "trabajo-nuevo": "✚"
 // The star's color says the pill's state (Dani 07-11): amarillo = generating (the star spins), verde = a suggestion is ready,
 // azul = it can be asked for, rojo = the last force failed. No ring around it (Dani 08-11: «saca el círculo y deja solo las
 // estrellas»): the host paints the pill's frame with one global theme token, so the star is the only thing that carries the state.
-// With the autopilot on (Dani 07-11): dorado while it works or waits (the star spins while it asks the service), rojo brillante
-// beating when it needs a person.
+// With the autopilot on: amarillo and spinning the whole time it is on — working, asking the service or waiting for an event
+// (Dani 08-11: «tienes que tener la estrella amarilla mientras está en marcha rodando») —, rojo brillante beating when it needs a person.
 const ESTADO_COLOR: Record<string, string> = {
   generando: "#eab308",
   lista: "#22c55e",
   pedible: "#3b82f6",
   error: "#ef4444",
-  autopilot: "#d4a017",
-  pensando: "#d4a017",
+  autopilot: "#eab308",
+  pensando: "#eab308",
   humano: "#ff1744",
 };
 type Autopilot = { on: boolean; estado: string; motivo: string; desde?: string; decidido?: string; pasos?: { seguidos: number; total: number }; enviado?: string };
@@ -171,8 +172,8 @@ function SuggestIcon(props: PluginButtonIconProps) {
     return registerPillAnchor(agentId, node.current as unknown as Element);
   }, [agentId, compact]);
   useEffect(() => {
-    // Mientras genera, la estrella gira sin parar (Dani 07-11: «como un gif, moviéndose») — en vez de los puntos suspensivos.
-    if ((estado !== "generando" && estado !== "pensando") || reduced) {
+    // Mientras genera o el autopilot está en marcha, la estrella gira sin parar (Dani 07-11: «como un gif, moviéndose»).
+    if (!gira(estado) || reduced) {
       giro.setValue(0);
       return;
     }
