@@ -6,7 +6,6 @@ import { AccessibilityInfo, Animated, Easing, Pressable, Text, View } from "reac
 import { autopilotSet, suggestFeedback, suggestForce, suggestGet } from "../shared/contract.ts";
 import { SUGGEST_WAIT_MS } from "../shared/suggest.ts";
 import { insertSuggestion, registerPillAnchor } from "./composer-bridge.ts";
-import { marco } from "./marco.ts";
 
 // One composer pill per idle agent (with the autopilot on, also mid-turn): with a suggestion ready it opens the card, without one it is a small ✦ whose popover forces a
 // generation now (Dani 19-10) or switches the agent's autopilot on (Dani 07-11; then the ✦ is gold, or red when it needs a person). Nothing reaches the prompt without a press: a generation that finishes while another window is in
@@ -21,11 +20,11 @@ const POLL_MS = 10_000;
 // «Garantizar plan»: what the anchored suggestion pursues — a step of the plan, new work for its own story and session, verifying,
 // or closing the session once the plan is delivered.
 const BADGE: Record<string, string> = { "en-plan": "▸", "trabajo-nuevo": "✚", verificar: "✓", cerrar: "■" };
-// The recuadro of the icon says the pill's state (Dani 07-11): amarillo = generating (the star spins), verde = a suggestion is
-// ready, azul = it can be asked for, rojo = the last force failed. The host paints the pill's own frame with a global theme token
-// (`borderAccent`, no per-pill hook in the plugin API), so the state frame is the icon's box — it carries the color on every client.
+// The star's color says the pill's state (Dani 07-11): amarillo = generating (the star spins), verde = a suggestion is ready,
+// azul = it can be asked for, rojo = the last force failed. No ring around it (Dani 08-11: «saca el círculo y deja solo las
+// estrellas»): the host paints the pill's frame with one global theme token, so the star is the only thing that carries the state.
 // With the autopilot on (Dani 07-11): dorado while it works or waits (the star spins while it asks the service), rojo brillante
-// pulsing when it needs a person.
+// beating when it needs a person.
 const ESTADO_COLOR: Record<string, string> = {
   generando: "#eab308",
   lista: "#22c55e",
@@ -193,26 +192,12 @@ function SuggestIcon(props: PluginButtonIconProps) {
     return () => loop.stop();
   }, [estado, pulso, reduced]);
   const angle = giro.interpolate({ inputRange: [0, 1], outputRange: ["0deg", "360deg"] });
-  const m = marco(estado);
-  const scale = pulso.interpolate({ inputRange: [0, 1], outputRange: [1, m.latido] });
-  const halo = pulso.interpolate({ inputRange: [0, 1], outputRange: ["rgba(255,23,68,0.15)", "rgba(255,23,68,0.45)"] });
+  // The beat shrinks the star instead of growing it: the host clips whatever leaves its icon box (Dani 08-11: «sale cortada»).
+  const scale = pulso.interpolate({ inputRange: [0, 1], outputRange: [1, 0.82] });
   return (
     <View ref={node}>
-      <Animated.View
-        style={{
-          width: m.lado,
-          height: m.lado,
-          borderWidth: m.borde,
-          borderRadius: m.lado / 2,
-          borderColor: color,
-          alignItems: "center",
-          justifyContent: "center",
-          ...(estado === "humano" ? { backgroundColor: halo, transform: [{ scale }] } : {}),
-        }}
-      >
-        <Animated.View style={{ transform: [{ rotate: angle }] }}>
-          <Icon name="Sparkles" size={m.icono} color={color} />
-        </Animated.View>
+      <Animated.View style={{ transform: [{ rotate: angle }, { scale }] }}>
+        <Icon name="Sparkles" size={props.size} color={color} />
       </Animated.View>
     </View>
   );
