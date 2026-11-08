@@ -25,6 +25,25 @@ function blocks(content: unknown): Block[] {
   return out;
 }
 
+/** What the `sugiere` service reads of a session: everything since its last compaction (`transcriptMessages`), and before it only
+ * the user's own messages, which the autopilot counts over the whole session (`racha`, service/cierre.ts). A session open for weeks
+ * is tens of MB, nearly all tool results, and the service refuses a transcript over 32 MiB with a 422 (measured 08-11: 77 MB → 6.7 MB). */
+export function forService(lines: string[]): string[] {
+  const boundary = lines.findLastIndex((l) => l.includes('"compact_boundary"'));
+  if (boundary <= 0) return lines;
+  const userText = (line: string) => {
+    if (!line.includes('"user"')) return false;
+    try {
+      const entry = JSON.parse(line);
+      const content = entry?.message?.content;
+      return entry?.type === "user" && (typeof content === "string" || (Array.isArray(content) && !content.some((b: any) => b?.type === "tool_result")));
+    } catch {
+      return false;
+    }
+  };
+  return [...lines.slice(0, boundary).filter(userText), ...lines.slice(boundary)];
+}
+
 /** The messages of the transcript since its last compaction, and the last real model the session used (null if none: no assistant yet, or only synthetic ones). */
 export function transcriptMessages(lines: string[]): { messages: Message[]; model: string | null } {
   const start = lines.findLastIndex((l) => l.includes('"compact_boundary"')) + 1;
