@@ -16,3 +16,7 @@ export function marco(estado: string): { lado: number; borde: number; icono: num
 /** How far the farthest tip of a Sparkles star of side `icono` reaches from its centre, stroke included: lucide's cross is
  * centred at (21, 4) of its 24-unit box and its stroke is 2 units. */
 export const puntaSparkles = (icono: number): number => icono * (Math.hypot(21 / 24 - 0.5, 4 / 24 - 0.5) + 1 / 24);
+
+/** The star spins while something is under way: a suggestion being generated, and the autopilot the whole time it is on
+ * («autopilot» working or waiting, «pensando» asking the service). Red («humano») beats instead. */
+export const gira = (estado: string): boolean => estado === "generando" || estado === "pensando" || estado === "autopilot";
