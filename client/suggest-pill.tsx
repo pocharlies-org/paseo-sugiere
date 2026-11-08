@@ -34,14 +34,31 @@ const ESTADO_COLOR: Record<string, string> = {
   pensando: "#d4a017",
   humano: "#ff1744",
 };
-type Autopilot = { on: boolean; estado: string; motivo: string };
+type Autopilot = { on: boolean; estado: string; motivo: string; desde?: string; decidido?: string; pasos?: { seguidos: number; total: number }; enviado?: string };
 const OFF: Autopilot = { on: false, estado: "apagado", motivo: "" };
 /** What the autopilot is doing, in one line: the pill's label and the popover's status. */
 export function autopilotLine({ estado, motivo }: Autopilot): string {
   if (estado === "humano") return `necesita acción: ${motivo || "sin motivo"}`;
   if (estado === "esperando") return `esperando: ${motivo || "un evento"}`;
-  if (estado === "pensando") return "autopilot: decidiendo el siguiente paso";
+  if (estado === "pensando") return `autopilot: ${motivo || "pidiendo el siguiente paso"}`;
   return "autopilot: trabajando";
+}
+export function hace(iso: string | undefined, now = Date.now()): string {
+  const t = iso ? Date.parse(iso) : NaN;
+  if (Number.isNaN(t)) return "";
+  const s = Math.max(0, Math.round((now - t) / 1000));
+  return s < 60 ? `hace ${s} s` : s < 3600 ? `hace ${Math.round(s / 60)} min` : `hace ${Math.round(s / 3600)} h`;
+}
+/** The popover's lines under the status (Dani 08-11: «ver si está en marcha, cuántas lleva»): who wakes a wait, the step count,
+ * since when it is on and when the service last decided, and the last message it sent. */
+export function autopilotDetails(a: Autopilot, now = Date.now()): string[] {
+  const out: string[] = [];
+  if (a.estado === "esperando") out.push("sigue solo cuando llegue el EVENTO del supervisor");
+  if (a.pasos) out.push(`${a.pasos.seguidos} pasos seguidos · ${a.pasos.total} en la sesión`);
+  const cuando = [a.desde ? `encendido ${hace(a.desde, now)}` : "", a.decidido ? `última decisión ${hace(a.decidido, now)}` : ""].filter(Boolean);
+  if (cuando.length) out.push(cuando.join(" · "));
+  if (a.enviado) out.push(`último envío: «${a.enviado.length > 140 ? `${a.enviado.slice(0, 140)}…` : a.enviado}»`);
+  return out;
 }
 const LINE = 18; // one row of the field; `rows` is not in the host's react-native types, so the height is set from here
 const MOBILE_LINE = 22;
@@ -68,8 +85,9 @@ function SuggestCard({
   onInserted,
   autopilot,
   toggle,
+  refresh,
   layout: { compact },
-}: PluginButtonContentProps & { text: string; send: (text: string) => void; agentId: string; onInserted: () => void; autopilot: Autopilot; toggle: (on: boolean) => Promise<Autopilot> }) {
+}: PluginButtonContentProps & { text: string; send: (text: string) => void; agentId: string; onInserted: () => void; autopilot: Autopilot; toggle: (on: boolean) => Promise<Autopilot>; refresh: () => Promise<Autopilot> }) {
   const [inserted, setInserted] = useState<boolean | null>(null); // null while the bridge decides
   useEffect(() => {
     const done = text !== "" && insertSuggestion(agentId, text);
@@ -111,7 +129,7 @@ function SuggestCard({
           <Text style={styles.arrow}>{compact ? "Send ↑" : "↑"}</Text>
         </Pressable>
       </View>
-      <AutopilotPanel theme={theme} autopilot={autopilot} toggle={toggle} />
+      <AutopilotPanel theme={theme} autopilot={autopilot} toggle={toggle} refresh={refresh} />
     </View>
   );
 }
@@ -200,9 +218,15 @@ function SuggestIcon(props: PluginButtonIconProps) {
 // The «Autopilot» switch (Dani 07-11): on, the session is piloted alone until it is done — at the end of every turn the sugiere
 // service says what to do and the plugin obeys. Not «Sugerir automáticamente», which only proposes messages for the user to send.
 // In the ✦'s popover (with «Sugerir ahora» while it is off) and in the mobile card.
-function AutopilotPanel({ theme, autopilot, toggle, suggestNow }: { theme: PluginButtonContentProps["theme"]; autopilot: Autopilot; toggle: (on: boolean) => Promise<Autopilot>; suggestNow?: () => void }) {
+function AutopilotPanel({ theme, autopilot, toggle, refresh, suggestNow }: { theme: PluginButtonContentProps["theme"]; autopilot: Autopilot; toggle: (on: boolean) => Promise<Autopilot>; refresh: () => Promise<Autopilot>; suggestNow?: () => void }) {
   const [state, setState] = useState(autopilot);
   const [busy, setBusy] = useState(false);
+  // Open, it reads its own state every few seconds: the host does not repaint an open popover, and «what is it doing» is the point.
+  useEffect(() => {
+    if (!state.on) return;
+    const timer = setInterval(() => void refresh().then(setState, () => {}), 3_000);
+    return () => clearInterval(timer);
+  }, [state.on]);
   return (
     <View style={{ gap: 4, minWidth: 260, maxWidth: 340 }}>
       {suggestNow && !state.on ? <SettingsAction label="Sugerencia" hint="Propone ahora el siguiente mensaje; lo envías tú" actionLabel="Sugerir ahora" onPress={suggestNow} /> : null}
@@ -217,8 +241,11 @@ function AutopilotPanel({ theme, autopilot, toggle, suggestNow }: { theme: Plugi
         }}
       />
       {state.on ? (
-        <Text style={{ color: state.estado === "humano" ? ESTADO_COLOR.humano : theme.colors.foregroundMuted, fontSize: 13 }}>{autopilotLine(state)}</Text>
+        <Text style={{ color: state.estado === "humano" ? ESTADO_COLOR.humano : theme.colors.foreground, fontSize: 13 }}>{autopilotLine(state)}</Text>
       ) : null}
+      {state.on ? autopilotDetails(state).map((detail) => (
+        <Text key={detail} style={{ color: theme.colors.foregroundMuted, fontSize: 12 }}>{detail}</Text>
+      )) : null}
     </View>
   );
 }
@@ -247,6 +274,7 @@ export function addSuggestPill(client: PluginClientContext): () => void {
     if (current) show(current);
     return next;
   };
+  const refresh = (agentId: string) => () => client.rpc(suggestGet, { agentId }).then(({ autopilot = OFF }) => autopilot);
   const feedback = (agentId: string, verdict: "no-es-esto" | "usada") =>
     client.rpc(suggestFeedback, { agentId, verdict }).catch(() => ({ muted: false }));
   let stopped = false;
@@ -305,14 +333,14 @@ export function addSuggestPill(client: PluginClientContext): () => void {
     const panel = (suggestNow?: () => void) => ({
       kind: "popover" as const,
       Content: (props: PluginButtonContentProps) => (
-        <AutopilotPanel theme={props.theme} autopilot={autopilot} toggle={toggle(agent.id)} suggestNow={suggestNow && (() => { props.close(); void suggestNow(); })} />
+        <AutopilotPanel theme={props.theme} autopilot={autopilot} toggle={toggle(agent.id)} refresh={refresh(agent.id)} suggestNow={suggestNow && (() => { props.close(); void suggestNow(); })} />
       ),
     });
     // The autopilot speaks with the ✦ alone: gold while it works or waits, red when it needs a person, and its popover is the switch.
     const button = piloted ? {
       title: autopilotLine(piloted),
       icon: SuggestIcon,
-      label: compact ? "✦" : piloted.estado === "humano" || piloted.estado === "esperando" ? autopilotLine(piloted).slice(0, 60) : "autopilot",
+      label: compact ? "✦" : piloted.estado === "activo" ? "autopilot" : autopilotLine(piloted).slice(0, 60),
       visible: true, // also while a turn runs: the switch must be reachable to stop it mid-turn
       disabled: false,
       behavior: panel(),
@@ -339,6 +367,7 @@ export function addSuggestPill(client: PluginClientContext): () => void {
                 agentId={agent.id}
                 autopilot={autopilot}
                 toggle={toggle(agent.id)}
+                refresh={refresh(agent.id)}
                 onInserted={() => {
                   consumed.set(agent.id, text);
                   texts.set(agent.id, null);

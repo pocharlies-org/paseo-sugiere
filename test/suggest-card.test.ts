@@ -228,6 +228,15 @@ test("a piloted ✦ is gold while it waits, red when it needs a person, and its 
   assert.deepEqual(toggles, [{ agentId: "a", on: false }]);
   assert.equal(next.on, false);
   assert.equal(buttons.suggest.visible, false, "off, the ✦ is the plain one again: hidden while the turn runs");
-  assert.equal(exports.autopilotLine({ on: true, estado: "pensando", motivo: "" }), "autopilot: decidiendo el siguiente paso");
+  assert.equal(exports.autopilotLine({ on: true, estado: "pensando", motivo: "" }), "autopilot: pidiendo el siguiente paso");
+  const now = Date.parse("2026-11-08T12:00:00Z");
+  assert.deepEqual(
+    exports.autopilotDetails(
+      { on: true, estado: "esperando", motivo: "jira SC-1", desde: "2026-11-08T11:00:00Z", decidido: "2026-11-08T11:59:30Z", pasos: { seguidos: 2, total: 9 }, enviado: "[AUTOPILOT] sigue" },
+      now,
+    ),
+    ["sigue solo cuando llegue el EVENTO del supervisor", "2 pasos seguidos · 9 en la sesión", "encendido hace 1 h · última decisión hace 30 s", "último envío: «[AUTOPILOT] sigue»"],
+  );
+  assert.deepEqual(exports.autopilotDetails({ on: true, estado: "activo", motivo: "" }, now), [], "nothing invented before the first decision");
   stop();
 });

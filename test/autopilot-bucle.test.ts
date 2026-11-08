@@ -48,6 +48,7 @@ const until = async (done: () => boolean, what: string) => {
 };
 const quiet = () => new Promise((resolve) => setImmediate(() => setImmediate(resolve))); // only where nothing must happen
 const estado = () => autopilot.get("a1").estado;
+const brief = () => (({ on, estado, motivo }) => ({ on, estado, motivo }))(autopilot.get("a1")); // the three fields the ✦ paints
 const file = () => JSON.parse(readFileSync(join(HOME, ".local", "state", "paseo-sugiere", "autopilot.json"), "utf8"));
 
 describe("the autopilot loop of the plugin", () => {
@@ -65,7 +66,7 @@ describe("the autopilot loop of the plugin", () => {
   after(() => rmSync(HOME, { recursive: true, force: true }));
 
   it("switched on over a session waiting on the user, asks at once; enviar sends the message", async () => {
-    answers = [{ status: 200, body: { accion: "enviar", mensaje: "[AUTOPILOT] sigue con los tests", fase: "seguir", motivo: "ok" } }];
+    answers = [{ status: 200, body: { accion: "enviar", mensaje: "[AUTOPILOT] sigue con los tests", fase: "seguir", motivo: "ok", pasos: { seguidos: 3, total: 7 } } }];
     autopilot.setTopes(15, 0);
     await autopilot.set("a1", true, paseo);
     await until(() => sent.length === 1, "the send");
@@ -79,6 +80,13 @@ describe("the autopilot loop of the plugin", () => {
     assert.deepEqual(sent, ["[AUTOPILOT] sigue con los tests"]);
     assert.equal(file().a1.on, true);
     assert.equal(file().a1.estado, "activo");
+    // What the popover shows besides the state: the step count, when it decided, what it sent.
+    const { pasos, decidido, enviado, desde } = autopilot.get("a1");
+    assert.deepEqual(pasos, { seguidos: 3, total: 7 });
+    assert.equal(enviado, "[AUTOPILOT] sigue con los tests");
+    assert.ok(Date.parse(decidido!) >= Date.parse(desde!));
+    await autopilot.set("a1", false, paseo);
+    assert.equal(autopilot.get("a1").pasos, undefined, "a new run starts its own count");
     autopilot.setTopes(0, 0);
   });
 
@@ -104,14 +112,14 @@ describe("the autopilot loop of the plugin", () => {
     answers = [{ status: 200, body: { accion: "esperar", motivo: "ESPERA: ci" } }];
     await autopilot.set("a1", true, paseo);
     await until(() => estado() === "esperando", "esperar");
-    assert.deepEqual(autopilot.get("a1"), { on: true, estado: "esperando", motivo: "ESPERA: ci" });
+    assert.deepEqual(brief(), { on: true, estado: "esperando", motivo: "ESPERA: ci" });
     assert.deepEqual(sent, []);
     suggest.cancel("a1");
     answers = [{ status: 200, body: { accion: "humano", motivo: "dinero: PARA DANI con importe" } }];
     await autopilot.decide("a1", "/w/repo", paseo);
-    assert.deepEqual(autopilot.get("a1"), { on: true, estado: "humano", motivo: "dinero: PARA DANI con importe" });
+    assert.deepEqual(brief(), { on: true, estado: "humano", motivo: "dinero: PARA DANI con importe" });
     autopilot.turnStarted("a1");
-    assert.deepEqual(autopilot.get("a1"), { on: true, estado: "activo", motivo: "" });
+    assert.deepEqual(brief(), { on: true, estado: "activo", motivo: "" });
   });
 
   it("cerrar archives the agent and switches the autopilot off as delivered", async () => {
@@ -119,7 +127,7 @@ describe("the autopilot loop of the plugin", () => {
     await autopilot.set("a1", true, paseo);
     await until(() => archived.length === 1, "the archive");
     assert.deepEqual(archived, ["a1"]);
-    assert.deepEqual(autopilot.get("a1"), { on: false, estado: "entregado", motivo: "entregado ticket-1: https://x" });
+    assert.deepEqual(brief(), { on: false, estado: "entregado", motivo: "entregado ticket-1: https://x" });
   });
 
   it("a 503 is retried once after 60 s; a second failure is humano", async () => {
@@ -132,6 +140,7 @@ describe("the autopilot loop of the plugin", () => {
       const first = autopilot.decide("a1", "/w/repo", paseo);
       await until(() => calls.length === 1, "the first ask");
       await quiet();
+      assert.match(autopilot.get("a1").motivo, /respondió 503; reintento en 60 s/, "the popover says it is retrying, not «working»");
       assert.equal(calls.length, 1, "no retry before the 60 s");
       await until(() => (mock.timers.tick(60_000), calls.length === 2), "the retry");
       await first;

@@ -5,6 +5,7 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import type { PluginHandlerContext } from "@getpaseo/plugin/server";
 import { SUGGEST_WAIT_MS } from "../shared/suggest.ts";
+import { forService } from "../shared/transcript.ts";
 
 // The server runtime boundary forbids importing @getpaseo/client: the API type comes from the SDK's own context.
 type PaseoApi = PluginHandlerContext["paseo"];
@@ -41,7 +42,7 @@ export async function locateSession(agentId: string, paseo: PaseoApi): Promise<s
       if (p?.enabled === false) continue;
       const projects = join(p?.env?.CLAUDE_CONFIG_DIR || join(homedir(), ".claude"), "projects");
       const found = await findIn(projects, `${sessionId}.jsonl`);
-      if (found) return (await readFile(found, "utf8")).split("\n");
+      if (found) return forService((await readFile(found, "utf8")).split("\n"));
     }
     throw new SessionError("no-transcript");
   } catch (error) {
@@ -82,7 +83,8 @@ export async function sugierePost(path: string, body: object, timeoutMs: number)
       body: JSON.stringify(body),
       signal: controller.signal,
     });
-    return { status: response.status, out: response.ok ? ((await response.json().catch(() => ({}))) as Record<string, unknown>) : {} };
+    // Also on a refusal: its `{error}` says why (the autopilot shows it); callers read only typed fields, so an error body is inert.
+    return { status: response.status, out: (await response.json().catch(() => ({}))) as Record<string, unknown> };
   } catch {
     throw new SessionError("servicio");
   } finally {

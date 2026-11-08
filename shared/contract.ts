@@ -1,8 +1,17 @@
 import { defineRpc } from "@getpaseo/plugin";
 import { z } from "zod";
 
-/** The autopilot of an agent: on/off, and what it is doing (activo · pensando · esperando · humano · entregado) with its reason. */
-const autopilot = z.object({ on: z.boolean(), estado: z.string(), motivo: z.string() });
+/** The autopilot of an agent: on/off, and what it is doing (activo · pensando · esperando · humano · entregado) with its reason;
+ * since when it is on, when the service last decided, its step count and the last message it sent (the popover, Dani 08-11). */
+const autopilot = z.object({
+  on: z.boolean(),
+  estado: z.string(),
+  motivo: z.string(),
+  desde: z.string().optional(),
+  decidido: z.string().optional(),
+  pasos: z.object({ seguidos: z.number().int(), total: z.number().int() }).optional(),
+  enviado: z.string().optional(),
+});
 
 /** The next-message suggestion of an agent, plus the state of the last force: the pill spins on `pending` and shows `error` once.
  * With «Garantizar plan» also what it pursues (`en_plan`, the badge) and the criterion, and `muted` after three «no es esto».
