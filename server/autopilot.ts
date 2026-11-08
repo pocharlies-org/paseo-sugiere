@@ -12,13 +12,15 @@ import { anchorKey, guardedPlan, turn } from "./suggest.ts";
 
 type Paseo = PluginHandlerContext["paseo"];
 type Agent = { id: string; cwd: string; status?: string; archivedAt?: string | null };
-type Estado = { on: boolean; desde: string; estado: string; motivo: string };
+// What the ✦'s popover shows besides the state (Dani 08-11: «ver si está en marcha, cuántas lleva»): when the service last
+// decided, its step count, and the last message it sent.
+type Estado = { on: boolean; desde: string; estado: string; motivo: string; decidido?: string; pasos?: { seguidos: number; total: number }; enviado?: string };
 
 const TIMEOUT_MS = 330_000; // the service waits on the session's model and the gate: its slowest answer, plus margin
 const RETRY_MS = 60_000; // a 503 is retried once, after this
 const ACCIONES = new Set(["enviar", "esperar", "humano", "cerrar"]);
 
-// Per agent, on the home PVC so it survives a restart of the pod: `{agentId: {on, desde, estado, motivo}}`.
+// Per agent, on the home PVC so it survives a restart of the pod: `{agentId: {on, desde, estado, motivo, decidido?, pasos?, enviado?}}`.
 // estado: activo (working) · pensando (asking the service) · esperando · humano · entregado · apagado.
 const file = () => join(homedir(), ".local", "state", "paseo-sugiere", "autopilot.json");
 let estados: Record<string, Estado> | null = null;
@@ -46,9 +48,8 @@ export function background(work: Promise<void>): void {
 }
 
 export const on = (agentId: string): boolean => all()[agentId]?.on === true;
-export function get(agentId: string): { on: boolean; estado: string; motivo: string } {
-  const { on = false, estado = "apagado", motivo = "" } = all()[agentId] ?? {};
-  return { on, estado, motivo };
+export function get(agentId: string): Partial<Estado> & { on: boolean; estado: string; motivo: string } {
+  return all()[agentId] ?? { on: false, estado: "apagado", motivo: "" };
 }
 
 // The caps from the settings document, sent with every call (0 = no cap; the service decides with them).
@@ -58,8 +59,9 @@ export function setTopes(max_seguidos: number, max_total: number): void {
 }
 
 /** The switch. Turning it on over an idle session that is waiting on the user starts piloting right away. */
-export async function set(agentId: string, value: boolean, paseo: Paseo): Promise<{ on: boolean; estado: string; motivo: string }> {
-  put(agentId, { on: value, desde: new Date().toISOString(), estado: value ? "activo" : "apagado", motivo: "" });
+export async function set(agentId: string, value: boolean, paseo: Paseo): Promise<ReturnType<typeof get>> {
+  // A new run starts its own count: what the last one decided and sent goes.
+  put(agentId, { on: value, desde: new Date().toISOString(), estado: value ? "activo" : "apagado", motivo: "", decidido: undefined, pasos: undefined, enviado: undefined });
   decided.delete(agentId);
   console.log(`autopilot: ${value ? "encendido" : "apagado"} para ${agentId}`);
   if (value) {
@@ -104,7 +106,7 @@ export async function decide(agentId: string, cwd: string, paseo: Paseo, turnId?
   if (!on(agentId) || decided.get(agentId) === seq) return;
   decided.set(agentId, seq);
   const current = () => on(agentId) && turn(agentId) === seq;
-  put(agentId, { estado: "pensando", motivo: "" });
+  put(agentId, { estado: "pensando", motivo: "pidiendo el siguiente paso al servicio" });
   let body: object;
   try {
     // The same reads generate() makes: the transcript, and the plan anchor; the native suggestion only without a guarded plan.
@@ -121,21 +123,25 @@ export async function decide(agentId: string, cwd: string, paseo: Paseo, turnId?
   let answer = await ask(body);
   if (!current()) return;
   if (answer.status !== 200) {
-    console.warn(`autopilot: el servicio respondió ${answer.status} para ${agentId}; reintento en ${RETRY_MS / 1000} s`);
+    const why = `el servicio respondió ${answer.status || "nada"}${refusal(answer)}`;
+    console.warn(`autopilot: ${why} para ${agentId}; reintento en ${RETRY_MS / 1000} s`);
+    put(agentId, { motivo: `${why}; reintento en ${RETRY_MS / 1000} s` });
     await new Promise((resolve) => setTimeout(resolve, RETRY_MS));
     if (!current()) return;
     answer = await ask(body);
     if (!current()) return;
   }
-  if (answer.status !== 200) return stop(agentId, `autopilot sin servicio (${answer.status || "sin respuesta"})`);
-  const { accion, mensaje, motivo, fase } = answer.out as { accion?: string; mensaje?: string; motivo?: string; fase?: string };
+  if (answer.status !== 200) return stop(agentId, `autopilot sin servicio (${answer.status || "sin respuesta"})${refusal(answer)}`);
+  const { accion, mensaje, motivo, fase, pasos } = answer.out as { accion?: string; mensaje?: string; motivo?: string; fase?: string; pasos?: { seguidos?: unknown; total?: unknown } };
   const why = typeof motivo === "string" ? motivo : "";
   if (!accion || !ACCIONES.has(accion) || (accion === "enviar" && !(typeof mensaje === "string" && mensaje.trim()))) {
     return stop(agentId, `respuesta del autopilot inválida: ${JSON.stringify(answer.out).slice(0, 120)}`);
   }
   console.log(`autopilot: ${agentId} turno ${seq} → ${accion}${fase ? ` (${fase})` : ""}: ${why.slice(0, 120)}`);
+  const counted = Number.isInteger(pasos?.seguidos) && Number.isInteger(pasos?.total);
+  put(agentId, { decidido: new Date().toISOString(), ...(counted ? { pasos: { seguidos: pasos!.seguidos as number, total: pasos!.total as number } } : {}) });
   if (accion === "enviar") {
-    put(agentId, { estado: "activo", motivo: why });
+    put(agentId, { estado: "activo", motivo: why, enviado: mensaje!.slice(0, 280) });
     await paseo.agents.ref(agentId).send(mensaje!).catch((error) => stop(agentId, `no se pudo enviar: ${(error as Error).message}`));
   } else if (accion === "esperar") put(agentId, { estado: "esperando", motivo: why });
   else if (accion === "humano") stop(agentId, why);
@@ -150,6 +156,9 @@ function stop(agentId: string, motivo: string): void {
   console.warn(`autopilot: ${agentId} necesita a una persona: ${motivo}`);
   put(agentId, { estado: "humano", motivo });
 }
+
+/** The service's own reason for refusing (its `{error}` body), for the log and the popover. */
+const refusal = ({ out }: { out: Record<string, unknown> }) => (typeof out.error === "string" ? `: ${out.error.slice(0, 120)}` : "");
 
 async function ask(body: object): Promise<{ status: number; out: Record<string, unknown> }> {
   try {

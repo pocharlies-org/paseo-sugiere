@@ -42,7 +42,7 @@ Entrada:
 |---|---|---|
 | `sid` | string | no vacío; solo para trazas |
 | `turno` | string | no vacío; solo para trazas y para que el llamante case la respuesta |
-| `transcript` | string | 1..32 MiB (un `.jsonl` de sesión real pasa de 6): el `.jsonl` de la sesión tal cual. El servicio lo aplana con `shared/transcript.ts` (tool calls, una línea; nunca su contenido), así que el llamante solo lee un fichero |
+| `transcript` | string | 1..32 MiB (un `.jsonl` de sesión real pasa de 6): líneas del `.jsonl` de la sesión: tal cual, o solo lo que el servicio lee (todo desde la última compactación y, antes, solo los mensajes de usuario, que cuenta la racha), que es lo que manda el plugin (`forService`) para que una sesión de semanas no pase del tope. El servicio lo aplana con `shared/transcript.ts` (tool calls, una línea; nunca su contenido), así que el llamante solo lee un fichero |
 | `contexto` | objeto | opcional; `kind` obligatorio si viene. `key`/`rol` solo si es de compañía |
 | `contexto.plan` | objeto | opcional y aditivo («Garantizar plan»): el ancla del ticket que escribe paseo-plan (`anchor-<agentId>.json`; acepta `ticket` o `ticketKey`, y `evidencia` texto u objeto). Si no es un objeto, `422`. Sin plan, o con un plan sin criterios (decisión 2 de Dani), la llamada al modelo es **byte a byte** la de antes (`test/fixtures/cuerpo-sin-plan.json`) |
 
