@@ -31,7 +31,7 @@ test("suggestion card uses the sheet-aware input, edits before sending and has a
     "../shared/contract.ts": { suggestGet: "get", suggestForce: "force", suggestFeedback: "feedback", autopilotSet: "autopilot" },
     "../shared/suggest.ts": { SUGGEST_WAIT_MS: 300_000 },
     "./composer-bridge.ts": { insertSuggestion: () => false },
-    "./marco.ts": { marco, CAJA: 16 },
+    "./marco.ts": { marco },
   };
   const exports: any = {};
   let poll: () => void = () => {};
@@ -119,7 +119,7 @@ test("a forced suggestion stays on the pill until its button is pressed", async 
       insertSuggestion: (agentId: string, text: string) => { inserted.push(`${agentId} ${text}`); return true; },
       registerPillAnchor: () => () => {},
     },
-    "./marco.ts": { marco, CAJA: 16 },
+    "./marco.ts": { marco },
   };
   let tick: () => void = () => {};
   const exports: any = {};
@@ -180,7 +180,7 @@ test("a piloted ✦ is gold while it waits, red when it needs a person, and its 
     "../shared/contract.ts": { suggestGet: "get", suggestForce: "force", suggestFeedback: "feedback", autopilotSet: "autopilot" },
     "../shared/suggest.ts": { SUGGEST_WAIT_MS: 300_000 },
     "./composer-bridge.ts": { insertSuggestion: () => false, registerPillAnchor: () => () => {} },
-    "./marco.ts": { marco, CAJA: 16 },
+    "./marco.ts": { marco },
   };
   let poll: () => void = () => {};
   const exports: any = {};
