@@ -1,18 +1,17 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { marco } from "../client/marco.ts";
+import { CAJA, marco } from "../client/marco.ts";
 
-// El host da a la ✦ un hueco de `size` y en el móvil recorta lo que sobra (Dani 08-11: «sale cortada»): el recuadro de estado,
-// su borde y el latido rojo tienen que caber siempre en ese hueco.
-describe("el recuadro de la ✦ cabe en el hueco del icono", () => {
+// The host draws every plugin icon in a CAJA box and clips what sticks out (Dani 08-11: «sale cortada»), and a ring smaller than
+// the box looked small («ese círculo es pequeño»): the ring fills the box, the star and its border fit inside, the red beat shrinks.
+describe("the ✦ ring fills the host's icon box without sticking out", () => {
   for (const estado of ["pedible", "generando", "lista", "error", "autopilot", "pensando", "humano"]) {
     it(estado, () => {
-      for (const size of [12, 14, 16, 18, 20, 24]) {
-        const m = marco(size, estado);
-        assert.equal(m.lado, size);
-        assert.ok(m.icono + 2 * (m.borde + m.padding) <= size, `${estado}/${size}: la estrella y el borde se salen`);
-        assert.ok(m.latido <= 1, `${estado}: el latido crece y se recortaría`);
-      }
+      const m = marco(estado);
+      assert.equal(m.lado, CAJA);
+      assert.ok(m.icono + 2 * m.borde <= CAJA, `${estado}: the star and the border stick out`);
+      assert.ok(m.icono >= 11, `${estado}: the star shrank below 11 px`);
+      assert.ok(m.latido <= 1, `${estado}: the beat grows and would be clipped`);
     });
   }
 });

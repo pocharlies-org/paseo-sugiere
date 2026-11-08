@@ -193,7 +193,7 @@ function SuggestIcon(props: PluginButtonIconProps) {
     return () => loop.stop();
   }, [estado, pulso, reduced]);
   const angle = giro.interpolate({ inputRange: [0, 1], outputRange: ["0deg", "360deg"] });
-  const m = marco(props.size, estado);
+  const m = marco(estado);
   const scale = pulso.interpolate({ inputRange: [0, 1], outputRange: [1, m.latido] });
   const halo = pulso.interpolate({ inputRange: [0, 1], outputRange: ["rgba(255,23,68,0.15)", "rgba(255,23,68,0.45)"] });
   return (
@@ -205,7 +205,6 @@ function SuggestIcon(props: PluginButtonIconProps) {
           borderWidth: m.borde,
           borderRadius: m.lado / 2,
           borderColor: color,
-          padding: m.padding,
           alignItems: "center",
           justifyContent: "center",
           ...(estado === "humano" ? { backgroundColor: halo, transform: [{ scale }] } : {}),
@@ -328,7 +327,7 @@ export function addSuggestPill(client: PluginClientContext): () => void {
       if (current) show(current);
     });
     // The suggestion's text goes without a ✦ of its own (the icon is already a Sparkles). The host refuses an empty label
-    // («Plugin button needs label», so no pill at all: Dani 02-11, «no sale el botón»): idle and compact fall back to the ✦.
+    // («Plugin button needs label», so no pill at all: Dani 02-11, «no sale el botón»): idle and compact fall back to a zero-width space.
     const compact = compactFor.get(agent.id) ?? false;
     // An anchored suggestion carries its badge and the criterion it pursues; only the text goes into the prompt.
     const meta = text ? anchors.get(agent.id) : undefined;
@@ -344,7 +343,7 @@ export function addSuggestPill(client: PluginClientContext): () => void {
     const button = piloted ? {
       title: autopilotLine(piloted),
       icon: SuggestIcon,
-      label: compact ? "✦" : piloted.estado === "activo" ? "autopilot" : autopilotLine(piloted).slice(0, 60),
+      label: compact ? "\u200b" : piloted.estado === "activo" ? "autopilot" : autopilotLine(piloted).slice(0, 60),
       visible: true, // also while a turn runs: the switch must be reachable to stop it mid-turn
       disabled: false,
       behavior: panel(),
@@ -354,7 +353,7 @@ export function addSuggestPill(client: PluginClientContext): () => void {
         : quiet ? "La ✦ se calla: tres «no es esto» seguidos. Púlsala para pedir otra." : "Suggest now",
       icon: SuggestIcon,
       label: !compact && text ? (badge ? `${badge} ${meta?.criterio ? `${meta.criterio} · ` : ""}${text}` : text)
-        : text && badge ? badge : pending ? "\u200b" : error ? "!" : quiet ? "✦ callada" : "✦", // sin «…»: la estrella amarilla gira (Dani 07-11); el host rechaza label vacía o en blanco (validation.ts requireText), el espacio de ancho cero la pasa y no se ve
+        : text && badge ? badge : pending ? "\u200b" : error ? "!" : quiet ? "callada" : "\u200b", // sin «…» ni ✦ repetida (la ✦ es el icono, Dani 08-11): la estrella amarilla gira (Dani 07-11); el host rechaza label vacía o en blanco (validation.ts requireText), el espacio de ancho cero la pasa y no se ve
       // Idle agents always carry the pill: with a suggestion it opens the card, without one the small ✦ opens «Sugerir ahora»,
       // which forces a generation (Dani 19-10), next to the Autopilot switch (Dani 07-11); it spins while the generation resolves
       // and shows the failure once if it does not.
