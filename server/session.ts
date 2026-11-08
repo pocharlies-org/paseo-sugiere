@@ -71,7 +71,7 @@ export async function sugiereRequest(
   };
 }
 
-/** One POST to the `sugiere` service: the status and the JSON body (empty unless 2xx). No answer in time is `SessionError("servicio")`. */
+/** One POST to the `sugiere` service: the status and the JSON body (empty if it is not JSON). No answer in time is `SessionError("servicio")`. */
 export async function sugierePost(path: string, body: object, timeoutMs: number): Promise<{ status: number; out: Record<string, unknown> }> {
   const base = (process.env.SUGIERE_URL || "http://sugiere.llm.svc:8080").replace(/\/+$/, "");
   const controller = new AbortController();

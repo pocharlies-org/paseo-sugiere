@@ -43,7 +43,7 @@ export function autopilotLine({ estado, motivo }: Autopilot): string {
   if (estado === "pensando") return `autopilot: ${motivo || "pidiendo el siguiente paso"}`;
   return "autopilot: trabajando";
 }
-export function hace(iso: string | undefined, now = Date.now()): string {
+function hace(iso: string | undefined, now = Date.now()): string {
   const t = iso ? Date.parse(iso) : NaN;
   if (Number.isNaN(t)) return "";
   const s = Math.max(0, Math.round((now - t) / 1000));
