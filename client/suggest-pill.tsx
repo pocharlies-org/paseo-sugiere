@@ -256,6 +256,7 @@ export function addSuggestPill(client: PluginClientContext): () => void {
   const muted = new Set<string>(); // three «no es esto» in a row: the ✦ says it is quiet until clicked
   const noPills = new Map<string, ReturnType<PluginClientContext["addComposerPill"]>>(); // «no es esto», next to an anchored suggestion
   const autopilots = new Map<string, Autopilot>(); // the autopilot of each agent, as the server last reported it
+  const pedido = new Set<string>(); // agents whose autopilot state we already asked the service for
   const toggle = (agentId: string) => async (on: boolean) => {
     const next = await client.rpc(autopilotSet, { agentId, on });
     autopilots.set(agentId, next);
@@ -285,6 +286,7 @@ export function addSuggestPill(client: PluginClientContext): () => void {
     compactReported.delete(id);
     estadoFor.delete(id);
     autopilots.delete(id);
+    pedido.delete(id);
   };
   const show = (agent: Agent) => {
     if (stopped) return;
@@ -300,7 +302,17 @@ export function addSuggestPill(client: PluginClientContext): () => void {
     const pending = pendingFor.get(agent.id) ?? false;
     const error = errors.get(agent.id) ?? null;
     // While a turn runs the autopilot is working, whatever it last reported; idle, the poll brings what it decided.
+    // A page opened mid-turn knows nothing yet (the poll only asks idle agents), and the ✦ of an autopilot must be gold and
+    // turning for as long as it is on (Dani 08-11): it is asked once, the first time the agent is seen.
     const autopilot = autopilots.get(agent.id) ?? OFF;
+    if (!autopilots.has(agent.id) && !pedido.has(agent.id)) {
+      pedido.add(agent.id);
+      void client.rpc(suggestGet, { agentId: agent.id }).then(({ autopilot: asked = OFF }) => {
+        if (stopped) return;
+        autopilots.set(agent.id, asked);
+        show(agents.get(agent.id) ?? agent);
+      }, () => {});
+    }
     const piloted = autopilot.on ? (agent.status === "idle" ? autopilot : { ...autopilot, estado: "activo", motivo: "" }) : null;
     estadoFor.set(agent.id, piloted
       ? (piloted.estado === "humano" || piloted.estado === "pensando" ? piloted.estado : "autopilot")
