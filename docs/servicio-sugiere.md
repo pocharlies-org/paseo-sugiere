@@ -329,7 +329,7 @@ Tabla de decisión, en orden (lo determinista antes que cualquier modelo):
 | 3 | alguna `ESPERA:` vigilable que no sea `fichero` (una `sesion` solo con `kind: live`, coordinación de sesiones: la compañía no espera algo sin reanudación) | `esperar` (la despierta el `EVENTO:` del supervisor o el dueño coordinado) |
 | 4 | `PARA IT:` / `PARA SECURITY:` / `PARA QA:` | `esperar` |
 | 5 | un tope configurado (`max_seguidos`, `max_total`, distinto de 0) superado | `humano` |
-| 6 | primer paso del autopilot sin ticket (ni `contexto.key` ni el del ancla) | `enviar` · `arranque` (el ticket primero) |
+| 6 | primer paso del autopilot sin ticket (ni `contexto.key` ni el del ancla) | `enviar` · `arranque` (el ticket primero): se enciende con la sesión a medias, así que el paso que propone el modelo (`nativa` si viene) y aprueba la puerta va delante y la plantilla detrás; sin paso aprobado, o sin modelo o puerta, la plantilla sola |
 | 7 | `PARA DANI` sin dinero | `enviar` · `devolver` (elige la recomendada, `DECISIÓN TOMADA:`); si insiste justo después, `humano` |
 | 8 | `ESTADO: ENTREGA` sin plan, o plan con todos los criterios verificados | `enviar` · `entregar` (el prompt de la entrega, con los números del autopilot); pedida y no cerrada en el turno siguiente, `humano` |
 | 9 | lo demás | el modelo propone (`nativa` si viene) y la puerta dictamina: `ok` → `enviar` · `seguir`; `alto` → `enviar` · `desvio`, y un segundo veto seguido `humano`; `dinero` → `humano`; vacío o el mismo paso que el anterior → `humano` |
@@ -345,7 +345,7 @@ Tabla de decisión, en orden (lo determinista antes que cualquier modelo):
   `sugiere-clasificador`, releído en cada petición como `brain.json`); sin fichero, sin tope. Sin topes siguen los cortes que no
   cuentan pasos: el mismo paso dos veces, insistir en preguntar a Dani, un segundo veto seguido y la entrega pedida y no cerrada.
 - Todo lo que propone el autopilot va prefijado `[AUTOPILOT] `. Las plantillas (`arranque`, `devolver`, `desvio`, `entregar`)
-  son texto fijo y no pasan por la puerta; el paso del modelo (`seguir`) sí, siempre.
+  son texto fijo y no pasan por la puerta; el paso del modelo (`seguir`, y el que encabeza el `arranque`) sí, siempre.
 - **Desviación declarada de la regla transversal de §6** («el servicio nunca deja un ticket en silencio»): en `live`,
   `esperar` y `humano` dejan la sesión callada. Lo cubren la ✦ roja del plugin y la línea en el topic «Autopilot» de Telegram
   (decisión 2 de Dani), no un `RETOMA`. En la compañía (F5) el `RETOMA` del supervisor sigue de respaldo.
