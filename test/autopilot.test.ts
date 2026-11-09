@@ -98,11 +98,30 @@ describe("el autopilot, fila a fila", () => {
     }
   });
 
-  it("5 · el primer paso sin plan anclado → arranque (el ticket primero)", async () => {
-    sinModelo();
-    const d = await decidir([u("monta X"), a("Hecho.\nESTADO: ENTREGA")], ctx);
-    assert.deepEqual([d.accion, d.fase], ["enviar", "arranque"]);
-    assert.match(d.mensaje!, /^\[AUTOPILOT\] .*clasificar-trabajo/);
+  it("5 · el primer paso sin plan anclado, a medias → arranque: el paso aprobado delante y la plantilla detrás", async () => {
+    litellm("añade el test del endpoint y córrelo");
+    const d = await decidir([u("monta X"), a("He escrito el endpoint; faltan los tests.")], ctx);
+    assert.deepEqual([d.accion, d.fase, d.via], ["enviar", "arranque", "residente"]);
+    assert.match(d.mensaje!, /^\[AUTOPILOT\] añade el test del endpoint y córrelo\n\nAutopilot activado: .*clasificar-trabajo.*ESTADO: ENTREGA/s);
+    assert.equal(d.mensaje!.split("[AUTOPILOT]").length, 2); // un solo prefijo
+  });
+
+  it("5 · en el arranque la sugerencia nativa también ahorra la llamada al modelo", async () => {
+    const f = litellm(new Error("no debería pedirse la sugerencia"));
+    const d = await decidir([u("monta X"), a("He escrito el endpoint.")], ctx, "corre npm test");
+    assert.match(d.mensaje!, /^\[AUTOPILOT\] corre npm test\n\nAutopilot activado/);
+    assert.equal(f.mock.callCount(), 1);
+  });
+
+  it("5 · sin paso, con el paso vetado o sin modelo ni puerta → la plantilla sola, nunca SinServicio", async () => {
+    for (const [paso, juez] of [["", undefined], ["kubectl delete pod -n llm sugiere-0", undefined],
+      [new Error("timeout"), undefined], ["abre el PR", new Error("residente caído")]] as const) {
+      mock.restoreAll();
+      litellm(paso, juez);
+      const d = await decidir([u("monta X"), a("Hecho.\nESTADO: ENTREGA")], ctx);
+      assert.deepEqual([d.accion, d.fase], ["enviar", "arranque"]);
+      assert.match(d.mensaje!, /^\[AUTOPILOT\] Autopilot activado: .*clasificar-trabajo/);
+    }
   });
 
   it("5 · con ticket conocido (aunque el ancla no tenga criterios) no hay arranque, y la clave llega a la entrega", async () => {

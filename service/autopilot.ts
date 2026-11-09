@@ -34,19 +34,22 @@ export type Contexto = { kind?: string; cwd: string; key?: string; plan?: Plan |
 /** El modelo o la puerta no contestaron: el servidor responde 503 y el llamante reintenta una vez (no hay respaldo local). */
 export class SinServicio extends Error {}
 
-// Las plantillas: texto fijo, sin modelo. Su primera frase es la marca con la que se reconoce la fase en el transcript.
+// Las plantillas: texto fijo, sin modelo (el `arranque` lleva delante, si lo hay, el paso que aprobó la puerta). Su primera
+// frase, tras ese paso en el `arranque`, es la marca con la que se reconoce la fase en el transcript.
 const ARRANQUE = `${PREFIJO}Autopilot activado: llevo yo esta sesión hasta la entrega.`;
 const DEVOLVER = `${PREFIJO}Tu \`PARA DANI\` no es dinero: con el autopilot no le llega a Dani.`;
 const DESVIO = `${PREFIJO}El paso que tocaba no se autoenvía`;
 const ENTREGAR = `${PREFIJO}El encargo está hecho: toca la entrega del autopilot.`;
 const CIERRES = "Acaba cada turno como siempre: `ESPERA:`, `PARA …:` o `ESTADO: ENTREGA`.";
 
-function arranque(): string {
-  return [ARRANQUE,
+/** Con `paso` (el que la puerta aprobó), el paso va delante y la plantilla detrás, con un solo prefijo. */
+function arranque(paso = ""): string {
+  const plantilla = [ARRANQUE,
     "Si esta tarea no tiene ticket, créalo ahora en vivo (skill `clasificar-trabajo`) con criterios verificables `- [ ]`, y sigue.",
     "Si tu último turno preguntaba algo que no es dinero, decide tú la opción recomendada y déjala como `DECISIÓN TOMADA: …`.",
     "Lo que solo IT, security o qa pueden darte: coméntalo en el ticket con `PARA IT:`/`PARA SECURITY:`/`PARA QA:` y una línea `Paseo: $PASEO_AGENT_ID`.",
     CIERRES].join(" ");
+  return paso ? `${PREFIJO}${paso}\n\n${plantilla.slice(PREFIJO.length)}` : plantilla;
 }
 
 function devolver(esperas: number): string {
@@ -92,6 +95,21 @@ export async function decidir(lines: string[], ctx: Contexto, nativa = ""): Prom
   const fin = (accion: Accion, motivo: string, extra: Partial<Decision> = {}): Decision => ({ accion, motivo, pasos, ...extra });
   const envia = (fase: Fase, mensaje: string, motivo: string, extra: Partial<Decision> = {}) =>
     fin("enviar", motivo, { fase, mensaje, ...extra });
+  // El paso que propone el modelo (la nativa, si viene y no hay plan, ahorra la llamada) y el dictamen de la puerta: filas 5 y 8.
+  const proponer = async (): Promise<[string, string]> => {
+    if (nativa.trim() && !plan) return [nativa.trim(), "nativa"];
+    try {
+      const s = await sugerir(lines, SUGGEST_WAIT_MS, ctx.kind ?? "", plan);
+      return [s.texto.trim(), s.modelo];
+    } catch (e) {
+      throw new SinServicio(`el modelo no contestó: ${String((e as Error).message).slice(0, 160)}`);
+    }
+  };
+  const juzgar = async (paso: string, quien: string) => {
+    const v = await dictaminar(paso, { cwd: ctx.cwd, key, resumen: plan?.objetivo ?? "",
+      criterio: criterios(plan).map((c, i) => `C${i + 1} ${c?.texto ?? ""}`).join("\n") });
+    return { v, puerta: { riesgo: v.riesgo, via: v.via, modelo: quien, ...(v.traza ? { traza: v.traza } : {}) } };
+  };
 
   // 1. La entrega ya está hecha: se cierra (el plugin archiva).
   const entregado = entregadoDe(texto);
@@ -118,8 +136,15 @@ export async function decidir(lines: string[], ctx: Contexto, nativa = ""): Prom
   if (t.max_total && r.total >= t.max_total) return fin("humano", `tope: ${r.total} pasos del autopilot en esta sesión`);
   const antes = r.seguidos ? r.ultimo : ""; // la fase anterior solo cuenta dentro de la racha: tras Dani o un EVENTO, no insiste nadie
 
-  // 5. El primer paso sin plan anclado: el ticket primero (decisión 4).
-  if (!r.total && !key) return envia("arranque", arranque(), "primer paso sin ticket");
+  // 5. El primer paso sin plan anclado: el ticket primero (decisión 4). El autopilot se enciende con la sesión a medias (Dani,
+  // 09-11): el paso que la puerta aprueba va delante de la plantilla. Sin él —sin paso, modelo o puerta, o vetado— la
+  // plantilla sola, como antes: el arranque no se para por un modelo.
+  if (!r.total && !key) {
+    const [paso, quien] = await proponer().catch((): [string, string] => ["", ""]);
+    const j = paso ? await juzgar(paso, quien) : null;
+    if (j?.v.ok) return envia("arranque", arranque(paso), "primer paso sin ticket, con el paso propuesto", j.puerta);
+    return envia("arranque", arranque(), "primer paso sin ticket");
+  }
 
   // 6. La pregunta a Dani que no es dinero vuelve a la sesión; si insiste justo después, la ve una persona.
   if (dani !== null) {
@@ -135,22 +160,10 @@ export async function decidir(lines: string[], ctx: Contexto, nativa = ""): Prom
   }
 
   // 8. Lo demás: el modelo propone el paso y la puerta lo dictamina.
-  let paso = "", quien = "";
-  if (nativa.trim() && !plan) [paso, quien] = [nativa.trim(), "nativa"];
-  else {
-    try {
-      const s = await sugerir(lines, SUGGEST_WAIT_MS, ctx.kind ?? "", plan);
-      [paso, quien] = [s.texto.trim(), s.modelo];
-    } catch (e) {
-      throw new SinServicio(`el modelo no contestó: ${String((e as Error).message).slice(0, 160)}`);
-    }
-  }
+  const [paso, quien] = await proponer();
   if (!paso) return fin("humano", "el turno no cierra y el modelo no propone nada", { modelo: quien });
   if (antes === `${PREFIJO}${paso}`) return fin("humano", "el autopilot repetiría el mismo paso", { modelo: quien });
-  const resumen = plan?.objetivo ?? "";
-  const criterio = criterios(plan).map((c, i) => `C${i + 1} ${c?.texto ?? ""}`).join("\n");
-  const v = await dictaminar(paso, { cwd: ctx.cwd, key, resumen, criterio });
-  const puerta = { riesgo: v.riesgo, via: v.via, modelo: quien, ...(v.traza ? { traza: v.traza } : {}) };
+  const { v, puerta } = await juzgar(paso, quien);
   if (v.via === "ninguno") throw new SinServicio(`puerta no disponible: ${(v.traza ?? []).join("; ").slice(0, 160)}`);
   if (v.ok) return envia("seguir", `${PREFIJO}${paso}`, v.motivo, puerta);
   if (v.riesgo === "dinero") return fin("humano", `dinero: ${v.motivo}`, puerta);
