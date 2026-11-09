@@ -18,7 +18,7 @@ type Agent = { id: string; cwd: string; status?: string; archivedAt?: string | n
 type Estado = { on: boolean; desde: string; estado: string; motivo: string; decidido?: string; pasos?: { seguidos: number; total: number }; enviado?: string };
 
 const TIMEOUT_MS = 330_000; // the service waits on the session's model and the gate: its slowest answer, plus margin
-const RETRY_MS = 60_000; // a 503 is retried once, after this
+const RETRY_MS = 60_000; // a 503, or a failed read of the session, is retried once, after this
 const ACCIONES = new Set(["enviar", "esperar", "humano", "cerrar"]);
 
 // Per agent, on the home PVC so it survives a restart of the pod: `{agentId: {on, desde, estado, motivo, decidido?, pasos?, enviado?}}`.
@@ -123,18 +123,20 @@ export async function decide(agentId: string, cwd: string, paseo: Paseo, turnId?
   decided.set(agentId, seq);
   const current = () => on(agentId) && turn(agentId) === seq;
   put(agentId, { estado: "pensando", motivo: "pidiendo el siguiente paso al servicio" });
-  let body: object;
-  try {
-    // The same reads generate() makes: the transcript, and the plan anchor; the native suggestion only without a guarded plan.
-    const lines = await locateSession(agentId, paseo);
-    const plan = guardedPlan(agentId);
-    const key = anchorKey(agentId);
-    const nativa = plan ? null : await nativeSuggestion(agentId, paseo);
-    const contexto = { kind: "live", cwd, topes, ...(key ? { key } : {}), ...(plan ? { plan } : {}) };
-    body = { sid: agentId, turno: turnId || String(seq), transcript: lines.join("\n"), contexto, ...(nativa ? { nativa } : {}) };
-  } catch (error) {
-    if (current()) stop(agentId, `autopilot sin transcript: ${(error as Error).message}`);
-    return;
+  // A failed read is retried once, like a 503: a saturated daemon fails it for a minute (09-11).
+  let body: object | undefined;
+  for (let intento = 1; !body; intento++) {
+    try {
+      body = await readBody(agentId, cwd, paseo, turnId || String(seq));
+    } catch (error) {
+      if (!current()) return;
+      const why = `no se pudo leer la sesión: ${(error as Error).message}`;
+      if (intento > 1) return stop(agentId, why);
+      console.warn(`autopilot: ${why} para ${agentId}; reintento en ${RETRY_MS / 1000} s`);
+      put(agentId, { motivo: `${why}; reintento en ${RETRY_MS / 1000} s` });
+      await new Promise((resolve) => setTimeout(resolve, RETRY_MS));
+      if (!current()) return;
+    }
   }
   let answer = await ask(body);
   if (!current()) return;
@@ -174,6 +176,17 @@ export async function decide(agentId: string, cwd: string, paseo: Paseo, turnId?
     put(agentId, { on: false, estado: "entregado", motivo: why });
     await paseo.agents.ref(agentId).archive().catch((error) => console.warn(`autopilot: no se pudo archivar ${agentId}: ${(error as Error).message}`));
   }
+}
+
+/** What the service is asked with — the same reads generate() makes: the transcript, and the plan anchor; the native
+ * suggestion only without a guarded plan. */
+async function readBody(agentId: string, cwd: string, paseo: Paseo, turno: string): Promise<object> {
+  const lines = await locateSession(agentId, paseo);
+  const plan = guardedPlan(agentId);
+  const key = anchorKey(agentId);
+  const nativa = plan ? null : await nativeSuggestion(agentId, paseo);
+  const contexto = { kind: "live", cwd, topes, ...(key ? { key } : {}), ...(plan ? { plan } : {}) };
+  return { sid: agentId, turno, transcript: lines.join("\n"), contexto, ...(nativa ? { nativa } : {}) };
 }
 
 /** The red ✦: a person is needed. The autopilot stays on and asks again when the next turn ends. */
