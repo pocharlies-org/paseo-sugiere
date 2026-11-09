@@ -5,7 +5,8 @@ esperado de cada caso. Uso: `python3 test/fixtures/genera_cierre.py [~/src/x86-h
 import json, os, subprocess, sys
 
 X86 = os.path.expanduser(sys.argv[1] if len(sys.argv) > 1 else "~/src/x86-host-runtime-pocharlies")
-show = lambda ruta: subprocess.run(["git", "-C", X86, "show", f"origin/main:{ruta}"], check=True, capture_output=True, text=True).stdout
+REF = sys.argv[2] if len(sys.argv) > 2 else "origin/main"
+show = lambda ruta: subprocess.run(["git", "-C", X86, "show", f"{REF}:{ruta}"], check=True, capture_output=True, text=True).stdout
 trozo = lambda texto, desde, hasta: texto[texto.index(desde):texto.index(hasta)]
 fuente = "\n".join(["import os, re, time", "from datetime import datetime, timezone",
     trozo(show("libexec/company_runtime.py"), "ESPERA_RE = re.compile(", "# ------------------------------------------------------------------ qué pide la épica"),
@@ -24,6 +25,9 @@ CASOS = [
  ("espera argocd con commit", "ESPERA: argocd sugiere 06defc7 → pruebo el endpoint", False, None),
  ("espera fichero", "ESPERA: fichero /tmp/salida.json → la leo", False, None),
  ("espera jira", "ESPERA: jira TAREA-1000002 → sigo cuando se cierre", False, None),
+ ("espera sesion registrada", "ESPERA: sesion 00000000-0000-4000-8000-0000000000ab → integro el resultado", False, None),
+ ("espera sesion UUID invalido", "ESPERA: sesion no-es-uuid → nada", False, None),
+ ("espera sesion mayuscula invalida", "ESPERA: sesion 00000000-0000-4000-8000-0000000000AB → nada", False, None),
  ("espera fecha con hora", "ESPERA: fecha 2026-11-08 09:30 → reviso la cola", False, None),
  ("espera fecha imposible no vale", "ESPERA: fecha 2026-02-30 → nada", False, None),
  ("espera sin objetivo no vale", "ESPERA: ci el pipeline del repo → sigo", False, None),
@@ -55,7 +59,7 @@ for nombre, texto, alcance, entregado in CASOS:
     casos.append({"nombre": nombre, "texto": texto, "esperas": [e["linea"] for e in g["esperas_de"](texto, 1762500000.0)],
                   "paras": [q for q, _ in paras], "para_dani": dani, "estado": list(g["estado_de"](texto)),
                   "dinero": bool(dani is not None and g["DINERO_RE"].search(dani)), "alcance": alcance, "entregado": entregado})
-json.dump({"_fuente": "x86-host-runtime origin/main: company_runtime.esperas_de/paras_de, company-sesion estado_de, "
+json.dump({"_fuente": f"x86-host-runtime {REF}: company_runtime.esperas_de/paras_de, company-sesion estado_de, "
            "jira-epic-trigger.DINERO_RE. `alcance` y `entregado` son solo del autopilot (TS). Regenerar con test/fixtures/genera_cierre.py.",
            "casos": casos}, sys.stdout, ensure_ascii=False, indent=1)
 print()

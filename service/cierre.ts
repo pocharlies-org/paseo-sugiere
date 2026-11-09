@@ -6,7 +6,7 @@
 
 export type Espera = { tipo: string; linea: string };
 
-const ESPERA_RE = /^[ \t]*(?:[-*>•]+[ \t]*)?[`*_]*ESPERA[`*_]*[ \t]*:[`*_]*[ \t]*(ci|merge|review|run|argocd|fichero|jira)[ \t]+([^\n→]+?)[ \t]*(?:(?:→|->)[ \t]*(.*?))?[ \t]*$/gim;
+const ESPERA_RE = /^[ \t]*(?:[-*>•]+[ \t]*)?[`*_]*ESPERA[`*_]*[ \t]*:[`*_]*[ \t]*(ci|merge|review|run|argocd|fichero|jira|sesion)[ \t]+([^\n→]+?)[ \t]*(?:(?:→|->)[ \t]*(.*?))?[ \t]*$/gim;
 const FECHA_RE = /^[ \t]*(?:[-*>•]+[ \t]*)?[`*_]*ESPERA[`*_]*[ \t]*:[`*_]*[ \t]*fecha[ \t]+(\d{4}-\d{2}-\d{2}|\d{2}-\d{2})(?:[ T](\d{1,2}):(\d{2}))?Z?[ \t]*(?:(?:→|->)[ \t]*(.*?))?[ \t]*$/gim;
 const PARA_RE = /^[ \t>*_`-]*PARA (DANI|IT|SECURITY|QA)[^\n:]{0,20}:/gim;
 const ESTADO_RE = /^[ \t>*_`-]*ESTADO[ \t*_`]*:[ \t*_`]*(ENTREGA|PREGUNTA|BLOQUEO)\b[ \t*_`]*:?[ \t]*(.*)$/gim;
@@ -18,8 +18,10 @@ const ALCANCE_RE = /^[ \t>*_`-]*PARA DANI[ \t]*\([ \t]*alcance[ \t]*\)[^\n:]{0,8
 const ENTREGADO_RE = /^[ \t>*_`-]*AUTOPILOT[ \t*_`]*:[ \t*_`]*ENTREGADO[ \t*_`]+([A-Z][A-Z0-9_]+-\d+)[ \t`*_]+(https?:\/\/\S+?)[`*_.,;)]*[ \t]*$/m;
 
 const PR = /^[\w.-]+\/[\w.-]+#\d+$/;
+// The coordinator waits for a registered producer; UUIDs use the daemon's lowercase representation.
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 const OBJETIVO: Record<string, RegExp> = { ci: PR, merge: PR, review: PR, run: /^[\w.-]+\/[\w.-]+$/,
-  argocd: /^[a-z0-9][a-z0-9.-]*$/, fichero: /^(\/|~)/, jira: /^[A-Z][A-Z0-9_]+-\d+$/ };
+  argocd: /^[a-z0-9][a-z0-9.-]*$/, fichero: /^(\/|~)/, jira: /^[A-Z][A-Z0-9_]+-\d+$/, sesion: UUID };
 
 // `str.strip("`*_,;.")` de Python: quita esos caracteres por los dos lados.
 const limpia = (s: string, chars: string) => {

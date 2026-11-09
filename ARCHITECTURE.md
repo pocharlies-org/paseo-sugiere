@@ -27,7 +27,16 @@ al modelo de la sesión, sin compartir la caché de la sesión.
   sugerencia pendiente y descarta una respuesta en vuelo.
 - `server/autopilot.ts` — el autopilot por agente: estado en `~/.local/state/paseo-sugiere/autopilot.json`, una llamada a
   `/v1/autopilot` por turno `completed` y obediencia (enviar · esperar · humano · cerrar). Usa el mismo `seq` de `suggest.ts` para
-  descartar una respuesta tardía; no razona: toda la lógica es del servicio (spec §12).
+  descartar una respuesta tardía; no razona: toda la lógica es del servicio (spec §12). Con el store del rutador enlazado al
+  agente (coordinación de sesiones) no pilota: `set(true)` rechaza (lectura antes y después del put — el rutador comprueba `autopilot.json`
+  antes de reclamar), `decide` para a rojo sin preguntar, y hay relectura justo antes de enviar/archivar (el enlace puede caer
+  con la request al servicio en vuelo). El autoenvío pasa `{ activeTurnBehavior: "steer" }`; `sourceAgentId` no existe todavía
+  en `send` de la SDK 0.11.2 (pendiente de SDK, no se fuerza con cast).
+- `server/delegation.ts` — lectura validada del store de coordinaciones del rutador (`$PASEO_HOME/rutador-coordinaciones.json`,
+  contrato `file.paseo.delegations.v1`, productor `paseo-rutador`): `{version:1, delegations:{[producerId]:{ownerId, producerId,
+  state watching|result|dispatching|paused, …}}}`. Todo registro activo reserva al producer (también `paused`; release = borrarlo);
+  campos extra de la entrada pasan. Ausente = normal; ilegible/corrupto/v1 incompleto = **fail closed** (no se reclama la sesión).
+  Solo lectura: el plugin no escribe este fichero y el rutador no escribe `autopilot.json`.
 - `client/suggest-pill.tsx` — píldora en el composer; sondea 10 s solo agentes
   `idle`; el texto se tira al salir de idle, al enviar y al pasarlo al prompt. Su icono es el ancla del puente. Nada entra en el prompt
   por su cuenta: una generación terminada se queda en la píldora de su ventana hasta que se pulsa su botón (Dani 02-11). El popover intenta

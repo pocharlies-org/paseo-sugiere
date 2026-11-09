@@ -1,5 +1,5 @@
 {
- "_fuente": "x86-host-runtime origin/main: company_runtime.esperas_de/paras_de, company-sesion estado_de, jira-epic-trigger.DINERO_RE. `alcance` y `entregado` son solo del autopilot (TS). Regenerar con test/fixtures/genera_cierre.py.",
+ "_fuente": "x86-host-runtime c5adbbaf: company_runtime.esperas_de/paras_de, company-sesion estado_de, jira-epic-trigger.DINERO_RE. `alcance` y `entregado` son solo del autopilot (TS). Regenerar con test/fixtures/genera_cierre.py.",
  "casos": [
   {
    "nombre": "espera ci con flecha",
@@ -117,6 +117,50 @@
    "esperas": [
     "jira TAREA-1000002"
    ],
+   "paras": [],
+   "para_dani": null,
+   "estado": [
+    null,
+    ""
+   ],
+   "dinero": false,
+   "alcance": false,
+   "entregado": null
+  },
+  {
+   "nombre": "espera sesion registrada",
+   "texto": "ESPERA: sesion 00000000-0000-4000-8000-0000000000ab → integro el resultado",
+   "esperas": [
+    "sesion 00000000-0000-4000-8000-0000000000ab"
+   ],
+   "paras": [],
+   "para_dani": null,
+   "estado": [
+    null,
+    ""
+   ],
+   "dinero": false,
+   "alcance": false,
+   "entregado": null
+  },
+  {
+   "nombre": "espera sesion UUID invalido",
+   "texto": "ESPERA: sesion no-es-uuid → nada",
+   "esperas": [],
+   "paras": [],
+   "para_dani": null,
+   "estado": [
+    null,
+    ""
+   ],
+   "dinero": false,
+   "alcance": false,
+   "entregado": null
+  },
+  {
+   "nombre": "espera sesion mayuscula invalida",
+   "texto": "ESPERA: sesion 00000000-0000-4000-8000-0000000000AB → nada",
+   "esperas": [],
    "paras": [],
    "para_dani": null,
    "estado": [

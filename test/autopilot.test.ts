@@ -49,6 +49,24 @@ describe("el autopilot, fila a fila", () => {
     assert.equal(d.accion, "enviar");
   });
 
+  it("2 · ESPERA: sesion con UUID, en live → esperar sin llamar a ningún modelo (coordinación de sesiones)", async () => {
+    sinModelo();
+    const d = await decidir([...yaArrancado, a("PR abierto.\nESPERA: sesion 3f2a8b1c-4d5e-4f70-8192-a3b4c5d6e7f8 → sigo cuando el dueño termine")], ctx);
+    assert.deepEqual([d.accion, d.motivo], ["esperar", "sesion 3f2a8b1c-4d5e-4f70-8192-a3b4c5d6e7f8"]);
+  });
+
+  it("2 · ESPERA: sesion no es esperar sin kind live: la compañía no espera algo sin reanudación (coordinación de sesiones)", async () => {
+    litellm("sigue con el plan");
+    const d = await decidir([...yaArrancado, a("ESPERA: sesion 3f2a8b1c-4d5e-4f70-8192-a3b4c5d6e7f8 → sigo")], { kind: "company", cwd: ctx.cwd });
+    assert.equal(d.accion, "enviar"); // cae a la fila del modelo: nadie reanuda al producer
+  });
+
+  it("2 · ESPERA: sesion con UUID inválido no es esperar ni en live", async () => {
+    litellm("sigue con el plan");
+    const d = await decidir([...yaArrancado, a("ESPERA: sesion no-es-uuid → sigo")], ctx);
+    assert.equal(d.accion, "enviar");
+  });
+
   it("3 · PARA IT / SECURITY / QA → esperar", async () => {
     sinModelo();
     const d = await decidir([...yaArrancado, a("PARA IT: falta el token del runner")], ctx);
