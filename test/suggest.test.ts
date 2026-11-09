@@ -135,7 +135,7 @@ describe("the state of a force (Dani 19-10: spinner while it runs, clear error i
     suggest.force("f1", broken);
     assert.deepEqual(suggest.state("f1"), { pending: true, error: null });
     await new Promise((r) => setImmediate(r));
-    assert.deepEqual(suggest.state("f1"), { pending: false, error: "the session could not be read on this machine" });
+    assert.deepEqual(suggest.state("f1"), { pending: false, error: "the session could not be read (no daemon)" });
   });
 });
 

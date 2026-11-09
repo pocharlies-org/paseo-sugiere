@@ -26,10 +26,14 @@ let calls: any[] = [];
 const sent: string[] = [];
 const archived: string[] = [];
 let status = "idle";
+let listFails = 0; // the next N agent lists fail, as with a saturated daemon
 const sendOpts: any[] = [];
 const paseo = {
   agents: {
-    list: async () => ({ entries: [{ agent: { id: "a1", cwd: "/w/repo", status, persistence: { sessionId: "s1" } } }] }),
+    list: async () => {
+      if (listFails > 0 && listFails--) throw new Error("Plugin RPC timed out");
+      return { entries: [{ agent: { id: "a1", cwd: "/w/repo", status, persistence: { sessionId: "s1" } } }] };
+    },
     ref: (id: string) => ({ send: async (text: string, opts?: object) => { sent.push(text); sendOpts.push(opts); }, archive: async () => void archived.push(id) }),
   },
 } as never;
@@ -158,6 +162,34 @@ describe("the autopilot loop of the plugin", () => {
     assert.equal(calls.length, 4);
     assert.equal(autopilot.get("a1").estado, "humano");
     assert.match(autopilot.get("a1").motivo, /sin servicio \(503\)/);
+  });
+
+  it("a failed read of the session is retried once after 60 s; a second failure is humano with its cause", async () => {
+    status = "running";
+    await autopilot.set("a1", true, paseo);
+    status = "idle";
+    mock.timers.enable({ apis: ["setTimeout"] });
+    try {
+      listFails = 1;
+      answers = [{ status: 200, body: { accion: "enviar", mensaje: "[AUTOPILOT] y", fase: "seguir", motivo: "" } }];
+      const first = autopilot.decide("a1", "/w/repo", paseo);
+      await until(() => /reintento en 60 s/.test(autopilot.get("a1").motivo ?? ""), "the retry notice");
+      assert.match(autopilot.get("a1").motivo!, /no se pudo leer la sesión: the session could not be read \(Plugin RPC timed out\)/);
+      assert.equal(calls.length, 0, "nothing asked before the retry");
+      await until(() => (mock.timers.tick(60_000), calls.length === 1), "the read retried");
+      await first;
+      suggest.cancel("a1");
+      listFails = 2;
+      const second = autopilot.decide("a1", "/w/repo", paseo);
+      await until(() => (mock.timers.tick(60_000), estado() === "humano"), "red after the second failure");
+      await second;
+    } finally {
+      mock.timers.reset();
+      listFails = 0;
+    }
+    assert.deepEqual(sent, ["[AUTOPILOT] y"], "the retried read is obeyed");
+    assert.equal(calls.length, 1, "the failed turn asks nothing");
+    assert.match(autopilot.get("a1").motivo!, /^no se pudo leer la sesión: .*Plugin RPC timed out/);
   });
 
   it("drops the answer when a turn started meanwhile, and asks only once per turn", async () => {

@@ -48,7 +48,7 @@ no consume su contrato `file.claude-cuentas.v1`: la llamada va a LiteLLM con la 
   (`contexto.kind: "live"`, `cwd`, la `key` del ancla, el plan si hay guarda, `nativa` solo sin plan, y `topes` de los ajustes;
   plazo 330 s) y obedece: `enviar` → manda el mensaje si no empezó otro turno (`seq`); `esperar` → ✦ dorada «esperando: …»;
   `humano` → ✦ rojo brillante con pulso (sin animación con movimiento reducido) hasta el siguiente mensaje; `cerrar` → archiva el
-  agente. Un 503 o sin respuesta se reintenta una vez a los 60 s; si vuelve a fallar, rojo. Con el autopilot encendido no se genera
+  agente. Un 503, sin respuesta o una lectura fallida de la sesión se reintenta una vez a los 60 s; si vuelve a fallar, rojo con la causa. Con el autopilot encendido no se genera
   sugerencia (una sola llamada por turno). Estado en `~/.local/state/paseo-sugiere/autopilot.json`
   (`{agentId: {on, desde, estado, motivo, decidido?, pasos?, enviado?}}`). Al arrancar, una evaluación de los agentes con autopilot `idle` cuyo último mensaje es
   del asistente (en la primera llamada que trae el host: la SDK no da `paseo` al arrancar). Es distinto de «Sugerir

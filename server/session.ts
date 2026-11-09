@@ -17,14 +17,14 @@ const MAX_BYTES = 4 * 1024 * 1024;
 const FAILURE_TEXT = {
   "no-session": "this agent has no Claude session",
   "no-transcript": "the session's transcript is not on this machine",
-  unreadable: "the session could not be read on this machine",
+  unreadable: "the session could not be read",
   router: "the model door (LiteLLM) did not answer",
   servicio: "the cluster's sugiere service did not answer",
 } as const;
 
 export class SessionError extends Error {
-  constructor(kind: keyof typeof FAILURE_TEXT) {
-    super(FAILURE_TEXT[kind]);
+  constructor(kind: keyof typeof FAILURE_TEXT, cause?: unknown) {
+    super(cause instanceof Error ? `${FAILURE_TEXT[kind]} (${cause.message})` : FAILURE_TEXT[kind]);
   }
 }
 
@@ -47,7 +47,7 @@ export async function locateSession(agentId: string, paseo: PaseoApi): Promise<s
     throw new SessionError("no-transcript");
   } catch (error) {
     if (error instanceof SessionError) throw error;
-    throw new SessionError("unreadable");
+    throw new SessionError("unreadable", error);
   }
 }
 
