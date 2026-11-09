@@ -7,6 +7,7 @@ import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import type { PluginHandlerContext } from "@getpaseo/plugin/server";
 import { transcriptMessages } from "../shared/transcript.ts";
+import { bloqueoDelegacion } from "./delegation.ts";
 import { SessionError, locateSession, nativeSuggestion, sugierePost } from "./session.ts";
 import { anchorKey, guardedPlan, turn } from "./suggest.ts";
 
@@ -58,13 +59,25 @@ export function setTopes(max_seguidos: number, max_total: number): void {
   topes = { max_seguidos, max_total };
 }
 
-/** The switch. Turning it on over an idle session that is waiting on the user starts piloting right away. */
+/** The switch. Turning it on over an idle session that is waiting on the user starts piloting right away.
+ * coordinación de sesiones: an agent the rutador holds as a producer (any active record, `paused` included) cannot be piloted from here —
+ * the RPC fails saying the delegation must be released first. Fence before and after the write: the rutador checks
+ * `autopilot.json` before claiming, so a claim that lands between our read and our write is caught on the second read. */
 export async function set(agentId: string, value: boolean, paseo: Paseo): Promise<ReturnType<typeof get>> {
+  if (value) {
+    const bloqueo = bloqueoDelegacion(agentId);
+    if (bloqueo) throw new Error(`autopilot: ${bloqueo}; libera la delegación antes de encenderlo`);
+  }
   // A new run starts its own count: what the last one decided and sent goes.
   put(agentId, { on: value, desde: new Date().toISOString(), estado: value ? "activo" : "apagado", motivo: "", decidido: undefined, pasos: undefined, enviado: undefined });
   decided.delete(agentId);
   console.log(`autopilot: ${value ? "encendido" : "apagado"} para ${agentId}`);
   if (value) {
+    const tras = bloqueoDelegacion(agentId);
+    if (tras) {
+      put(agentId, { on: false, estado: "apagado", motivo: "" });
+      throw new Error(`autopilot: ${tras}; libera la delegación antes de encenderlo`);
+    }
     const { entries } = await paseo.agents.list({ page: { limit: 200 } });
     const agent = entries.find(({ agent }) => agent.id === agentId)?.agent as Agent | undefined;
     if (agent) background(decideIfWaiting(agent, paseo));
@@ -104,6 +117,9 @@ const decided = new Map<string, number>(); // the last turn asked for: the turn 
 export async function decide(agentId: string, cwd: string, paseo: Paseo, turnId?: string | null): Promise<void> {
   const seq = turn(agentId);
   if (!on(agentId) || decided.get(agentId) === seq) return;
+  // coordinación de sesiones: con delegación activa del rutador no se pilota — se para a rojo con el motivo, sin preguntar ni enviar.
+  const bloqueo = bloqueoDelegacion(agentId);
+  if (bloqueo) return stop(agentId, `${bloqueo}: el rutador lleva esta sesión; libera la delegación para pilotarla`);
   decided.set(agentId, seq);
   const current = () => on(agentId) && turn(agentId) === seq;
   put(agentId, { estado: "pensando", motivo: "pidiendo el siguiente paso al servicio" });
@@ -137,12 +153,21 @@ export async function decide(agentId: string, cwd: string, paseo: Paseo, turnId?
   if (!accion || !ACCIONES.has(accion) || (accion === "enviar" && !(typeof mensaje === "string" && mensaje.trim()))) {
     return stop(agentId, `respuesta del autopilot inválida: ${JSON.stringify(answer.out).slice(0, 120)}`);
   }
+  // Owner fence (coordinación de sesiones): a delegation can land while the service request is in flight — recheck right before the side
+  // effect: nothing is sent or archived over an active record.
+  if (accion === "enviar" || accion === "cerrar") {
+    const enlace = bloqueoDelegacion(agentId);
+    if (enlace) return stop(agentId, `${enlace}: el rutador enlazó la sesión mientras el servicio pensaba; no se envía ni archiva`);
+  }
   console.log(`autopilot: ${agentId} turno ${seq} → ${accion}${fase ? ` (${fase})` : ""}: ${why.slice(0, 120)}`);
   const counted = Number.isInteger(pasos?.seguidos) && Number.isInteger(pasos?.total);
   put(agentId, { decidido: new Date().toISOString(), ...(counted ? { pasos: { seguidos: pasos!.seguidos as number, total: pasos!.total as number } } : {}) });
   if (accion === "enviar") {
     put(agentId, { estado: "activo", motivo: why, enviado: mensaje!.slice(0, 280) });
-    await paseo.agents.ref(agentId).send(mensaje!).catch((error) => stop(agentId, `no se pudo enviar: ${(error as Error).message}`));
+    // coordinación de sesiones: el autoenvío se declara `steer` (si el turno arrancó mientras el servicio pensaba, no lo interrumpe). La SDK
+    // 0.11.2 aún no expone `sourceAgentId` en `send` (solo messageId/activeTurnBehavior/images/attachments): la procedencia
+    // del mensaje queda pendiente de la SDK; no se fuerza con cast.
+    await paseo.agents.ref(agentId).send(mensaje!, { activeTurnBehavior: "steer" }).catch((error) => stop(agentId, `no se pudo enviar: ${(error as Error).message}`));
   } else if (accion === "esperar") put(agentId, { estado: "esperando", motivo: why });
   else if (accion === "humano") stop(agentId, why);
   else {

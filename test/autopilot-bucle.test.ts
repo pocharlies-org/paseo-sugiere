@@ -26,10 +26,11 @@ let calls: any[] = [];
 const sent: string[] = [];
 const archived: string[] = [];
 let status = "idle";
+const sendOpts: any[] = [];
 const paseo = {
   agents: {
     list: async () => ({ entries: [{ agent: { id: "a1", cwd: "/w/repo", status, persistence: { sessionId: "s1" } } }] }),
-    ref: (id: string) => ({ send: async (text: string) => void sent.push(text), archive: async () => void archived.push(id) }),
+    ref: (id: string) => ({ send: async (text: string, opts?: object) => { sent.push(text); sendOpts.push(opts); }, archive: async () => void archived.push(id) }),
   },
 } as never;
 globalThis.fetch = (async (url: string, init: any) => {
@@ -55,7 +56,7 @@ describe("the autopilot loop of the plugin", () => {
   beforeEach(async () => {
     answers = [];
     calls = [];
-    sent.length = archived.length = 0;
+    sent.length = archived.length = sendOpts.length = 0;
     status = "idle";
     write(join(HOME, ".paseo", "config.json"), "{}");
     write(join(HOME, ".claude", "projects", "p", "s1.jsonl"), transcript("assistant"));
@@ -78,6 +79,7 @@ describe("the autopilot loop of the plugin", () => {
     assert.ok(turno, "the service refuses a falsy turno");
     assert.equal(nativa, undefined);
     assert.deepEqual(sent, ["[AUTOPILOT] sigue con los tests"]);
+    assert.deepEqual(sendOpts, [{ activeTurnBehavior: "steer" }], "el autoenvío se declara steer (coordinación de sesiones; la SDK 0.11.2 aún no tiene sourceAgentId)");
     assert.equal(file().a1.on, true);
     assert.equal(file().a1.estado, "activo");
     // What the popover shows besides the state: the step count, when it decided, what it sent.

@@ -21,6 +21,22 @@ describe("la gramática del cierre, igual que el supervisor", () => {
   }
 });
 
+describe("ESPERA: sesion (coordinación de sesiones, coordinación con el rutador)", () => {
+  const uuid = "3f2a8b1c-4d5e-4f70-8192-a3b4c5d6e7f8";
+  it("sesion con UUID se reconoce, también en viñeta y backticks", () => {
+    assert.deepEqual(esperasDe(`Abrí el PR.\nESPERA: sesion ${uuid} → sigo cuando el dueño termine`).map((e) => e.linea), [`sesion ${uuid}`]);
+    assert.deepEqual(esperasDe(`- \`ESPERA: sesion ${uuid}\` → espero`).map((e) => e.linea), [`sesion ${uuid}`]);
+    assert.deepEqual(esperasDe(`ESPERA: sesion ${uuid.toUpperCase()} → UUID ajeno al formato del daemon`), []);
+  });
+
+  it("UUID inválido no se reconoce", () => {
+    for (const mal of ["no-es-uuid", "3f2a8b1c4d5e4f708192a3b4c5d6e7f8", "3f2a8b1c-4d5e-4f70-8192-a3b4c5d6e7f",
+      "3f2a8b1c-4d5e-4f70-8192-a3b4c5d6e7f8x", "gggggggg-4d5e-4f70-8192-a3b4c5d6e7f8", "3f2a8b1c-4d5e-4f70-8192"]) {
+      assert.deepEqual(esperasDe(`ESPERA: sesion ${mal} → nada`), [], mal);
+    }
+  });
+});
+
 const linea = (o: object) => JSON.stringify(o);
 const usuario = (texto: string, extra: object = {}) => linea({ type: "user", timestamp: "2026-11-07T10:00:00Z", ...extra,
   message: { role: "user", content: [{ type: "text", text: texto }] } });

@@ -326,7 +326,7 @@ Tabla de decisión, en orden (lo determinista antes que cualquier modelo):
 |---|---|---|
 | 1 | `AUTOPILOT: ENTREGADO <CLAVE> <url>` con clave y URL reales | `cerrar` |
 | 2 | `PARA DANI` (o `ESTADO: PREGUNTA/BLOQUEO`) con importe (`DINERO_RE` del supervisor) o `PARA DANI (alcance):` | `humano` |
-| 3 | alguna `ESPERA:` vigilable que no sea `fichero` | `esperar` (la despierta el `EVENTO:` del supervisor) |
+| 3 | alguna `ESPERA:` vigilable que no sea `fichero` (una `sesion` solo con `kind: live`, coordinación de sesiones: la compañía no espera algo sin reanudación) | `esperar` (la despierta el `EVENTO:` del supervisor o el dueño coordinado) |
 | 4 | `PARA IT:` / `PARA SECURITY:` / `PARA QA:` | `esperar` |
 | 5 | un tope configurado (`max_seguidos`, `max_total`, distinto de 0) superado | `humano` |
 | 6 | primer paso del autopilot sin ticket (ni `contexto.key` ni el del ancla) | `enviar` · `arranque` (el ticket primero) |

@@ -52,3 +52,19 @@ contracts:
       no contestaron (el llamante reintenta una vez). Consumidores: el plugin de Paseo de este repo (F2 del plan) y, en F5,
       el supervisor de la compañía. Spec: docs/servicio-sugiere.md §12. Aditivo (07-11-2026): `contexto.topes`
       {max_seguidos, max_total} opcional, enteros >= 0, 0 = sin tope (y por defecto, sin tope).
+  - id: file.paseo.delegations.v1
+    kind: file-schema
+    value: "rutador-coordinaciones.json"
+    role: consumer
+    files:
+      - server/delegation.ts
+    status: active
+    note: >-
+      09-11-2026 (coordinación de sesiones). Productor: paseo-rutador (su alta vive en su CONTRACTS.yaml); consumidor: el plugin de este repo.
+      Fichero en $PASEO_HOME (default ~/.paseo) con el store de coordinaciones, schema v1: {version:1,
+      delegations:{[producerId]: {ownerId, producerId, state watching|result|dispatching|paused, ownerActivity,
+      producerActivity, sentIds, …}}} — los campos extra pasan, el consumidor no exige forma exacta de la entrada. Todo
+      registro activo reserva la propiedad del producer (también `paused`); release = borrar el registro. El consumidor lo
+      lee validado (server/delegation.ts): ausente = normal; ilegible, no-JSON o v1 incompleto = fail closed (el autopilot
+      no reclama la sesión: rechaza encenderse y para a rojo sin enviar ni archivar). El rutador no escribe
+      autopilot.json y el plugin no escribe este fichero.

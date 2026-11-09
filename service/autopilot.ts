@@ -105,8 +105,9 @@ export async function decidir(lines: string[], ctx: Contexto, nativa = ""): Prom
   if (dani !== null && esAlcance(texto)) return fin("humano", "cambio de alcance o diseño: lo decide Dani", { riesgo: "alto" });
   if (dani !== null && DINERO_RE.test(dani)) return fin("humano", `dinero: ${dani.slice(0, 160)}`, { riesgo: "dinero" });
 
-  // 3. Lo que espera fuera lo despierta el supervisor con EVENTO (una `ESPERA: fichero` no despierta a nadie en Paseo).
-  const esperas = esperasDe(texto).filter((e) => e.tipo !== "fichero");
+  // 3. Lo que espera fuera lo despierta el supervisor con EVENTO (una `ESPERA: fichero` no despierta a nadie en Paseo). Una
+  // `ESPERA: sesion` (coordinación de sesiones) solo espera en `live`: en la compañía nada reanuda al producer, y no se espera lo que no reanuda.
+  const esperas = esperasDe(texto).filter((e) => e.tipo !== "fichero" && (e.tipo !== "sesion" || ctx.kind === "live"));
   if (dani === null && esperas.length) return fin("esperar", esperas.map((e) => e.linea).join(", "));
   const otros = parasDe(texto).filter((p) => p.quien !== "DANI");
   if (dani === null && otros.length) return fin("esperar", `PARA ${otros.map((p) => p.quien).join("/")}: lo despierta el supervisor`);
