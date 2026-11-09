@@ -29,7 +29,6 @@ const registro = (producerId: string, extra: object = {}) => ({
 describe("el store del rutador, leído validado", () => {
   const dir = mkdtempSync(join(tmpdir(), "delegacion-store-"));
   const ruta = (nombre: string) => join(dir, nombre);
-  afterEach(() => { for (const f of ["ausente.json"]) rmSync(ruta(f), { force: true }); });
 
   it("ausente = normal: sin bloqueo", () => {
     assert.equal(bloqueoDelegacion("p1", ruta("no-existe.json")), null);
