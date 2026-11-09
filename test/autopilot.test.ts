@@ -3,7 +3,7 @@ import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, it, mock } from "node:test";
-import { SinServicio, decidir, topes } from "../service/autopilot.ts";
+import { SinServicio, decidir, etiquetaProgramada, topes } from "../service/autopilot.ts";
 
 // Una fila de la tabla de decisión del plan del autopilot (§3) por test. Lo determinista no llama a ningún modelo; el paso
 // propuesto pasa por la puerta. Las respuestas de LiteLLM se simulan: la del juez lleva la rúbrica, la de la sugerencia no.
@@ -65,6 +65,48 @@ describe("el autopilot, fila a fila", () => {
     litellm("sigue con el plan");
     const d = await decidir([...yaArrancado, a("ESPERA: sesion no-es-uuid → sigo")], ctx);
     assert.equal(d.accion, "enviar");
+  });
+
+  // Una espera solo de fecha lejana no deja la sesión abierta días: se aplaza a un ticket programado.
+  const dia = (h: number) => new Date(Date.now() + h * 3600_000).toISOString().slice(0, 10);
+  const hora = (h: number) => new Date(Date.now() + h * 3600_000).toISOString().slice(0, 16).replace("T", " ");
+
+  it("2 · ESPERA: fecha a 2 días, en live → enviar · aplazar con la etiqueta programada en hora de Madrid", async () => {
+    sinModelo();
+    const d = await decidir([...yaArrancado, a(`Nada más que hacer.\nESPERA: fecha ${dia(48)} → revisar la aprobación`)], { ...ctx, key: "TAREA-1000001" });
+    assert.deepEqual([d.accion, d.fase], ["enviar", "aplazar"]);
+    assert.match(d.mensaje!, /^\[AUTOPILOT\] /);
+    assert.match(d.mensaje!, /programada-\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/);
+    assert.match(d.mensaje!, /enlazar <NUEVA> TAREA-1000001 --tipo Blocks/);
+    assert.match(d.mensaje!, /AUTOPILOT: APLAZADO <NUEVA>/);
+  });
+
+  it("2 · la etiqueta programada es la hora de Madrid (CET en invierno, CEST en verano)", () => {
+    assert.equal(etiquetaProgramada(Date.UTC(2026, 10, 11, 0, 0)), "programada-2026-11-11T01:00");
+    assert.equal(etiquetaProgramada(Date.UTC(2026, 6, 1, 22, 30)), "programada-2026-07-02T00:30");
+  });
+
+  it("2 · ESPERA: fecha cercana, en la compañía o junto a otra espera → esperar, no se aplaza", async () => {
+    sinModelo();
+    const cerca = await decidir([...yaArrancado, a(`ESPERA: fecha ${hora(3)} → sigo`)], ctx);
+    assert.equal(cerca.accion, "esperar");
+    const compania = await decidir([...yaArrancado, a(`ESPERA: fecha ${dia(48)} → sigo`)], { kind: "company", cwd: ctx.cwd });
+    assert.equal(compania.accion, "esperar");
+    const mixta = await decidir([...yaArrancado, a(`ESPERA: ci pocharlies-org/paseo#9 → fusiono\nESPERA: fecha ${dia(48)} → miro`)], ctx);
+    assert.equal(mixta.accion, "esperar");
+  });
+
+  it("2 · aplazar pedido y el turno vuelve a esperar la fecha → humano", async () => {
+    sinModelo();
+    const pedido = (await decidir([...yaArrancado, a(`ESPERA: fecha ${dia(48)} → sigo`)], ctx)).mensaje!;
+    const d = await decidir([...yaArrancado, u(pedido), a(`ESPERA: fecha ${dia(48)} → sigo`)], ctx);
+    assert.equal(d.accion, "humano");
+  });
+
+  it("1 · AUTOPILOT: APLAZADO con clave y URL → cerrar", async () => {
+    sinModelo();
+    const d = await decidir([...yaArrancado, a("Creado TAREA-1000002.\nAUTOPILOT: APLAZADO TAREA-1000002 https://tickets.example.com/TAREA-1000002")], ctx);
+    assert.deepEqual([d.accion, d.motivo], ["cerrar", "aplazado a TAREA-1000002: https://tickets.example.com/TAREA-1000002"]);
   });
 
   it("3 · PARA IT / SECURITY / QA → esperar", async () => {

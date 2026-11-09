@@ -4,7 +4,7 @@
 // `CIERRE_PASEO`; `test/fixtures/cierre.json` es el corpus que las dos suites deben pasar igual (plan del autopilot, §3.2).
 // Puro: texto dentro, datos fuera.
 
-export type Espera = { tipo: string; linea: string };
+export type Espera = { tipo: string; linea: string; ts?: number }; // `ts`: el instante de una `fecha` (epoch ms)
 
 const ESPERA_RE = /^[ \t]*(?:[-*>•]+[ \t]*)?[`*_]*ESPERA[`*_]*[ \t]*:[`*_]*[ \t]*(ci|merge|review|run|argocd|fichero|jira|sesion)[ \t]+([^\n→]+?)[ \t]*(?:(?:→|->)[ \t]*(.*?))?[ \t]*$/gim;
 const FECHA_RE = /^[ \t]*(?:[-*>•]+[ \t]*)?[`*_]*ESPERA[`*_]*[ \t]*:[`*_]*[ \t]*fecha[ \t]+(\d{4}-\d{2}-\d{2}|\d{2}-\d{2})(?:[ T](\d{1,2}):(\d{2}))?Z?[ \t]*(?:(?:→|->)[ \t]*(.*?))?[ \t]*$/gim;
@@ -14,8 +14,9 @@ const ESTADO_RE = /^[ \t>*_`-]*ESTADO[ \t*_`]*:[ \t*_`]*(ENTREGA|PREGUNTA|BLOQUE
 export const DINERO_RE = /\d[\d.,]*[ \t]*(?:€|\$|eur(?:os?)?\b|usd\b|dólares?\b)|[€$][ \t]*\d/i;
 /** Decisión 1 de Dani (07-11): un cambio de alcance o diseño del encargo para el autopilot y espera a una persona. */
 const ALCANCE_RE = /^[ \t>*_`-]*PARA DANI[ \t]*\([ \t]*alcance[ \t]*\)[^\n:]{0,8}:/im;
-/** La última línea de la entrega del autopilot: clave y URL reales (un `<KEY> <url>` de ejemplo no cierra nada). */
-const ENTREGADO_RE = /^[ \t>*_`-]*AUTOPILOT[ \t*_`]*:[ \t*_`]*ENTREGADO[ \t*_`]+([A-Z][A-Z0-9_]+-\d+)[ \t`*_]+(https?:\/\/\S+?)[`*_.,;)]*[ \t]*$/m;
+/** La última línea con que el autopilot cierra la sesión: clave y URL reales (un `<KEY> <url>` de ejemplo no cierra nada).
+ * `ENTREGADO` = encargo hecho; `APLAZADO` = la espera larga sigue en un ticket programado. */
+const CIERRE_RE = /^[ \t>*_`-]*AUTOPILOT[ \t*_`]*:[ \t*_`]*(ENTREGADO|APLAZADO)[ \t*_`]+([A-Z][A-Z0-9_]+-\d+)[ \t`*_]+(https?:\/\/\S+?)[`*_.,;)]*[ \t]*$/m;
 
 const PR = /^[\w.-]+\/[\w.-]+#\d+$/;
 // The coordinator waits for a registered producer; UUIDs use the daemon's lowercase representation.
@@ -53,7 +54,7 @@ export function esperasDe(texto: string): Espera[] {
     const f = new Date(Date.UTC(a, mes - 1, d, Number(hh ?? 0), Number(mm ?? 0)));
     // `datetime(...)` de Python rechaza un día o una hora imposibles; Date los desborda: se comprueba a la vuelta.
     if (f.getUTCMonth() !== mes - 1 || f.getUTCDate() !== d || Number(hh ?? 0) > 23 || Number(mm ?? 0) > 59) continue;
-    out.push({ tipo: "fecha", linea: `fecha ${dia}${hh ? ` ${hh}:${mm}Z` : ""}` });
+    out.push({ tipo: "fecha", linea: `fecha ${dia}${hh ? ` ${hh}:${mm}Z` : ""}`, ts: f.getTime() });
   }
   return out;
 }
@@ -78,10 +79,12 @@ export function estadoDe(texto: string): [string | null, string] {
 
 export const esAlcance = (texto: string) => ALCANCE_RE.test(texto || "");
 
-export function entregadoDe(texto: string): { key: string; url: string } | null {
-  const m = (texto || "").match(ENTREGADO_RE);
-  return m ? { key: m[1]!, url: m[2]! } : null;
-}
+const cierreDe = (palabra: string) => (texto: string): { key: string; url: string } | null => {
+  const m = (texto || "").match(CIERRE_RE);
+  return m && m[1] === palabra ? { key: m[2]!, url: m[3]! } : null;
+};
+export const entregadoDe = cierreDe("ENTREGADO");
+export const aplazadoDe = cierreDe("APLAZADO");
 
 type Entrada = { type?: string; isMeta?: boolean; timestamp?: string; message?: { role?: string; content?: unknown } };
 const entradas = (lines: string[]): Entrada[] => lines.flatMap((l) => { try { return [JSON.parse(l)]; } catch { return []; } });

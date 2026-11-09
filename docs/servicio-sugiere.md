@@ -313,7 +313,7 @@ Salida (`200`):
 
 ```json
 {"accion": "enviar|esperar|humano|cerrar", "motivo": "una línea", "mensaje": "[AUTOPILOT] …",
- "fase": "arranque|devolver|entregar|seguir|desvio", "riesgo": "…", "modelo": "…", "via": "…",
+ "fase": "arranque|devolver|entregar|aplazar|seguir|desvio", "riesgo": "…", "modelo": "…", "via": "…",
  "pasos": {"seguidos": 4, "total": 17}, "ms": 812}
 ```
 
@@ -324,8 +324,9 @@ Tabla de decisión, en orden (lo determinista antes que cualquier modelo):
 
 | # | El último turno (lo que el asistente escribió tras el último mensaje real) | Acción |
 |---|---|---|
-| 1 | `AUTOPILOT: ENTREGADO <CLAVE> <url>` con clave y URL reales | `cerrar` |
+| 1 | `AUTOPILOT: ENTREGADO <CLAVE> <url>` o `AUTOPILOT: APLAZADO <CLAVE> <url>` con clave y URL reales | `cerrar` |
 | 2 | `PARA DANI` (o `ESTADO: PREGUNTA/BLOQUEO`) con importe (`DINERO_RE` del supervisor) o `PARA DANI (alcance):` | `humano` |
+| 3a | en `live`, solo `ESPERA: fecha` y la primera a 12 h o más (ninguna sesión abierta días esperando) | `enviar` · `aplazar`: crear el ticket que retoma el trabajo con `programada-<fecha Madrid>` (contrato `jira.etiquetas.programada` del supervisor) y `cola-compania`, enlazarlo con `Blocks` al actual, comentar el informe y cerrar con `AUTOPILOT: APLAZADO`; pedido y no cerrado en el turno siguiente, `humano` |
 | 3 | alguna `ESPERA:` vigilable que no sea `fichero` (una `sesion` solo con `kind: live`, coordinación de sesiones: la compañía no espera algo sin reanudación) | `esperar` (la despierta el `EVENTO:` del supervisor o el dueño coordinado) |
 | 4 | `PARA IT:` / `PARA SECURITY:` / `PARA QA:` | `esperar` |
 | 5 | un tope configurado (`max_seguidos`, `max_total`, distinto de 0) superado | `humano` |
@@ -339,12 +340,12 @@ Tabla de decisión, en orden (lo determinista antes que cualquier modelo):
   barrido. `test/fixtures/cierre.json` lo genera el Python del supervisor y el TS tiene que dar lo mismo caso por caso.
 - La racha: los mensajes de usuario que empiezan por `[AUTOPILOT]` son del autopilot; un `EVENTO:` o un mensaje humano ponen
   `seguidos` a 0; lo que manda el sistema (`RETOMA:`, `[SUPERVISOR]`, el feedback del hook `Stop`, recordatorios) no cuenta.
-  La fase anterior (devolver, entregar, desvío) solo cuenta dentro de la racha.
+  La fase anterior (devolver, entregar, aplazar, desvío) solo cuenta dentro de la racha.
 - Topes: **0 = sin tope, y es lo de fábrica** (Dani, 07-11: «si es autopilot es autopilot»). Manda `contexto.topes`, que el plugin
   saca de sus ajustes; si el llamante no los manda, los de `/etc/sugiere/autopilot.json` (`AUTOPILOT_FICHERO`, el ConfigMap montado
   `sugiere-clasificador`, releído en cada petición como `brain.json`); sin fichero, sin tope. Sin topes siguen los cortes que no
-  cuentan pasos: el mismo paso dos veces, insistir en preguntar a Dani, un segundo veto seguido y la entrega pedida y no cerrada.
-- Todo lo que propone el autopilot va prefijado `[AUTOPILOT] `. Las plantillas (`arranque`, `devolver`, `desvio`, `entregar`)
+  cuentan pasos: el mismo paso dos veces, insistir en preguntar a Dani, un segundo veto seguido y la entrega o el aplazamiento pedidos y no cerrados.
+- Todo lo que propone el autopilot va prefijado `[AUTOPILOT] `. Las plantillas (`arranque`, `devolver`, `desvio`, `entregar`, `aplazar`)
   son texto fijo y no pasan por la puerta; el paso del modelo (`seguir`, y el que encabeza el `arranque`) sí, siempre.
 - **Desviación declarada de la regla transversal de §6** («el servicio nunca deja un ticket en silencio»): en `live`,
   `esperar` y `humano` dejan la sesión callada. Lo cubren la ✦ roja del plugin y la línea en el topic «Autopilot» de Telegram

@@ -4,7 +4,7 @@
 import { readFileSync } from "node:fs";
 import { type Plan, SUGGEST_WAIT_MS } from "../shared/suggest.ts";
 import { transcriptMessages } from "../shared/transcript.ts";
-import { DINERO_RE, PREFIJO, entregadoDe, esAlcance, esperasDe, estadoDe, parasDe, racha, ultimoTurno, type Racha } from "./cierre.ts";
+import { DINERO_RE, PREFIJO, aplazadoDe, entregadoDe, esAlcance, esperasDe, type Espera, estadoDe, parasDe, racha, ultimoTurno, type Racha } from "./cierre.ts";
 import { dictaminar, type Veredicto } from "./juez.ts";
 import { sugerir } from "./residente.ts";
 
@@ -26,7 +26,7 @@ export function topes(delLlamante?: Partial<Topes> | null, ruta: string = RUTA_T
 }
 
 export type Accion = "enviar" | "esperar" | "humano" | "cerrar";
-export type Fase = "arranque" | "devolver" | "entregar" | "seguir" | "desvio";
+export type Fase = "arranque" | "devolver" | "entregar" | "aplazar" | "seguir" | "desvio";
 export type Decision = { accion: Accion; motivo: string; mensaje?: string; fase?: Fase; riesgo?: string; modelo?: string;
   via?: Veredicto["via"]; traza?: string[]; pasos: { seguidos: number; total: number } };
 export type Contexto = { kind?: string; cwd: string; key?: string; plan?: Plan | null; topes?: Partial<Topes> | null };
@@ -40,6 +40,9 @@ const ARRANQUE = `${PREFIJO}Autopilot activado: llevo yo esta sesión hasta la e
 const DEVOLVER = `${PREFIJO}Tu \`PARA DANI\` no es dinero: con el autopilot no le llega a Dani.`;
 const DESVIO = `${PREFIJO}El paso que tocaba no se autoenvía`;
 const ENTREGAR = `${PREFIJO}El encargo está hecho: toca la entrega del autopilot.`;
+const APLAZAR = `${PREFIJO}Lo que esperas es una fecha lejana: esta sesión no se queda abierta esperándola.`;
+/** Dani, 09-11, «que no se quede una sesión esperando 2 días»: una espera solo de fecha a más de esto se aplaza. */
+const APLAZAR_DESDE_MS = 12 * 3600_000;
 const CIERRES = "Acaba cada turno como siempre: `ESPERA:`, `PARA …:` o `ESTADO: ENTREGA`.";
 
 /** Con `paso` (el que la puerta aprobó), el paso va delante y la plantilla detrás, con un solo prefijo. */
@@ -81,6 +84,28 @@ function entregar(r: Racha, modelo: string, key: string): string {
     "5. Acaba el turno con `ESTADO: ENTREGA` y, en la última línea, `AUTOPILOT: ENTREGADO <KEY> <url del artifact>`: el autopilot cierra y archiva la sesión."].join("\n");
 }
 
+/** El `programada-AAAA-MM-DDTHH:MM` del supervisor (contrato `jira.etiquetas.programada`): la hora de Madrid. */
+export const etiquetaProgramada = (ts: number) =>
+  `programada-${new Date(ts).toLocaleString("sv-SE", { timeZone: "Europe/Madrid", hour12: false }).slice(0, 16).replace(" ", "T")}`;
+
+/** En `live`, la espera hecha solo de fechas cuya primera queda lejos: mejor un ticket programado que una sesión abierta. */
+function aplazable(esperas: Espera[], kind = ""): number | null {
+  if (kind !== "live" || !esperas.length || esperas.some((e) => e.tipo !== "fecha" || e.ts === undefined)) return null;
+  const ts = Math.min(...esperas.map((e) => e.ts!));
+  return ts - Date.now() >= APLAZAR_DESDE_MS ? ts : null;
+}
+
+function aplazar(ts: number, key: string): string {
+  const actual = key || "el ticket de esta sesión";
+  return [`${APLAZAR} Pasa el trabajo a un ticket que el supervisor arranca a su hora, y cierra.`,
+    "1. Crea el ticket que lo retoma (skill `clasificar-trabajo`): sin asignar, en To Do, con `jira_rest.py crear … --rol cto` y la descripción por stdin: " +
+      `lo hecho (PRs, commits, evidencia), dónde quedó, el paso que toca en esa fecha (el \`→\` de tu \`ESPERA\`), criterios \`- [ ]\` verificables y, el último, cerrar ${actual}.`,
+    `2. Etiquétalo con \`jira_rest.etiqueta_add\` (\`JIRA_ROL=cto\`), PRIMERO \`${etiquetaProgramada(ts)}\` (hora de Madrid) y DESPUÉS \`cola-compania\`: sin la fecha delante, el supervisor lo lanzaría ya.`,
+    `3. \`jira_rest.py enlazar <NUEVA> ${key || "<ACTUAL>"} --tipo Blocks\` y comenta en ${actual} el informe de lo hecho y la clave nueva.`,
+    "4. Limpia lo tuyo: tu worktree por su ruta exacta (la rama con PR abierta se queda).",
+    "5. Acaba el turno con, en la última línea, `AUTOPILOT: APLAZADO <NUEVA> <url del ticket nuevo>`: el autopilot cierra y archiva esta sesión."].join("\n");
+}
+
 const criterios = (plan: Plan | null | undefined) => (Array.isArray(plan?.criterios) ? plan!.criterios! : []);
 const todoVerificado = (plan: Plan | null | undefined) =>
   criterios(plan).length > 0 && criterios(plan).every((c) => String(c?.status ?? "").toLowerCase().startsWith("verificad"));
@@ -111,9 +136,11 @@ export async function decidir(lines: string[], ctx: Contexto, nativa = ""): Prom
     return { v, puerta: { riesgo: v.riesgo, via: v.via, modelo: quien, ...(v.traza ? { traza: v.traza } : {}) } };
   };
 
-  // 1. La entrega ya está hecha: se cierra (el plugin archiva).
+  // 1. La entrega ya está hecha, o aplazada a un ticket programado: se cierra (el plugin archiva).
   const entregado = entregadoDe(texto);
   if (entregado) return fin("cerrar", `entregado ${entregado.key}: ${entregado.url}`);
+  const aplazado = aplazadoDe(texto);
+  if (aplazado) return fin("cerrar", `aplazado a ${aplazado.key}: ${aplazado.url}`);
   if (!texto.trim()) return fin("esperar", "el turno no dejó texto (lo retoma el supervisor)");
 
   // 2. Lo que espera a Dani: dinero o un cambio de alcance (decisión 1) paran; lo demás vuelve a la sesión, como en el supervisor.
@@ -125,7 +152,14 @@ export async function decidir(lines: string[], ctx: Contexto, nativa = ""): Prom
 
   // 3. Lo que espera fuera lo despierta el supervisor con EVENTO (una `ESPERA: fichero` no despierta a nadie en Paseo). Una
   // `ESPERA: sesion` (coordinación de sesiones) solo espera en `live`: en la compañía nada reanuda al producer, y no se espera lo que no reanuda.
+  // Una espera solo de fecha lejana, en live, no deja la sesión abierta: se aplaza a un ticket programado.
   const esperas = esperasDe(texto).filter((e) => e.tipo !== "fichero" && (e.tipo !== "sesion" || ctx.kind === "live"));
+  const antes = r.seguidos ? r.ultimo : ""; // la fase anterior solo cuenta dentro de la racha: tras Dani o un EVENTO, no insiste nadie
+  const lejos = dani === null ? aplazable(esperas, ctx.kind) : null;
+  if (lejos !== null) {
+    if (antes.startsWith(APLAZAR)) return fin("humano", "se pidió aplazar a un ticket programado y el turno no cerró con AUTOPILOT: APLAZADO");
+    return envia("aplazar", aplazar(lejos, key), `espera solo de fecha (${esperas.map((e) => e.linea).join(", ")}): se aplaza`);
+  }
   if (dani === null && esperas.length) return fin("esperar", esperas.map((e) => e.linea).join(", "));
   const otros = parasDe(texto).filter((p) => p.quien !== "DANI");
   if (dani === null && otros.length) return fin("esperar", `PARA ${otros.map((p) => p.quien).join("/")}: lo despierta el supervisor`);
@@ -134,7 +168,6 @@ export async function decidir(lines: string[], ctx: Contexto, nativa = ""): Prom
   const t = topes(ctx.topes);
   if (t.max_seguidos && r.seguidos >= t.max_seguidos) return fin("humano", `tope: ${r.seguidos} pasos seguidos sin ESPERA, EVENTO ni entrega`);
   if (t.max_total && r.total >= t.max_total) return fin("humano", `tope: ${r.total} pasos del autopilot en esta sesión`);
-  const antes = r.seguidos ? r.ultimo : ""; // la fase anterior solo cuenta dentro de la racha: tras Dani o un EVENTO, no insiste nadie
 
   // 5. El primer paso sin plan anclado: el ticket primero (decisión 4). El autopilot se enciende con la sesión a medias (Dani,
   // 09-11): el paso que la puerta aprueba va delante de la plantilla. Sin él —sin paso, modelo o puerta, o vetado— la

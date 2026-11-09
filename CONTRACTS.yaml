@@ -47,11 +47,13 @@ contracts:
     status: active
     note: >-
       07-11-2026. Entrada {sid, turno, transcript, contexto{cwd, kind?, key?, plan?}, nativa?}; salida 200
-      {accion enviar|esperar|humano|cerrar, motivo, mensaje?, fase? arranque|devolver|entregar|seguir|desvio, riesgo?,
+      {accion enviar|esperar|humano|cerrar, motivo, mensaje?, fase? arranque|devolver|entregar|aplazar|seguir|desvio, riesgo?,
       modelo?, via?, traza?, pasos{seguidos, total}, ms}; 422 cuerpo inválido o sin contexto.cwd; 503 el modelo o la puerta
       no contestaron (el llamante reintenta una vez). Consumidores: el plugin de Paseo de este repo (F2 del plan) y, en F5,
       el supervisor de la compañía. Spec: docs/servicio-sugiere.md §12. Aditivo (07-11-2026): `contexto.topes`
-      {max_seguidos, max_total} opcional, enteros >= 0, 0 = sin tope (y por defecto, sin tope).
+      {max_seguidos, max_total} opcional, enteros >= 0, 0 = sin tope (y por defecto, sin tope). Aditivo (09-11-2026):
+      `fase` `aplazar` (live, espera solo de fecha a >= 12 h: el turno pasa el trabajo a un ticket `programada-<fecha>` y
+      cierra con `AUTOPILOT: APLAZADO <KEY> <url>`, que se lee como `cerrar`).
   - id: file.paseo.delegations.v1
     kind: file-schema
     value: "rutador-coordinaciones.json"
