@@ -88,7 +88,7 @@ describe("el autopilot, fila a fila", () => {
 
   it("2 · ESPERA: fecha cercana, en la compañía o junto a otra espera → esperar, no se aplaza", async () => {
     sinModelo();
-    const cerca = await decidir([...yaArrancado, a(`ESPERA: fecha ${hora(3)} → sigo`)], ctx);
+    const cerca = await decidir([...yaArrancado, a(`ESPERA: fecha ${hora(1)} → sigo`)], ctx);
     assert.equal(cerca.accion, "esperar");
     const compania = await decidir([...yaArrancado, a(`ESPERA: fecha ${dia(48)} → sigo`)], { kind: "company", cwd: ctx.cwd });
     assert.equal(compania.accion, "esperar");

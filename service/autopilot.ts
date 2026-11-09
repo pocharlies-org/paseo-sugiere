@@ -41,8 +41,8 @@ const DEVOLVER = `${PREFIJO}Tu \`PARA DANI\` no es dinero: con el autopilot no l
 const DESVIO = `${PREFIJO}El paso que tocaba no se autoenvía`;
 const ENTREGAR = `${PREFIJO}El encargo está hecho: toca la entrega del autopilot.`;
 const APLAZAR = `${PREFIJO}Lo que esperas es una fecha lejana: esta sesión no se queda abierta esperándola.`;
-/** Dani, 09-11, «que no se quede una sesión esperando 2 días»: una espera solo de fecha a más de esto se aplaza. */
-const APLAZAR_DESDE_MS = 12 * 3600_000;
+/** Dani, 09-11: «que no se quede una sesión esperando 2 días»; «si es 2 h ya sería suficiente». Una espera solo de fecha a más de esto se aplaza. */
+const APLAZAR_DESDE_MS = 2 * 3600_000;
 const CIERRES = "Acaba cada turno como siempre: `ESPERA:`, `PARA …:` o `ESTADO: ENTREGA`.";
 
 /** Con `paso` (el que la puerta aprobó), el paso va delante y la plantilla detrás, con un solo prefijo. */
