@@ -326,7 +326,7 @@ Tabla de decisión, en orden (lo determinista antes que cualquier modelo):
 |---|---|---|
 | 1 | `AUTOPILOT: ENTREGADO <CLAVE> <url>` o `AUTOPILOT: APLAZADO <CLAVE> <url>` con clave y URL reales | `cerrar` |
 | 2 | `PARA DANI` (o `ESTADO: PREGUNTA/BLOQUEO`) con importe (`DINERO_RE` del supervisor) o `PARA DANI (alcance):` | `humano` |
-| 3a | en `live`, solo `ESPERA: fecha` y la primera a 12 h o más (ninguna sesión abierta días esperando) | `enviar` · `aplazar`: crear el ticket que retoma el trabajo con `programada-<fecha Madrid>` (contrato `jira.etiquetas.programada` del supervisor) y `cola-compania`, enlazarlo con `Blocks` al actual, comentar el informe y cerrar con `AUTOPILOT: APLAZADO`; pedido y no cerrado en el turno siguiente, `humano` |
+| 3a | en `live`, solo `ESPERA: fecha` y la primera a 2 h o más (ninguna sesión abierta horas o días esperando) | `enviar` · `aplazar`: crear el ticket que retoma el trabajo con `programada-<fecha Madrid>` (contrato `jira.etiquetas.programada` del supervisor) y `cola-compania`, enlazarlo con `Blocks` al actual, comentar el informe y cerrar con `AUTOPILOT: APLAZADO`; pedido y no cerrado en el turno siguiente, `humano` |
 | 3 | alguna `ESPERA:` vigilable que no sea `fichero` (una `sesion` solo con `kind: live`, coordinación de sesiones: la compañía no espera algo sin reanudación) | `esperar` (la despierta el `EVENTO:` del supervisor o el dueño coordinado) |
 | 4 | `PARA IT:` / `PARA SECURITY:` / `PARA QA:` | `esperar` |
 | 5 | un tope configurado (`max_seguidos`, `max_total`, distinto de 0) superado | `humano` |
