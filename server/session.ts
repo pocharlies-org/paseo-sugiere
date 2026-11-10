@@ -115,10 +115,14 @@ export async function nativeSuggestion(agentId: string, paseo: PaseoApi): Promis
   }
 }
 
+/** A session copied to another project keeps its id: the live copy is the last one written, never the first one listed (SC-5166:
+ * the autopilot read a stale copy with no `[AUTOPILOT]` in it, counted zero steps and resent its start 1.299 times). */
 async function findIn(projectsDir: string, name: string): Promise<string | null> {
+  let found: { path: string; mtime: number } | null = null;
   for (const project of await readdir(projectsDir).catch(() => [])) {
-    const candidate = join(projectsDir, project, name);
-    if (await stat(candidate).then((s) => s.isFile(), () => false)) return candidate;
+    const path = join(projectsDir, project, name);
+    const s = await stat(path).catch(() => null);
+    if (s?.isFile() && (!found || s.mtimeMs > found.mtime)) found = { path, mtime: s.mtimeMs };
   }
-  return null;
+  return found?.path ?? null;
 }
