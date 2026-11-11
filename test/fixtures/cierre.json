@@ -467,6 +467,22 @@
    "entregado": null
   },
   {
+   "nombre": "entregado citado a mitad de turno no cierra",
+   "texto": "El cierre será `AUTOPILOT: ENTREGADO TAREA-1000002 https://artefactos.example.com/b.html` al terminar.\nESPERA: ci pocharlies-org/x#1 → fusiono",
+   "esperas": [
+    "ci pocharlies-org/x#1"
+   ],
+   "paras": [],
+   "para_dani": null,
+   "estado": [
+    null,
+    ""
+   ],
+   "dinero": false,
+   "alcance": false,
+   "entregado": null
+  },
+  {
    "nombre": "nada",
    "texto": "He leído el código y sigo mañana.",
    "esperas": [],

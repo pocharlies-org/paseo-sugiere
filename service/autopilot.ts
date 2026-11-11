@@ -136,11 +136,19 @@ export async function decidir(lines: string[], ctx: Contexto, nativa = ""): Prom
     return { v, puerta: { riesgo: v.riesgo, via: v.via, modelo: quien, ...(v.traza ? { traza: v.traza } : {}) } };
   };
 
-  // 1. La entrega ya está hecha, o aplazada a un ticket programado: se cierra (el plugin archiva).
+  // 1. La entrega ya está hecha, o aplazada a un ticket programado: se cierra (el plugin archiva). Pero el cierre no archiva
+  // una sesión que sigue esperando (Dani 11-11): con el marcador presente y alguna espera viva, lo ve una persona. En el
+  // `APLAZADO` las `ESPERA: fecha` son justo las que se van al ticket programado: no cuentan como espera viva.
   const entregado = entregadoDe(texto);
-  if (entregado) return fin("cerrar", `entregado ${entregado.key}: ${entregado.url}`);
   const aplazado = aplazadoDe(texto);
-  if (aplazado) return fin("cerrar", `aplazado a ${aplazado.key}: ${aplazado.url}`);
+  const cierre = entregado ?? aplazado;
+  if (cierre) {
+    const vivas = esperasDe(texto).filter((e) => e.tipo !== "fichero" && !(aplazado && e.tipo === "fecha")).map((e) => e.linea);
+    const paras = parasDe(texto).map((p) => `PARA ${p.quien}`);
+    if (vivas.length || paras.length)
+      return fin("humano", `cierra con AUTOPILOT: ${aplazado ? "APLAZADO" : "ENTREGADO"} y sigue esperando: ${[...vivas, ...paras].join(", ")}`);
+    return fin("cerrar", entregado ? `entregado ${entregado.key}: ${entregado.url}` : `aplazado a ${cierre.key}: ${cierre.url}`);
+  }
   if (!texto.trim()) return fin("esperar", "el turno no dejó texto (lo retoma el supervisor)");
 
   // 2. Lo que espera a Dani: dinero o un cambio de alcance (decisión 1) paran; lo demás vuelve a la sesión, como en el supervisor.

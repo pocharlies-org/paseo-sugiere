@@ -109,6 +109,39 @@ describe("el autopilot, fila a fila", () => {
     assert.deepEqual([d.accion, d.motivo], ["cerrar", "aplazado a TAREA-1000002: https://tickets.example.com/TAREA-1000002"]);
   });
 
+  // Dani 11-11: el autopilot no archiva una sesión que no está terminada.
+  it("1 · ENTREGADO citado a mitad de turno no es cierre: no archiva", async () => {
+    sinModelo();
+    const d = await decidir([...yaArrancado, a("Cuando termine acabará con `AUTOPILOT: ENTREGADO TAREA-1000001 https://artefactos.example.com/a.html`.\nESPERA: ci pocharlies-org/paseo-sugiere#77 → fusiono")], ctx);
+    assert.equal(d.accion, "esperar");
+  });
+
+  it("1 · ENTREGADO como último renglón pero con una ESPERA viva → humano, no archivar", async () => {
+    sinModelo();
+    const d = await decidir([...yaArrancado, a("ESPERA: ci pocharlies-org/paseo-sugiere#77 → fusiono\nESTADO: ENTREGA\nAUTOPILOT: ENTREGADO TAREA-1000001 https://artefactos.example.com/a.html")], ctx);
+    assert.equal(d.accion, "humano");
+    assert.match(d.motivo, /ci pocharlies-org\/paseo-sugiere#77/);
+  });
+
+  it("1 · ENTREGADO con un PARA IT en el turno → humano, no archivar", async () => {
+    sinModelo();
+    const d = await decidir([...yaArrancado, a("ESTADO: ENTREGA\nPARA IT: falta rotar la clave\nAUTOPILOT: ENTREGADO TAREA-1000001 https://artefactos.example.com/a.html")], ctx);
+    assert.equal(d.accion, "humano");
+    assert.match(d.motivo, /PARA IT/);
+  });
+
+  it("1 · APLAZADO con su ESPERA: fecha → cerrar (las fechas van al ticket programado)", async () => {
+    sinModelo();
+    const d = await decidir([...yaArrancado, a("ESPERA: fecha 2026-11-20 → sigo\nAUTOPILOT: APLAZADO TAREA-1000002 https://tickets.example.com/TAREA-1000002")], ctx);
+    assert.equal(d.accion, "cerrar");
+  });
+
+  it("1 · APLAZADO con una ESPERA de ci → humano, no archivar", async () => {
+    sinModelo();
+    const d = await decidir([...yaArrancado, a("ESPERA: ci pocharlies-org/paseo-sugiere#77 → fusiono\nAUTOPILOT: APLAZADO TAREA-1000002 https://tickets.example.com/TAREA-1000002")], ctx);
+    assert.equal(d.accion, "humano");
+  });
+
   it("3 · PARA IT / SECURITY / QA → esperar", async () => {
     sinModelo();
     const d = await decidir([...yaArrancado, a("PARA IT: falta el token del runner")], ctx);

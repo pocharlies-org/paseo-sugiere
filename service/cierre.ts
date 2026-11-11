@@ -14,9 +14,10 @@ const ESTADO_RE = /^[ \t>*_`-]*ESTADO[ \t*_`]*:[ \t*_`]*(ENTREGA|PREGUNTA|BLOQUE
 export const DINERO_RE = /\d[\d.,]*[ \t]*(?:€|\$|eur(?:os?)?\b|usd\b|dólares?\b)|[€$][ \t]*\d/i;
 /** Decisión 1 de Dani (07-11): un cambio de alcance o diseño del encargo para el autopilot y espera a una persona. */
 const ALCANCE_RE = /^[ \t>*_`-]*PARA DANI[ \t]*\([ \t]*alcance[ \t]*\)[^\n:]{0,8}:/im;
-/** La última línea con que el autopilot cierra la sesión: clave y URL reales (un `<KEY> <url>` de ejemplo no cierra nada).
+/** La última línea con que el autopilot cierra la sesión: clave y URL reales (un `<KEY> <url>` de ejemplo no cierra nada) y
+ * SOLO como último renglón no vacío del turno (Dani 11-11: citado a mitad de turno no es un cierre — archivaría sesiones vivas).
  * `ENTREGADO` = encargo hecho; `APLAZADO` = la espera larga sigue en un ticket programado. */
-const CIERRE_RE = /^[ \t>*_`-]*AUTOPILOT[ \t*_`]*:[ \t*_`]*(ENTREGADO|APLAZADO)[ \t*_`]+([A-Z][A-Z0-9_]+-\d+)[ \t`*_]+(https?:\/\/\S+?)[`*_.,;)]*[ \t]*$/m;
+const CIERRE_RE = /^[ \t>*_`-]*AUTOPILOT[ \t*_`]*:[ \t*_`]*(ENTREGADO|APLAZADO)[ \t*_`]+([A-Z][A-Z0-9_]+-\d+)[ \t`*_]+(https?:\/\/\S+?)[`*_.,;)]*[ \t]*$/;
 
 const PR = /^[\w.-]+\/[\w.-]+#\d+$/;
 // The coordinator waits for a registered producer; UUIDs use the daemon's lowercase representation.
@@ -80,7 +81,8 @@ export function estadoDe(texto: string): [string | null, string] {
 export const esAlcance = (texto: string) => ALCANCE_RE.test(texto || "");
 
 const cierreDe = (palabra: string) => (texto: string): { key: string; url: string } | null => {
-  const m = (texto || "").match(CIERRE_RE);
+  const ultima = (texto || "").split("\n").filter((l) => l.trim()).at(-1) ?? "";
+  const m = ultima.match(CIERRE_RE);
   return m && m[1] === palabra ? { key: m[2]!, url: m[3]! } : null;
 };
 export const entregadoDe = cierreDe("ENTREGADO");
