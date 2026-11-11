@@ -324,7 +324,7 @@ Tabla de decisión, en orden (lo determinista antes que cualquier modelo):
 
 | # | El último turno (lo que el asistente escribió tras el último mensaje real) | Acción |
 |---|---|---|
-| 1 | `AUTOPILOT: ENTREGADO <CLAVE> <url>` o `AUTOPILOT: APLAZADO <CLAVE> <url>` con clave y URL reales | `cerrar` |
+| 1 | `AUTOPILOT: ENTREGADO <CLAVE> <url>` o `AUTOPILOT: APLAZADO <CLAVE> <url>` con clave y URL reales, como **último renglón no vacío** del turno (citado a mitad de turno no es cierre, Dani 11-11) y sin espera viva: ninguna `ESPERA:` vigilable salvo `fichero` (en `APLAZADO` sus `fecha` van al ticket programado y no cuentan) y ningún `PARA …:` | `cerrar`; con el marcador y alguna espera viva → `humano`: el autopilot no archiva una sesión que no está terminada |
 | 2 | `PARA DANI` (o `ESTADO: PREGUNTA/BLOQUEO`) con importe (`DINERO_RE` del supervisor) o `PARA DANI (alcance):` | `humano` |
 | 3a | en `live`, solo `ESPERA: fecha` y la primera a 2 h o más (ninguna sesión abierta horas o días esperando) | `enviar` · `aplazar`: crear el ticket que retoma el trabajo con `programada-<fecha Madrid>` (contrato `jira.etiquetas.programada` del supervisor) y `cola-compania`, enlazarlo con `Blocks` al actual, comentar el informe y cerrar con `AUTOPILOT: APLAZADO`; pedido y no cerrado en el turno siguiente, `humano` |
 | 3 | alguna `ESPERA:` vigilable que no sea `fichero` (una `sesion` solo con `kind: live`, coordinación de sesiones: la compañía no espera algo sin reanudación) | `esperar` (la despierta el `EVENTO:` del supervisor o el dueño coordinado) |

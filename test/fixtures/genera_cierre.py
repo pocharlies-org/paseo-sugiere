@@ -8,7 +8,7 @@ X86 = os.path.expanduser(sys.argv[1] if len(sys.argv) > 1 else "~/src/x86-host-r
 REF = sys.argv[2] if len(sys.argv) > 2 else "origin/main"
 show = lambda ruta: subprocess.run(["git", "-C", X86, "show", f"{REF}:{ruta}"], check=True, capture_output=True, text=True).stdout
 trozo = lambda texto, desde, hasta: texto[texto.index(desde):texto.index(hasta)]
-fuente = "\n".join(["import os, re, time", "from datetime import datetime, timezone",
+fuente = "\n".join(["import os, re, sys, time", "from datetime import datetime, timezone",
     trozo(show("libexec/company_runtime.py"), "ESPERA_RE = re.compile(", "# ------------------------------------------------------------------ qué pide la épica"),
     trozo(show("libexec/company-sesion"), "ESTADO_RE = re.compile(", "# Lo que el cto lanza él mismo"),
     next(l for l in show("libexec/jira-epic-trigger.py").splitlines() if l.startswith("DINERO_RE = "))])
@@ -49,6 +49,7 @@ CASOS = [
  ("entregado en backticks", "ESTADO: ENTREGA\n`AUTOPILOT: ENTREGADO TAREA-1000003 https://artefactos.example.com/a.html`", False,
   {"key": "TAREA-1000003", "url": "https://artefactos.example.com/a.html"}),
  ("entregado de ejemplo no cierra", "5. Último renglón: `AUTOPILOT: ENTREGADO <KEY> <url>`\n`AUTOPILOT: ENTREGADO <KEY> <url>`", False, None),
+ ("entregado citado a mitad de turno no cierra", "El cierre será `AUTOPILOT: ENTREGADO TAREA-1000002 https://artefactos.example.com/b.html` al terminar.\nESPERA: ci pocharlies-org/x#1 → fusiono", False, None),
  ("nada", "He leído el código y sigo mañana.", False, None),
 ]
 
