@@ -212,11 +212,11 @@ describe("el autopilot, fila a fila", () => {
     assert.deepEqual([d.accion, d.riesgo], ["humano", "dinero"]);
   });
 
-  it("7 · PARA DANI (alcance) → humano (decisión 1 de Dani)", async () => {
+  it("7 · PARA DANI (alcance) sin importe no para: se devuelve, y la devolución no ofrece esa salida", async () => {
     sinModelo();
     const d = await decidir([...yaArrancado, a("PARA DANI (alcance): el brief pide X y lo correcto es Y")], ctx);
-    assert.equal(d.accion, "humano");
-    assert.match(d.motivo, /alcance/);
+    assert.deepEqual([d.accion, d.fase], ["enviar", "devolver"]);
+    assert.doesNotMatch(d.mensaje!, /alcance/);
   });
 
   it("7 · PARA DANI sin dinero → devolver, y recuerda redeclarar la ESPERA si la había", async () => {
@@ -227,11 +227,19 @@ describe("el autopilot, fila a fila", () => {
     assert.match(d.mensaje!, /siguen en pie/);
   });
 
-  it("7 · si insiste en preguntar a Dani justo después de devolverla → humano", async () => {
+  it("7 · si insiste justo después de devolverla → a security por el ticket; su PARA SECURITY espera; una tercera vez, humano", async () => {
     sinModelo();
-    const primera = await decidir([...yaArrancado, a("PARA DANI: ¿nombre A o B?")], ctx);
-    const d = await decidir([...yaArrancado, a("PARA DANI: ¿nombre A o B?"), u(primera.mensaje!), a("PARA DANI: de verdad, ¿A o B?")], ctx);
-    assert.equal(d.accion, "humano");
+    const t1 = [...yaArrancado, a("PARA DANI: ¿nombre A o B?")];
+    const primera = await decidir(t1, ctx);
+    const t2 = [...t1, u(primera.mensaje!), a("PARA DANI (alcance): de verdad, ¿A o B?")];
+    const segunda = await decidir(t2, { ...ctx, key: "TAREA-1000007" });
+    assert.deepEqual([segunda.accion, segunda.fase], ["enviar", "security"]);
+    assert.match(segunda.mensaje!, /Comenta en TAREA-1000007 `PARA SECURITY: /);
+    assert.match(segunda.mensaje!, /Paseo: \$PASEO_AGENT_ID/);
+    const obedece = await decidir([...t2, u(segunda.mensaje!), a("Comentado en TAREA-1000007.\n\nPARA SECURITY: ¿nombre A o B? Recomiendo A.")], ctx);
+    assert.deepEqual([obedece.accion, obedece.motivo], ["esperar", "PARA SECURITY: lo despierta el supervisor"]);
+    const tercera = await decidir([...t2, u(segunda.mensaje!), a("PARA DANI: ¿A o B?")], ctx);
+    assert.equal(tercera.accion, "humano");
   });
 
   it("6 · ESTADO: ENTREGA sin plan → entregar, con los números del autopilot en el prompt", async () => {

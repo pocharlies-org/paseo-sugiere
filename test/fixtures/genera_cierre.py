@@ -15,52 +15,52 @@ fuente = "\n".join(["import os, re, sys, time", "from datetime import datetime, 
 g = {}
 exec(compile(fuente, "gramatica_supervisor", "exec"), g)
 
-# (nombre, texto, alcance, entregado): `alcance` y `entregado` son solo del autopilot (TS); lo demás lo dice el Python.
+# (nombre, texto, entregado): `entregado` es solo del autopilot (TS); lo demás lo dice el Python.
 CASOS = [
- ("espera ci con flecha", "Abrí el PR.\nESPERA: ci pocharlies-org/paseo-sugiere#77 → fusiono si está verde", False, None),
- ("espera merge en viñeta y backticks", "Hecho.\n- `ESPERA: merge pocharlies-org/k8s-sugiere-pocharlies#14` → miro ArgoCD", False, None),
- ("espera review", "ESPERA: review pocharlies-org/dgx-infra#901 -> contesto al juez", False, None),
- ("espera run con id", "ESPERA: run pocharlies-org/paseo-sugiere 123456789 → leo el log", False, None),
- ("espera run sin id no vale", "ESPERA: run pocharlies-org/paseo-sugiere → leo el log", False, None),
- ("espera argocd con commit", "ESPERA: argocd sugiere 06defc7 → pruebo el endpoint", False, None),
- ("espera fichero", "ESPERA: fichero /tmp/salida.json → la leo", False, None),
- ("espera jira", "ESPERA: jira TAREA-1000002 → sigo cuando se cierre", False, None),
- ("espera sesion registrada", "ESPERA: sesion 00000000-0000-4000-8000-0000000000ab → integro el resultado", False, None),
- ("espera sesion UUID invalido", "ESPERA: sesion no-es-uuid → nada", False, None),
- ("espera sesion mayuscula invalida", "ESPERA: sesion 00000000-0000-4000-8000-0000000000AB → nada", False, None),
- ("espera fecha con hora", "ESPERA: fecha 2026-11-08 09:30 → reviso la cola", False, None),
- ("espera fecha imposible no vale", "ESPERA: fecha 2026-02-30 → nada", False, None),
- ("espera sin objetivo no vale", "ESPERA: ci el pipeline del repo → sigo", False, None),
- ("espera repetida cuenta una", "ESPERA: ci pocharlies-org/x#1 → a\nESPERA: ci pocharlies-org/x#1 → b", False, None),
- ("espera en prosa no cuenta", "Dejo una ESPERA: ci pocharlies-org/x#1 para luego.", False, None),
- ("para dani sin dinero", "Listo el plan.\n\nPARA DANI: ¿apruebas el plan con las propuestas por defecto?", False, None),
- ("para dani con euros", "PARA DANI (dinero): comprar el dominio cuesta 120 € al año, ¿lo pago?", False, None),
- ("para dani con dolares delante", "PARA DANI: la API cobra $45 al mes, ¿la contrato?", False, None),
- ("para dani etiqueta dinero sin importe", "PARA DANI (dinero): nada de dinero, solo confirma el nombre", False, None),
- ("para dani decimales eur", "PARA DANI: el plan cuesta 12,50 eur al mes", False, None),
- ("para dani alcance", "PARA DANI (alcance): el brief pide X pero lo correcto es Y, ¿cambio el alcance?", True, None),
- ("para it y security en orden", "PARA IT: falta el token del runner\n\nPARA SECURITY: revisa el secreto nuevo", False, None),
- ("para dani y espera a la vez", "ESPERA: ci pocharlies-org/x#9 → fusiono\n\nPARA DANI: ¿le pongo otro nombre al servicio?", False, None),
- ("estado entrega", "Todo verificado en vivo.\nESTADO: ENTREGA", False, None),
- ("estado entrega en negrita", "Hecho.\n**ESTADO: ENTREGA** — PR fusionada y desplegada", False, None),
- ("estado pregunta antiguo", "ESTADO: PREGUNTA ¿sigo con la fase 2?", False, None),
- ("entregado con clave y url", "ESTADO: ENTREGA\nAUTOPILOT: ENTREGADO TAREA-1000001 https://artefactos.example.com/entrega.html", False,
+ ("espera ci con flecha", "Abrí el PR.\nESPERA: ci pocharlies-org/paseo-sugiere#77 → fusiono si está verde", None),
+ ("espera merge en viñeta y backticks", "Hecho.\n- `ESPERA: merge pocharlies-org/k8s-sugiere-pocharlies#14` → miro ArgoCD", None),
+ ("espera review", "ESPERA: review pocharlies-org/dgx-infra#901 -> contesto al juez", None),
+ ("espera run con id", "ESPERA: run pocharlies-org/paseo-sugiere 123456789 → leo el log", None),
+ ("espera run sin id no vale", "ESPERA: run pocharlies-org/paseo-sugiere → leo el log", None),
+ ("espera argocd con commit", "ESPERA: argocd sugiere 06defc7 → pruebo el endpoint", None),
+ ("espera fichero", "ESPERA: fichero /tmp/salida.json → la leo", None),
+ ("espera jira", "ESPERA: jira TAREA-1000002 → sigo cuando se cierre", None),
+ ("espera sesion registrada", "ESPERA: sesion 00000000-0000-4000-8000-0000000000ab → integro el resultado", None),
+ ("espera sesion UUID invalido", "ESPERA: sesion no-es-uuid → nada", None),
+ ("espera sesion mayuscula invalida", "ESPERA: sesion 00000000-0000-4000-8000-0000000000AB → nada", None),
+ ("espera fecha con hora", "ESPERA: fecha 2026-11-08 09:30 → reviso la cola", None),
+ ("espera fecha imposible no vale", "ESPERA: fecha 2026-02-30 → nada", None),
+ ("espera sin objetivo no vale", "ESPERA: ci el pipeline del repo → sigo", None),
+ ("espera repetida cuenta una", "ESPERA: ci pocharlies-org/x#1 → a\nESPERA: ci pocharlies-org/x#1 → b", None),
+ ("espera en prosa no cuenta", "Dejo una ESPERA: ci pocharlies-org/x#1 para luego.", None),
+ ("para dani sin dinero", "Listo el plan.\n\nPARA DANI: ¿apruebas el plan con las propuestas por defecto?", None),
+ ("para dani con euros", "PARA DANI (dinero): comprar el dominio cuesta 120 € al año, ¿lo pago?", None),
+ ("para dani con dolares delante", "PARA DANI: la API cobra $45 al mes, ¿la contrato?", None),
+ ("para dani etiqueta dinero sin importe", "PARA DANI (dinero): nada de dinero, solo confirma el nombre", None),
+ ("para dani decimales eur", "PARA DANI: el plan cuesta 12,50 eur al mes", None),
+ ("para dani alcance", "PARA DANI (alcance): el brief pide X pero lo correcto es Y, ¿cambio el alcance?", None),
+ ("para it y security en orden", "PARA IT: falta el token del runner\n\nPARA SECURITY: revisa el secreto nuevo", None),
+ ("para dani y espera a la vez", "ESPERA: ci pocharlies-org/x#9 → fusiono\n\nPARA DANI: ¿le pongo otro nombre al servicio?", None),
+ ("estado entrega", "Todo verificado en vivo.\nESTADO: ENTREGA", None),
+ ("estado entrega en negrita", "Hecho.\n**ESTADO: ENTREGA** — PR fusionada y desplegada", None),
+ ("estado pregunta antiguo", "ESTADO: PREGUNTA ¿sigo con la fase 2?", None),
+ ("entregado con clave y url", "ESTADO: ENTREGA\nAUTOPILOT: ENTREGADO TAREA-1000001 https://artefactos.example.com/entrega.html",
   {"key": "TAREA-1000001", "url": "https://artefactos.example.com/entrega.html"}),
- ("entregado en backticks", "ESTADO: ENTREGA\n`AUTOPILOT: ENTREGADO TAREA-1000003 https://artefactos.example.com/a.html`", False,
+ ("entregado en backticks", "ESTADO: ENTREGA\n`AUTOPILOT: ENTREGADO TAREA-1000003 https://artefactos.example.com/a.html`",
   {"key": "TAREA-1000003", "url": "https://artefactos.example.com/a.html"}),
- ("entregado de ejemplo no cierra", "5. Último renglón: `AUTOPILOT: ENTREGADO <KEY> <url>`\n`AUTOPILOT: ENTREGADO <KEY> <url>`", False, None),
- ("entregado citado a mitad de turno no cierra", "El cierre será `AUTOPILOT: ENTREGADO TAREA-1000002 https://artefactos.example.com/b.html` al terminar.\nESPERA: ci pocharlies-org/x#1 → fusiono", False, None),
- ("nada", "He leído el código y sigo mañana.", False, None),
+ ("entregado de ejemplo no cierra", "5. Último renglón: `AUTOPILOT: ENTREGADO <KEY> <url>`\n`AUTOPILOT: ENTREGADO <KEY> <url>`", None),
+ ("entregado citado a mitad de turno no cierra", "El cierre será `AUTOPILOT: ENTREGADO TAREA-1000002 https://artefactos.example.com/b.html` al terminar.\nESPERA: ci pocharlies-org/x#1 → fusiono", None),
+ ("nada", "He leído el código y sigo mañana.", None),
 ]
 
 casos = []
-for nombre, texto, alcance, entregado in CASOS:
+for nombre, texto, entregado in CASOS:
     paras = g["paras_de"](texto)
     dani = next((t for q, t in paras if q == "DANI"), None)
     casos.append({"nombre": nombre, "texto": texto, "esperas": [e["linea"] for e in g["esperas_de"](texto, 1762500000.0)],
                   "paras": [q for q, _ in paras], "para_dani": dani, "estado": list(g["estado_de"](texto)),
-                  "dinero": bool(dani is not None and g["DINERO_RE"].search(dani)), "alcance": alcance, "entregado": entregado})
+                  "dinero": bool(dani is not None and g["DINERO_RE"].search(dani)), "entregado": entregado})
 json.dump({"_fuente": f"x86-host-runtime {REF}: company_runtime.esperas_de/paras_de, company-sesion estado_de, "
-           "jira-epic-trigger.DINERO_RE. `alcance` y `entregado` son solo del autopilot (TS). Regenerar con test/fixtures/genera_cierre.py.",
+           "jira-epic-trigger.DINERO_RE. `entregado` es solo del autopilot (TS). Regenerar con test/fixtures/genera_cierre.py.",
            "casos": casos}, sys.stdout, ensure_ascii=False, indent=1)
 print()
