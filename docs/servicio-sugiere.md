@@ -325,13 +325,13 @@ Tabla de decisión, en orden (lo determinista antes que cualquier modelo):
 | # | El último turno (lo que el asistente escribió tras el último mensaje real) | Acción |
 |---|---|---|
 | 1 | `AUTOPILOT: ENTREGADO <CLAVE> <url>` o `AUTOPILOT: APLAZADO <CLAVE> <url>` con clave y URL reales, como **último renglón no vacío** del turno (citado a mitad de turno no es cierre, Dani 11-11) y sin espera viva: ninguna `ESPERA:` vigilable salvo `fichero` (en `APLAZADO` sus `fecha` van al ticket programado y no cuentan) y ningún `PARA …:` | `cerrar`; con el marcador y alguna espera viva → `humano`: el autopilot no archiva una sesión que no está terminada |
-| 2 | `PARA DANI` (o `ESTADO: PREGUNTA/BLOQUEO`) con importe (`DINERO_RE` del supervisor) o `PARA DANI (alcance):` | `humano` |
+| 2 | `PARA DANI` (o `ESTADO: PREGUNTA/BLOQUEO`) con importe (`DINERO_RE` del supervisor): solo el dinero espera a Dani | `humano` |
 | 3a | en `live`, solo `ESPERA: fecha` y la primera a 2 h o más (ninguna sesión abierta horas o días esperando) | `enviar` · `aplazar`: crear el ticket que retoma el trabajo con `programada-<fecha Madrid>` (contrato `jira.etiquetas.programada` del supervisor) y `cola-compania`, enlazarlo con `Blocks` al actual, comentar el informe y cerrar con `AUTOPILOT: APLAZADO`; pedido y no cerrado en el turno siguiente, `humano` |
 | 3 | alguna `ESPERA:` vigilable que no sea `fichero` (una `sesion` solo con `kind: live`, coordinación de sesiones: la compañía no espera algo sin reanudación) | `esperar` (la despierta el `EVENTO:` del supervisor o el dueño coordinado) |
 | 4 | `PARA IT:` / `PARA SECURITY:` / `PARA QA:` | `esperar` |
 | 5 | un tope configurado (`max_seguidos`, `max_total`, distinto de 0) superado | `humano` |
 | 6 | primer paso del autopilot sin ticket (ni `contexto.key` ni el del ancla) | `enviar` · `arranque` (el ticket primero): se enciende con la sesión a medias, así que el paso que propone el modelo (`nativa` si viene) y aprueba la puerta va delante y la plantilla detrás; sin paso aprobado, o sin modelo o puerta, la plantilla sola |
-| 7 | `PARA DANI` sin dinero | `enviar` · `devolver` (elige la recomendada, `DECISIÓN TOMADA:`); si insiste justo después, `humano` |
+| 7 | `PARA DANI` sin dinero, con o sin `(alcance)` | `enviar` · `devolver` (elige la recomendada, `DECISIÓN TOMADA:`); si insiste justo después, `enviar` · `security`: lo comenta en su ticket como `PARA SECURITY:` con `Paseo: $PASEO_AGENT_ID` y el supervisor abre la Request y la despierta al cerrarse (SC-3502), como la compañía (SC-2481; Dani 13-11, SC-5497); si aun así vuelve a preguntar a Dani, `humano` |
 | 8 | `ESTADO: ENTREGA` sin plan, o plan con todos los criterios verificados | `enviar` · `entregar` (el prompt de la entrega, con los números del autopilot); pedida y no cerrada en el turno siguiente, `humano` |
 | 9 | lo demás | el modelo propone (`nativa` si viene) y la puerta dictamina: `ok` → `enviar` · `seguir`; `alto` → `enviar` · `desvio`, y un segundo veto seguido `humano`; `dinero` → `humano`; vacío o el mismo paso que el anterior → `humano` |
 

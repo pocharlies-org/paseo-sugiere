@@ -4,7 +4,7 @@
 import { readFileSync } from "node:fs";
 import { type Plan, SUGGEST_WAIT_MS } from "../shared/suggest.ts";
 import { transcriptMessages } from "../shared/transcript.ts";
-import { DINERO_RE, PREFIJO, aplazadoDe, entregadoDe, esAlcance, esperasDe, type Espera, estadoDe, parasDe, racha, ultimoTurno, type Racha } from "./cierre.ts";
+import { DINERO_RE, PREFIJO, aplazadoDe, entregadoDe, esperasDe, type Espera, estadoDe, parasDe, racha, ultimoTurno, type Racha } from "./cierre.ts";
 import { dictaminar, type Veredicto } from "./juez.ts";
 import { sugerir } from "./residente.ts";
 
@@ -26,7 +26,7 @@ export function topes(delLlamante?: Partial<Topes> | null, ruta: string = RUTA_T
 }
 
 export type Accion = "enviar" | "esperar" | "humano" | "cerrar";
-export type Fase = "arranque" | "devolver" | "entregar" | "aplazar" | "seguir" | "desvio";
+export type Fase = "arranque" | "devolver" | "security" | "entregar" | "aplazar" | "seguir" | "desvio";
 export type Decision = { accion: Accion; motivo: string; mensaje?: string; fase?: Fase; riesgo?: string; modelo?: string;
   via?: Veredicto["via"]; traza?: string[]; pasos: { seguidos: number; total: number } };
 export type Contexto = { kind?: string; cwd: string; key?: string; plan?: Plan | null; topes?: Partial<Topes> | null };
@@ -38,6 +38,7 @@ export class SinServicio extends Error {}
 // frase, tras ese paso en el `arranque`, es la marca con la que se reconoce la fase en el transcript.
 const ARRANQUE = `${PREFIJO}Autopilot activado: llevo yo esta sesión hasta la entrega.`;
 const DEVOLVER = `${PREFIJO}Tu \`PARA DANI\` no es dinero: con el autopilot no le llega a Dani.`;
+const SECURITY = `${PREFIJO}Tu pregunta a Dani sigue sin ser dinero: la decide security, como en la compañía.`;
 const DESVIO = `${PREFIJO}El paso que tocaba no se autoenvía`;
 const ENTREGAR = `${PREFIJO}El encargo está hecho: toca la entrega del autopilot.`;
 const APLAZAR = `${PREFIJO}Lo que esperas es una fecha lejana: esta sesión no se queda abierta esperándola.`;
@@ -57,10 +58,20 @@ function arranque(paso = ""): string {
   return paso ? `${PREFIJO}${paso}\n\n${plantilla.slice(PREFIJO.length)}` : plantilla;
 }
 
+const REDECLARAR = "Tus `ESPERA:` siguen en pie: decláralas otra vez al acabar.";
+
 function devolver(esperas: number): string {
   return [DEVOLVER, "Elige tú la opción recomendada, déjala escrita como `DECISIÓN TOMADA: …` y sigue.",
-    "Si es un cambio de alcance o de diseño del encargo, ciérralo con `PARA DANI (alcance): …`; si es dinero, la línea lleva el importe.",
-    ...(esperas ? ["Tus `ESPERA:` siguen en pie: decláralas otra vez al acabar."] : []), CIERRES].join(" ");
+    "Si es dinero, la línea `PARA DANI:` lleva el importe.", ...(esperas ? [REDECLARAR] : []), CIERRES].join(" ");
+}
+
+/** La segunda pregunta seguida sin dinero (SC-5497): a security por el camino de las sesiones en vivo (SC-3502). */
+function aSecurity(esperas: number, key: string): string {
+  return [SECURITY,
+    `Comenta en ${key || "el ticket de esta sesión"} \`PARA SECURITY: <la pregunta, las opciones y la que recomiendas>\` con una línea `
+      + "`Paseo: $PASEO_AGENT_ID`: el supervisor abre la Request y te despierta con `EVENTO:` cuando security la cierre.",
+    "Mientras, sigue con lo que no dependa de esa respuesta.", ...(esperas ? [REDECLARAR] : []),
+    "Acaba el turno con `PARA SECURITY: …`, no con `PARA DANI:`."].join(" ");
 }
 
 const desvio = (motivo: string) =>
@@ -153,11 +164,10 @@ export async function decidir(lines: string[], ctx: Contexto, nativa = ""): Prom
   }
   if (!texto.trim()) return fin("esperar", "el turno no dejó texto (lo retoma el supervisor)");
 
-  // 2. Lo que espera a Dani: dinero o un cambio de alcance (decisión 1) paran; lo demás vuelve a la sesión, como en el supervisor.
+  // 2. Lo que espera a Dani: solo el dinero para; lo demás vuelve a la sesión, como en el supervisor (fila 6).
   const [etiqueta, detalle] = estadoDe(texto);
   const dani = parasDe(texto).find((p) => p.quien === "DANI")?.texto
     ?? (etiqueta === "PREGUNTA" || etiqueta === "BLOQUEO" ? detalle || etiqueta : null);
-  if (dani !== null && esAlcance(texto)) return fin("humano", "cambio de alcance o diseño: lo decide Dani", { riesgo: "alto" });
   if (dani !== null && DINERO_RE.test(dani)) return fin("humano", `dinero: ${dani.slice(0, 160)}`, { riesgo: "dinero" });
 
   // 3. Lo que espera fuera lo despierta el supervisor con EVENTO (una `ESPERA: fichero` no despierta a nadie en Paseo). Una
@@ -189,9 +199,11 @@ export async function decidir(lines: string[], ctx: Contexto, nativa = ""): Prom
     return envia("arranque", arranque(), "primer paso sin ticket");
   }
 
-  // 6. La pregunta a Dani que no es dinero vuelve a la sesión; si insiste justo después, la ve una persona.
+  // 6. La pregunta a Dani que no es dinero vuelve a la sesión; si insiste justo después, la decide security, como en la compañía
+  // (SC-2481; en vivo, Dani 13-11, SC-5497). Solo si insiste una tercera vez la ve una persona.
   if (dani !== null) {
-    if (antes.startsWith(DEVOLVER)) return fin("humano", `insiste en preguntar a Dani: ${dani.slice(0, 160)}`, { riesgo: "alto" });
+    if (antes.startsWith(SECURITY)) return fin("humano", `sigue preguntando a Dani tras pasarlo a security: ${dani.slice(0, 160)}`, { riesgo: "alto" });
+    if (antes.startsWith(DEVOLVER)) return envia("security", aSecurity(esperas.length, key), "PARA DANI sin dinero otra vez: lo decide security");
     return envia("devolver", devolver(esperas.length), "PARA DANI sin dinero: decide la sesión");
   }
 
