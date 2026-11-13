@@ -43,7 +43,9 @@ const ENTREGAR = `${PREFIJO}El encargo está hecho: toca la entrega del autopilo
 const APLAZAR = `${PREFIJO}Lo que esperas es una fecha lejana: esta sesión no se queda abierta esperándola.`;
 /** Dani, 09-11: «que no se quede una sesión esperando 2 días»; «si es 2 h ya sería suficiente». Una espera solo de fecha a más de esto se aplaza. */
 const APLAZAR_DESDE_MS = 2 * 3600_000;
-const CIERRES = "Acaba cada turno como siempre: `ESPERA:`, `PARA …:` o `ESTADO: ENTREGA`.";
+// Dani, 13-11: «no parar hasta tener el plan entero»; el supervisor bloquea la ENTREGA con tareas abiertas.
+const CIERRES = "No pares mientras quede una tarea de tu plan. Cierra el turno con `ESPERA:` o `PARA …:` si lo que falta depende "
+  + "de fuera, y con `ESTADO: ENTREGA` solo con todas las tareas hechas y probadas.";
 
 /** Con `paso` (el que la puerta aprobó), el paso va delante y la plantilla detrás, con un solo prefijo. */
 function arranque(paso = ""): string {
