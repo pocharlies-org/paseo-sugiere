@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { describe, it } from "node:test";
-import { DINERO_RE, entregadoDe, esAlcance, esperasDe, estadoDe, parasDe, racha, ultimoTurno } from "../service/cierre.ts";
+import { DINERO_RE, entregadoDe, esperasDe, estadoDe, parasDe, racha, ultimoTurno } from "../service/cierre.ts";
 
 // El corpus lo genera el Python del supervisor (fuente de verdad de la gramática): el TS tiene que dar lo mismo, caso por caso.
 const { casos } = JSON.parse(readFileSync(new URL("./fixtures/cierre.json", import.meta.url), "utf8"));
@@ -15,7 +15,6 @@ describe("la gramática del cierre, igual que el supervisor", () => {
       assert.equal(paras.find((p) => p.quien === "DANI")?.texto ?? null, c.para_dani);
       assert.deepEqual(estadoDe(c.texto), c.estado);
       assert.equal(c.para_dani !== null && DINERO_RE.test(c.para_dani), c.dinero);
-      assert.equal(esAlcance(c.texto), c.alcance);
       assert.deepEqual(entregadoDe(c.texto), c.entregado);
     });
   }

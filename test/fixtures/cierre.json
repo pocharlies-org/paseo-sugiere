@@ -1,5 +1,5 @@
 {
- "_fuente": "x86-host-runtime c5adbbaf: company_runtime.esperas_de/paras_de, company-sesion estado_de, jira-epic-trigger.DINERO_RE. `alcance` y `entregado` son solo del autopilot (TS). Regenerar con test/fixtures/genera_cierre.py.",
+ "_fuente": "x86-host-runtime c5adbbaf: company_runtime.esperas_de/paras_de, company-sesion estado_de, jira-epic-trigger.DINERO_RE. `entregado` es solo del autopilot (TS). Regenerar con test/fixtures/genera_cierre.py.",
  "casos": [
   {
    "nombre": "espera ci con flecha",
@@ -14,7 +14,6 @@
     ""
    ],
    "dinero": false,
-   "alcance": false,
    "entregado": null
   },
   {
@@ -30,7 +29,6 @@
     ""
    ],
    "dinero": false,
-   "alcance": false,
    "entregado": null
   },
   {
@@ -46,7 +44,6 @@
     ""
    ],
    "dinero": false,
-   "alcance": false,
    "entregado": null
   },
   {
@@ -62,7 +59,6 @@
     ""
    ],
    "dinero": false,
-   "alcance": false,
    "entregado": null
   },
   {
@@ -76,7 +72,6 @@
     ""
    ],
    "dinero": false,
-   "alcance": false,
    "entregado": null
   },
   {
@@ -92,7 +87,6 @@
     ""
    ],
    "dinero": false,
-   "alcance": false,
    "entregado": null
   },
   {
@@ -108,7 +102,6 @@
     ""
    ],
    "dinero": false,
-   "alcance": false,
    "entregado": null
   },
   {
@@ -124,7 +117,6 @@
     ""
    ],
    "dinero": false,
-   "alcance": false,
    "entregado": null
   },
   {
@@ -140,7 +132,6 @@
     ""
    ],
    "dinero": false,
-   "alcance": false,
    "entregado": null
   },
   {
@@ -154,7 +145,6 @@
     ""
    ],
    "dinero": false,
-   "alcance": false,
    "entregado": null
   },
   {
@@ -168,7 +158,6 @@
     ""
    ],
    "dinero": false,
-   "alcance": false,
    "entregado": null
   },
   {
@@ -184,7 +173,6 @@
     ""
    ],
    "dinero": false,
-   "alcance": false,
    "entregado": null
   },
   {
@@ -198,7 +186,6 @@
     ""
    ],
    "dinero": false,
-   "alcance": false,
    "entregado": null
   },
   {
@@ -212,7 +199,6 @@
     ""
    ],
    "dinero": false,
-   "alcance": false,
    "entregado": null
   },
   {
@@ -228,7 +214,6 @@
     ""
    ],
    "dinero": false,
-   "alcance": false,
    "entregado": null
   },
   {
@@ -242,7 +227,6 @@
     ""
    ],
    "dinero": false,
-   "alcance": false,
    "entregado": null
   },
   {
@@ -258,7 +242,6 @@
     ""
    ],
    "dinero": false,
-   "alcance": false,
    "entregado": null
   },
   {
@@ -274,7 +257,6 @@
     ""
    ],
    "dinero": true,
-   "alcance": false,
    "entregado": null
   },
   {
@@ -290,7 +272,6 @@
     ""
    ],
    "dinero": true,
-   "alcance": false,
    "entregado": null
   },
   {
@@ -306,7 +287,6 @@
     ""
    ],
    "dinero": false,
-   "alcance": false,
    "entregado": null
   },
   {
@@ -322,7 +302,6 @@
     ""
    ],
    "dinero": true,
-   "alcance": false,
    "entregado": null
   },
   {
@@ -338,7 +317,6 @@
     ""
    ],
    "dinero": false,
-   "alcance": true,
    "entregado": null
   },
   {
@@ -355,7 +333,6 @@
     ""
    ],
    "dinero": false,
-   "alcance": false,
    "entregado": null
   },
   {
@@ -373,7 +350,6 @@
     ""
    ],
    "dinero": false,
-   "alcance": false,
    "entregado": null
   },
   {
@@ -387,7 +363,6 @@
     ""
    ],
    "dinero": false,
-   "alcance": false,
    "entregado": null
   },
   {
@@ -401,7 +376,6 @@
     "— PR fusionada y desplegada"
    ],
    "dinero": false,
-   "alcance": false,
    "entregado": null
   },
   {
@@ -415,7 +389,6 @@
     "¿sigo con la fase 2?"
    ],
    "dinero": false,
-   "alcance": false,
    "entregado": null
   },
   {
@@ -429,7 +402,6 @@
     ""
    ],
    "dinero": false,
-   "alcance": false,
    "entregado": {
     "key": "TAREA-1000001",
     "url": "https://artefactos.example.com/entrega.html"
@@ -446,7 +418,6 @@
     ""
    ],
    "dinero": false,
-   "alcance": false,
    "entregado": {
     "key": "TAREA-1000003",
     "url": "https://artefactos.example.com/a.html"
@@ -463,7 +434,6 @@
     ""
    ],
    "dinero": false,
-   "alcance": false,
    "entregado": null
   },
   {
@@ -479,7 +449,6 @@
     ""
    ],
    "dinero": false,
-   "alcance": false,
    "entregado": null
   },
   {
@@ -493,7 +462,6 @@
     ""
    ],
    "dinero": false,
-   "alcance": false,
    "entregado": null
   }
  ]

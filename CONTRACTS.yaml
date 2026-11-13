@@ -53,7 +53,8 @@ contracts:
       el supervisor de la compañía. Spec: docs/servicio-sugiere.md §12. Aditivo (07-11-2026): `contexto.topes`
       {max_seguidos, max_total} opcional, enteros >= 0, 0 = sin tope (y por defecto, sin tope). Aditivo (09-11-2026):
       `fase` `aplazar` (live, espera solo de fecha a >= 2 h: el turno pasa el trabajo a un ticket `programada-<fecha>` y
-      cierra con `AUTOPILOT: APLAZADO <KEY> <url>`, que se lee como `cerrar`).
+      cierra con `AUTOPILOT: APLAZADO <KEY> <url>`, que se lee como `cerrar`). Aditivo (13-11-2026): `fase` `security` (un
+      `PARA DANI` sin dinero repetido tras `devolver`: el turno lo pasa a security por su ticket y acaba con `PARA SECURITY:`).
   - id: file.paseo.delegations.v1
     kind: file-schema
     value: "rutador-coordinaciones.json"

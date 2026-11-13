@@ -12,8 +12,6 @@ const PARA_RE = /^[ \t>*_`-]*PARA (DANI|IT|SECURITY|QA)[^\n:]{0,20}:/gim;
 const ESTADO_RE = /^[ \t>*_`-]*ESTADO[ \t*_`]*:[ \t*_`]*(ENTREGA|PREGUNTA|BLOQUEO)\b[ \t*_`]*:?[ \t]*(.*)$/gim;
 /** La regla del supervisor: a Dani solo le espera el dinero, y lo dice el importe, no la etiqueta. */
 export const DINERO_RE = /\d[\d.,]*[ \t]*(?:€|\$|eur(?:os?)?\b|usd\b|dólares?\b)|[€$][ \t]*\d/i;
-/** Decisión 1 de Dani (07-11): un cambio de alcance o diseño del encargo para el autopilot y espera a una persona. */
-const ALCANCE_RE = /^[ \t>*_`-]*PARA DANI[ \t]*\([ \t]*alcance[ \t]*\)[^\n:]{0,8}:/im;
 /** La última línea con que el autopilot cierra la sesión: clave y URL reales (un `<KEY> <url>` de ejemplo no cierra nada) y
  * SOLO como último renglón no vacío del turno (Dani 11-11: citado a mitad de turno no es un cierre — archivaría sesiones vivas).
  * `ENTREGADO` = encargo hecho; `APLAZADO` = la espera larga sigue en un ticket programado. */
@@ -77,8 +75,6 @@ export function estadoDe(texto: string): [string | null, string] {
   const m = ms[ms.length - 1];
   return m ? [m[1]!.toUpperCase(), limpia(m[2]!.trim(), "`*_ ")] : [null, ""];
 }
-
-export const esAlcance = (texto: string) => ALCANCE_RE.test(texto || "");
 
 const cierreDe = (palabra: string) => (texto: string): { key: string; url: string } | null => {
   const ultima = (texto || "").split("\n").filter((l) => l.trim()).at(-1) ?? "";
