@@ -313,7 +313,7 @@ Salida (`200`):
 
 ```json
 {"accion": "enviar|esperar|humano|cerrar", "motivo": "una línea", "mensaje": "[AUTOPILOT] …",
- "fase": "arranque|devolver|entregar|aplazar|seguir|desvio", "riesgo": "…", "modelo": "…", "via": "…",
+ "fase": "arranque|devolver|security|entregar|aplazar|seguir|desvio", "riesgo": "…", "modelo": "…", "via": "…",
  "pasos": {"seguidos": 4, "total": 17}, "ms": 812}
 ```
 
@@ -340,12 +340,12 @@ Tabla de decisión, en orden (lo determinista antes que cualquier modelo):
   barrido. `test/fixtures/cierre.json` lo genera el Python del supervisor y el TS tiene que dar lo mismo caso por caso.
 - La racha: los mensajes de usuario que empiezan por `[AUTOPILOT]` son del autopilot; un `EVENTO:` o un mensaje humano ponen
   `seguidos` a 0; lo que manda el sistema (`RETOMA:`, `[SUPERVISOR]`, el feedback del hook `Stop`, recordatorios) no cuenta.
-  La fase anterior (devolver, entregar, aplazar, desvío) solo cuenta dentro de la racha.
+  La fase anterior (devolver, security, entregar, aplazar, desvío) solo cuenta dentro de la racha.
 - Topes: **0 = sin tope, y es lo de fábrica** (Dani, 07-11: «si es autopilot es autopilot»). Manda `contexto.topes`, que el plugin
   saca de sus ajustes; si el llamante no los manda, los de `/etc/sugiere/autopilot.json` (`AUTOPILOT_FICHERO`, el ConfigMap montado
   `sugiere-clasificador`, releído en cada petición como `brain.json`); sin fichero, sin tope. Sin topes siguen los cortes que no
   cuentan pasos: el mismo paso dos veces, insistir en preguntar a Dani, un segundo veto seguido y la entrega o el aplazamiento pedidos y no cerrados.
-- Todo lo que propone el autopilot va prefijado `[AUTOPILOT] `. Las plantillas (`arranque`, `devolver`, `desvio`, `entregar`, `aplazar`)
+- Todo lo que propone el autopilot va prefijado `[AUTOPILOT] `. Las plantillas (`arranque`, `devolver`, `security`, `desvio`, `entregar`, `aplazar`)
   son texto fijo y no pasan por la puerta; el paso del modelo (`seguir`, y el que encabeza el `arranque`) sí, siempre.
 - **Desviación declarada de la regla transversal de §6** («el servicio nunca deja un ticket en silencio»): en `live`,
   `esperar` y `humano` dejan la sesión callada. Lo cubren la ✦ roja del plugin y la línea en el topic «Autopilot» de Telegram
