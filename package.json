@@ -14,7 +14,8 @@
     "server/",
     "shared/",
     "scripts/autodeploy.sh",
-    "docs/media/"
+    "docs/media/",
+    "console/"
   ],
   "scripts": {
     "typecheck": "tsc --noEmit",
