@@ -177,7 +177,7 @@ describe("el autopilot, fila a fila", () => {
     litellm("añade el test del endpoint y córrelo");
     const d = await decidir([u("monta X"), a("He escrito el endpoint; faltan los tests.")], ctx);
     assert.deepEqual([d.accion, d.fase, d.via], ["enviar", "arranque", "residente"]);
-    assert.match(d.mensaje!, /^\[AUTOPILOT\] añade el test del endpoint y córrelo\n\nAutopilot activado: .*clasificar-trabajo.*ESTADO: ENTREGA/s);
+    assert.match(d.mensaje!, /^\[AUTOPILOT\] añade el test del endpoint y córrelo\n\nAutopilot activado: .*clasificar-trabajo.*Terminar no lleva línea/s);
     assert.equal(d.mensaje!.split("[AUTOPILOT]").length, 2); // un solo prefijo
   });
 
