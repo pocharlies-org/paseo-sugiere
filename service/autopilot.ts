@@ -44,9 +44,9 @@ const ENTREGAR = `${PREFIJO}El encargo está hecho: toca la entrega del autopilo
 const APLAZAR = `${PREFIJO}Lo que esperas es una fecha lejana: esta sesión no se queda abierta esperándola.`;
 /** Dani, 09-11: «que no se quede una sesión esperando 2 días»; «si es 2 h ya sería suficiente». Una espera solo de fecha a más de esto se aplaza. */
 const APLAZAR_DESDE_MS = 2 * 3600_000;
-// Dani, 13-11: «no parar hasta tener el plan entero»; el supervisor bloquea la ENTREGA con tareas abiertas.
-const CIERRES = "No pares mientras quede una tarea de tu plan. Cierra el turno con `ESPERA:` o `PARA …:` si lo que falta depende "
-  + "de fuera, y con `ESTADO: ENTREGA` solo con todas las tareas hechas y probadas.";
+// Dani, 13-11: «no parar hasta tener el plan entero»; 14-11: terminar no lleva línea (nada de `ESTADO: ENTREGA`).
+const CIERRES = "No pares mientras quede una tarea de tu plan. Terminar no lleva línea; si lo que falta depende de fuera, acaba "
+  + "el turno con `ESPERA:` o `PARA …:`.";
 
 /** Con `paso` (el que la puerta aprobó), el paso va delante y la plantilla detrás, con un solo prefijo. */
 function arranque(paso = ""): string {
@@ -94,7 +94,7 @@ function entregar(r: Racha, modelo: string, key: string): string {
       `**Traza del autopilot**: ${r.total} pasos del autopilot, ${r.eventos} esperas resueltas, ${duracion(r.desde)} desde que se activó, modelo ${modelo || "sin medir"}, ${r.humanos} intervenciones humanas.`,
     `3. Publícalo con \`publish_html\` (LAN, 7 días) y adjúntalo al ticket${ticket} con \`jira_rest.py upload <KEY> <fichero> --como 92-autopilot.html\` (como mucho 2 MiB; la URL publicada va además como enlace).`,
     "4. En el ticket: etiquetas `autopilot` y `entrega-<tipo>` (uno de: codigo, infra, datos, documento, investigacion, operacion), el resumen de entrega con `prompts/resumen-entrega.md` y la transición a Done.",
-    "5. Acaba el turno con `ESTADO: ENTREGA` y, en la última línea, `AUTOPILOT: ENTREGADO <KEY> <url del artifact>`: el autopilot cierra y archiva la sesión."].join("\n");
+    "5. Acaba el turno con `AUTOPILOT: ENTREGADO <KEY> <url del artifact>` en la última línea: el autopilot cierra y archiva la sesión."].join("\n");
 }
 
 /** El `programada-AAAA-MM-DDTHH:MM` del supervisor (contrato `jira.etiquetas.programada`): la hora de Madrid. */
