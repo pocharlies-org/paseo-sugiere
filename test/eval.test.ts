@@ -41,7 +41,7 @@ describe("eval: los casos", () => {
 
 describe("eval: D0-D14 sin tocar", () => {
   it("service/rules.ts es el de la línea base (cambiar una regla es cambiar la especificación, y se repinea aquí a la vista)", () => {
-    assert.equal(huellaReglas(), "be8629e70a3fd58d");
+    assert.equal(huellaReglas(), "abee5d04aad2b725");
   });
 
   it("cada sonda cae en su regla, de D0 a D14", () => {

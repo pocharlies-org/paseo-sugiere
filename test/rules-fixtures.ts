@@ -69,4 +69,7 @@ export const CASOS: [string, string, "dispara" | "no dispara"][] = [
   ["D9", "revisa el log del despliegue de ayer", "no dispara"],
   ["D10", "usa el script de ~/k8s/k8s-litellm-pocharlies/scripts/x.sh", "dispara"],
   ["D10", "usa el script de /home/dani/k8s/k8s-paseo-pocharlies/scripts/x.sh", "no dispara"],
+  ["D10", "deja la evidencia con ~/.local/libexec/x86-host-runtime/jira_rest.py attach <KEY> e.md --as 50-entrega.md", "no dispara"],
+  ["D10", "mira /home/dani/.local/libexec/x86-host-runtime/company-aprobar estado org/repo#3", "no dispara"],
+  ["D10", "edita ~/.local/libexec/x86-host-runtime/jira-epic-trigger.py", "dispara"],
 ];

@@ -83,6 +83,9 @@ export const REGLAS: Regla[] = [
 // D10 no es una regex sobre el texto sino una comparación de prefijos: toda ruta con raíz (~ o /home/…) que se salga del cwd de la
 // sesión. Una ruta relativa es del cwd por definición.
 const RUTA = /(?:^|[\s"'`(=])((?:~|\/home\/[\w.-]+)\/[\w./-]+)/g;
+// Las dos herramientas de la casa que las reglas mandan usar desde cualquier cwd: la evidencia y el ticket (jira_rest.py) y la
+// puerta de fusión (company-aprobar). Solo invocarlas: el resto de esa carpeta es la copia desplegada del supervisor.
+const HERRAMIENTAS = /^(?:~|\/home\/[\w.-]+)\/\.local\/libexec\/x86-host-runtime\/(?:jira_rest\.py|company-aprobar)$/;
 
 export function normalizar(texto: string): string {
   return texto.normalize("NFKC").trim();
@@ -95,6 +98,7 @@ function fueraDeAmbito(texto: string, cwd: string): string | null {
     const ruta = m[1];
     if (ruta === cwd || ruta.startsWith(base) || ruta === cwd.replace(/\/$/, "")) continue;
     if (/^\/(home\/[\w.-]+)?$/.test(ruta)) continue; // la casa entera no es una ruta de trabajo
+    if (HERRAMIENTAS.test(ruta)) continue;
     return ruta;
   }
   return null;
