@@ -10,6 +10,7 @@ import { after, beforeEach, describe, it } from "node:test";
 const HOME = mkdtempSync(join(tmpdir(), "supervisor-"));
 process.env.HOME = HOME;
 const { arrancarPar, apagarPar } = await import("../server/supervisor.ts");
+const { sesionConGoal } = await import("../server/goal.ts");
 
 const llamas: { url: string; metodo: string; cabeceras: Record<string, string>; cuerpo: any }[] = [];
 let respuestas: { status: number; body?: object }[] = [];
@@ -125,5 +126,66 @@ describe("apagar la pareja", () => {
     const r = await apagarPar("a1");
     assert.equal(r.ok, false);
     assert.equal(r.error, "esa sesión no es tuya");
+  });
+});
+
+describe("sesión con goal", () => {
+  const A = "3f2a8b1c-4d5e-4f70-8192-a3b4c5d6e7f8";
+  let creadas: any[] = [];
+  let archivadas: string[] = [];
+  let fallaCrear: Error | null = null;
+  const conWorkspace = {
+    agents: {
+      ref: (id: string) => ({ refresh: async () => ({ agent: { id, cwd: "/home/node/k8s/nuevo", title: "deja verde el CI", provider: "claude" } }) }),
+    },
+    workspaces: {
+      ref: (workspaceId: string) => ({
+        agents: {
+          create: async (opciones: object) => {
+            if (fallaCrear) throw fallaCrear;
+            creadas.push({ workspaceId, ...opciones });
+            return { id: A, archive: async () => { archivadas.push(A); return {}; } };
+          },
+        },
+      }),
+    },
+  } as never;
+  beforeEach(() => {
+    llamas.length = 0;
+    respuestas = [];
+    falla = null;
+    creadas = [];
+    archivadas = [];
+    fallaCrear = null;
+    process.env.SUPERVISOR_URL = "http://supervisor.example:19911";
+    escribe(join(HOME, ".company", "jira-trigger", "secret"), "token-de-prueba");
+  });
+
+  it("crea la sesión en el workspace, sin prompt y en bypass, y arranca su pareja con el goal", async () => {
+    const r = await sesionConGoal({ workspaceId: "w1", texto: "deja verde el CI\ncon la PR fusionada", sesion: "claude/claude-opus-5-5", modelo: "claude-fable-5-2" }, conWorkspace);
+    assert.deepEqual(r, { ok: true, agentId: A });
+    assert.deepEqual(creadas, [{ workspaceId: "w1", config: { provider: "claude/claude-opus-5-5", modeId: "bypassPermissions" }, title: "deja verde el CI" }]);
+    assert.equal("prompt" in creadas[0], false, "el primer mensaje lo escribe el auditor");
+    assert.deepEqual(llamas[0]!.cuerpo.objetivo, { modo: "prompt", texto: "deja verde el CI\ncon la PR fusionada" });
+    assert.equal(llamas[0]!.cuerpo.a.id, A);
+    assert.equal(llamas[0]!.cuerpo.modelo, "claude-fable-5-2");
+    assert.deepEqual(archivadas, []);
+  });
+
+  it("si el supervisor rechaza la pareja, enseña su motivo y archiva la sesión vacía", async () => {
+    respuestas = [{ status: 503, body: { error: "no se pudo crear el auditor: la CLI de Paseo no arrancó" } }];
+    const r = await sesionConGoal({ workspaceId: "w1", texto: "haz X", sesion: "claude/claude-opus-5-5" }, conWorkspace);
+    assert.deepEqual(r, { ok: false, error: "no se pudo crear el auditor: la CLI de Paseo no arrancó" });
+    assert.deepEqual(archivadas, [A]);
+  });
+
+  it("si Paseo no crea la sesión, lo dice sin llamar al supervisor; sin token, la sesión creada se archiva", async () => {
+    fallaCrear = new Error("workspace not found");
+    assert.equal((await sesionConGoal({ workspaceId: "w1", texto: "haz X", sesion: "claude/x" }, conWorkspace)).error, "no se pudo crear la sesión (workspace not found)");
+    assert.equal(llamas.length, 0);
+    fallaCrear = null;
+    rmSync(join(HOME, ".company", "jira-trigger", "secret"));
+    assert.match((await sesionConGoal({ workspaceId: "w1", texto: "haz X", sesion: "claude/x" }, conWorkspace)).error!, /jira-trigger\/secret/);
+    assert.deepEqual(archivadas, [A]);
   });
 });

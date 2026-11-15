@@ -3,10 +3,11 @@ import { existsSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import type { PluginHandlerContext, PluginServerContext } from "@getpaseo/plugin/server";
-import { autopilotStart, autopilotStop, suggestFeedback, suggestForce, suggestGet } from "./shared/contract.ts";
+import { autopilotGoal, autopilotStart, autopilotStop, suggestFeedback, suggestForce, suggestGet } from "./shared/contract.ts";
 import { suggestSettings, type SuggestValues } from "./shared/settings.ts";
 import { estadoPareja } from "./server/pares.ts";
 import { apagarPar, arrancarPar } from "./server/supervisor.ts";
+import { sesionConGoal } from "./server/goal.ts";
 import * as suggest from "./server/suggest.ts";
 
 // What is merged to trunk is what runs: the plugin checks GitHub every 5 min and, on a new commit, deploys that tree and reloads
@@ -56,6 +57,7 @@ export default function contribute(server: PluginServerContext) {
   });
   server.handle(autopilotStart, (input, context) => arrancarPar(input, context.paseo));
   server.handle(autopilotStop, (input) => apagarPar(input.agentId));
+  server.handle(autopilotGoal, (input, context) => sesionConGoal(input, context.paseo));
   server.handle(suggestFeedback, (input) => suggest.feedback(input.agentId, input.verdict));
   server.handle(suggestForce, (input, context) => ({ started: suggest.force(input.agentId, context) }));
   const check = () => spawn("bash", [AUTODEPLOY], { detached: true, stdio: "ignore" }).unref();
