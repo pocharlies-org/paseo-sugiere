@@ -61,7 +61,8 @@ export function planAnchor(agentId: string): { key: string; criterios: number } 
  * shortcut: the count lives in memory, so a host restart forgets it; persist it if that turns out to matter. */
 const MAX_NOES = 3;
 
-// pending/error describe only the last FORCE (the pill spins on pending and shows error once); the quiet window stays silent by design.
+// pending/error/nada describe only the last FORCE (the pill spins on pending, shows error once, says «nada que sugerir» on nada);
+// the quiet window stays silent by design.
 // en_plan/criterio come with an anchored suggestion; noes/muted survive turns (the streak is across turns) and only reset on use or click.
 type Entry = {
   timer?: ReturnType<typeof setTimeout>;
@@ -71,12 +72,13 @@ type Entry = {
   criterio: string | null;
   pending: boolean;
   error: string | null;
+  nada: boolean;
   noes: number;
   muted: boolean;
 };
 const agents = new Map<string, Entry>();
-const fresh = (): Entry => ({ seq: 0, text: null, en_plan: null, criterio: null, pending: false, error: null, noes: 0, muted: false });
-const clear = (entry: Entry) => Object.assign(entry, { text: null, en_plan: null, criterio: null, pending: false, error: null });
+const fresh = (): Entry => ({ seq: 0, text: null, en_plan: null, criterio: null, pending: false, error: null, nada: false, noes: 0, muted: false });
+const clear = (entry: Entry) => Object.assign(entry, { text: null, en_plan: null, criterio: null, pending: false, error: null, nada: false });
 
 /** A turn ended completed: after the quiet window, one generation, unless anything happens first. Only with `auto` —
 off by default (Dani 25-10): each automatic suggestion pays the whole transcript of its session; without auto the user's click forces it.
@@ -116,10 +118,10 @@ export function get(agentId: string): string | null {
   return enabled ? (agents.get(agentId)?.text ?? null) : null;
 }
 
-/** The state of the last force for the pill: spin while pending, show the error once when it failed. */
-export function state(agentId: string): { pending: boolean; error: string | null } {
+/** The state of the last force for the pill: spin while pending, show the error once when it failed, «nada que sugerir» on nada. */
+export function state(agentId: string): { pending: boolean; error: string | null; nada: boolean } {
   const entry = enabled ? agents.get(agentId) : undefined;
-  return { pending: entry?.pending ?? false, error: entry?.error ?? null };
+  return { pending: entry?.pending ?? false, error: entry?.error ?? null, nada: entry?.nada ?? false };
 }
 
 /** With «Garantizar plan»: the badge and criterion of the suggestion shown, and whether the ✦ went quiet. */
@@ -199,12 +201,14 @@ async function generate(agentId: string, seq: number, context: PluginHandlerCont
     }
     const text = answer.sugerencia;
     if (!text) console.log(`suggest: respuesta vacía (nada que sugerir) para ${agentId}`);
-    const entry = settle(text ? null : "nada que sugerir");
+    const entry = settle(null);
     if (entry && entry.seq === seq && text) {
       console.log(`suggest: generada para ${agentId} con ${answer.modelo}${plan ? ` (${answer.en_plan} · ${answer.criterio})` : ""}: ${JSON.stringify(text.slice(0, 60))}`);
       entry.text = text;
       entry.en_plan = answer.en_plan;
       entry.criterio = answer.criterio;
+    } else if (entry && entry.seq === seq) {
+      entry.nada = forced; // vacía a propósito (trabajo hecho o lo siguiente es del usuario): la ✦ lo dice, no es un fallo (SC-5616)
     } else if (forced && entry && entry.seq !== seq && !entry.pending && !entry.text) {
       // Solo si de verdad empezó otro turno (seq nuevo): una respuesta vacía de esta misma generación ya dejó «nada que sugerir».
       console.log(`suggest: respuesta descartada para ${agentId} (la sesión se movió)`);
