@@ -17,7 +17,8 @@ const par = z.object({
   modelo: z.string().optional(),
 });
 
-/** The next-message suggestion of an agent, plus the state of the last force: the pill spins on `pending` and shows `error` once.
+/** The next-message suggestion of an agent, plus the state of the last force: the pill spins on `pending`, shows `error` once,
+ * and says «nada que sugerir» on `nada` (the service answered empty on purpose: not a failure, Dani 15-11).
  * With «Garantizar plan» also what it pursues (`en_plan`, the badge) and the criterion, and `muted` after three «no es esto».
  * And the agent's autopilot pair, which paints the ✦ (yellow and turning while the auditor pilots it, red when a person is
  * needed, green when delivered), and the plan the popover can link (`plan`: the anchor's ticket and criterion count). */
@@ -28,6 +29,7 @@ export const suggestGet = defineRpc({
     text: z.string().nullable(),
     pending: z.boolean(),
     error: z.string().nullable(),
+    nada: z.boolean(),
     en_plan: z.string().nullable(),
     criterio: z.string().nullable(),
     muted: z.boolean(),

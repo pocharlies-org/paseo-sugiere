@@ -25,7 +25,7 @@ describe("a session with no real model", () => {
     await flush();
     assert.equal(calls, 0);
     assert.equal(suggest.get("n1"), null);
-    assert.deepEqual(suggest.state("n1"), { pending: false, error: "la sesión aún no tiene modelo" });
+    assert.deepEqual(suggest.state("n1"), { pending: false, error: "la sesión aún no tiene modelo", nada: false });
   });
 
   it("only synthetic assistants count as no model either", async () => {
@@ -33,7 +33,7 @@ describe("a session with no real model", () => {
     suggest.force("n2", {} as never);
     await flush();
     assert.equal(calls, 0);
-    assert.deepEqual(suggest.state("n2"), { pending: false, error: "la sesión aún no tiene modelo" });
+    assert.deepEqual(suggest.state("n2"), { pending: false, error: "la sesión aún no tiene modelo", nada: false });
   });
 
   it("calls once the session has a real model", async () => {

@@ -365,6 +365,7 @@ export function addSuggestPill(client: PluginClientContext): () => void {
   const consumed = new Map<string, string>(); // the suggestion already put in the prompt: the poll must not bring it back until the next turn
   const pendingFor = new Map<string, boolean>(); // a force in flight: the pill's star spins in a yellow frame, disabled until it settles
   const errors = new Map<string, string>(); // the last force's failure, shown once by the popover
+  const nadas = new Set<string>(); // the last force answered empty on purpose: the pill says «nada que sugerir», not a failure (Dani 15-11)
   const anchors = new Map<string, { en_plan: string | null; criterio: string | null }>(); // badge and criterion of the anchored suggestion
   const muted = new Set<string>(); // three «no es esto» in a row: the ✦ says it is quiet until clicked
   const noPills = new Map<string, ReturnType<PluginClientContext["addComposerPill"]>>(); // «no es esto», next to an anchored suggestion
@@ -422,6 +423,7 @@ export function addSuggestPill(client: PluginClientContext): () => void {
     consumed.delete(id);
     pendingFor.delete(id);
     errors.delete(id);
+    nadas.delete(id);
     compactFor.delete(id);
     compactReported.delete(id);
     estadoFor.delete(id);
@@ -438,10 +440,12 @@ export function addSuggestPill(client: PluginClientContext): () => void {
       consumed.delete(agent.id);
       pendingFor.delete(agent.id);
       errors.delete(agent.id);
+      nadas.delete(agent.id);
     }
     const text = agent.status === "idle" ? (texts.get(agent.id) ?? null) : null;
     const pending = pendingFor.get(agent.id) ?? false;
     const error = errors.get(agent.id) ?? null;
+    const nada = nadas.has(agent.id);
     // The pair is the supervisor's, not this plugin's: whatever the last turn did, the registry says what the auditor is doing.
     // A page opened mid-turn knows nothing yet (the poll only asks idle agents), and the ✦ of a live pair must be gold and
     // turning (Dani 08-11): it is asked once, the first time the agent is seen.
@@ -500,10 +504,11 @@ export function addSuggestPill(client: PluginClientContext): () => void {
     } : {
       title: text ? (badge ? `${badge} ${meta?.criterio ?? ""}`.trim() : "Suggested next message")
         : pending ? "Generating…" : error ? "Last suggestion failed"
+        : nada ? "No hay nada que sugerir: el trabajo está hecho o lo siguiente es tuyo. Púlsala para pedir otra."
         : quiet ? "La ✦ se calla: tres «no es esto» seguidos. Púlsala para pedir otra." : "Suggest now",
       icon: SuggestIcon,
       label: !compact && text ? (badge ? `${badge} ${meta?.criterio ? `${meta.criterio} · ` : ""}${text}` : text)
-        : text && badge ? badge : pending ? "\u200b" : error ? "!" : quiet ? "callada" : "\u200b", // sin «…» ni ✦ repetida (la ✦ es el icono, Dani 08-11): la estrella amarilla gira (Dani 07-11); el host rechaza label vacía o en blanco (validation.ts requireText), el espacio de ancho cero la pasa y no se ve
+        : text && badge ? badge : pending ? "\u200b" : error ? "!" : nada ? "nada que sugerir" : quiet ? "callada" : "\u200b", // sin «…» ni ✦ repetida (la ✦ es el icono, Dani 08-11): la estrella amarilla gira (Dani 07-11); el host rechaza label vacía o en blanco (validation.ts requireText), el espacio de ancho cero la pasa y no se ve
       // Idle agents always carry the pill: with a suggestion it opens the card, without one the small ✦ opens «Sugerir ahora»,
       // which forces a generation (Dani 19-10), next to the autopilot form (Dani 07-11, now the auditor's start form); it spins
       // while the generation resolves and shows the failure once if it does not.
@@ -556,6 +561,7 @@ export function addSuggestPill(client: PluginClientContext): () => void {
                 // Fast-poll until it settles: the text waits on the pill until its button is pressed, error shows once; the pill spins meanwhile (Dani 19-10, 02-11).
                 pendingFor.set(agent.id, true);
                 errors.delete(agent.id);
+                nadas.delete(agent.id);
                 show(agents.get(agent.id) ?? agent);
                 const deadline = Date.now() + SUGGEST_WAIT_MS + 30_000; // after the service's wait and the plugin server's margin over it
                 const id = setInterval(() => {
@@ -574,12 +580,14 @@ export function addSuggestPill(client: PluginClientContext): () => void {
                     return;
                   }
                   void client.rpc(suggestGet, { agentId: agent.id }).then(
-                    ({ text: forced, error: failed, en_plan, criterio }) => {
-                      if (!forced && !failed) return; // still generating: keep spinning
+                    ({ text: forced, error: failed, nada: vacia, en_plan, criterio }) => {
+                      if (!forced && !failed && !vacia) return; // still generating: keep spinning
                       clearInterval(id);
                       pendingFor.delete(agent.id);
                       if (failed) {
                         errors.set(agent.id, failed);
+                      } else if (vacia) {
+                        nadas.add(agent.id);
                       } else {
                         texts.set(agent.id, forced!); // it waits on this pill's button: injecting it here would write into whichever window is in front (Dani 02-11)
                         anchors.set(agent.id, { en_plan, criterio });
