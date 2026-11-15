@@ -133,9 +133,9 @@ describe("the state of a force (Dani 19-10: spinner while it runs, clear error i
   it("pends from the click and settles with a readable error when the session cannot be read", async () => {
     const broken = { paseo: { agents: { list: async () => { throw new Error("no daemon"); } } } } as any;
     suggest.force("f1", broken);
-    assert.deepEqual(suggest.state("f1"), { pending: true, error: null });
+    assert.deepEqual(suggest.state("f1"), { pending: true, error: null, nada: false });
     await new Promise((r) => setImmediate(r));
-    assert.deepEqual(suggest.state("f1"), { pending: false, error: "the session could not be read (no daemon)" });
+    assert.deepEqual(suggest.state("f1"), { pending: false, error: "the session could not be read (no daemon)", nada: false });
   });
 });
 
