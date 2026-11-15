@@ -30,6 +30,8 @@ prompt, ready to edit and send with Enter.
   answering), green once delivered; the popover carries the reason, the steps, the last send, the auditor and «Parar». Its
   state comes from the supervisor's registry (`~/.company/jira-trigger/autopilot-pares.json`): no file means no pair. It is
   not the «suggest automatically» setting, which only proposes.
+- **Goal** (a button in each workspace's header; since 15-11-2026): write a goal, pick the session's and the auditor's models,
+  and «Empezar» creates a new session in that workspace already paired with its auditor, which writes its first message.
 - Settings (plugin settings screen): on/off and the quiet window (the autopilot's caps died with the plugin's loop — the
   supervisor decides the steps).
 

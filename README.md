@@ -56,6 +56,11 @@ no consume su contrato `file.claude-cuentas.v1`: la llamada va a LiteLLM con la 
   popover da el motivo, los pasos, el último envío y el auditor. El estado viene del registro del supervisor
   (`~/.company/jira-trigger/autopilot-pares.json`): fichero ausente = sin pareja; ilegible = estado desconocido sin romper la
   píldora. Un error del supervisor se enseña una vez en el popover. Es distinto de «Sugerir automáticamente», que solo propone.
+- **Goal** en la cabecera de cada workspace (15-11-2026): una sesión nueva que nace con su autopilot. Formulario:
+  el goal, el modelo de la sesión y el del auditor (proveedor `claude`, `claude-opus-5-5` por defecto). «Empezar» crea la
+  sesión en ese workspace sin primer mensaje y en `bypassPermissions`, y arranca su pareja con el goal como objetivo
+  «Prompt» (el mismo `POST /autopilot/par`): el primer mensaje de la sesión lo escribe el auditor. Si el supervisor rechaza
+  la pareja, el formulario da su motivo y la sesión vacía se archiva. Sale también en un workspace sin sesiones.
 
 ## Qué lee y envía
 
