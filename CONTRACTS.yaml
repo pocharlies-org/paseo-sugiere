@@ -2,7 +2,8 @@
 #
 # El servicio `sugiere` (ns llm, imagen de este repo, despliegue k8s-sugiere-pocharlies) lo consumen procesos de otros
 # repos: el supervisor de la compañía (x86-host-runtime, libexec/sugiere_puerta.py) y, desde el 07-11-2026, el plugin de Paseo
-# de este mismo repo para el autopilot. Sus rutas y nombres de campo son contrato: un renombre o un cambio de forma rompe
+# de este mismo repo para las sugerencias (su autopilot dejó de llamar a /v1/autopilot el 14-11-2026:
+# es la sesión auditora del supervisor, ver `http.supervisor.autopilot.v1`). Sus rutas y nombres de campo son contrato: un renombre o un cambio de forma rompe
 # consumidores que los tests de aquí no ven.
 #
 # Lo existente NO muta. Breaking = entrada nueva `.vN+1`, la vieja a `status: deprecated` con `replaced_by` +
@@ -44,7 +45,7 @@ contracts:
     role: provider
     files:
       - service/server.ts
-    status: active
+    status: deprecated
     note: >-
       07-11-2026. Entrada {sid, turno, transcript, contexto{cwd, kind?, key?, plan?}, nativa?}; salida 200
       {accion enviar|esperar|humano|cerrar, motivo, mensaje?, fase? arranque|devolver|entregar|aplazar|seguir|desvio, riesgo?,
@@ -55,13 +56,18 @@ contracts:
       `fase` `aplazar` (live, espera solo de fecha a >= 2 h: el turno pasa el trabajo a un ticket `programada-<fecha>` y
       cierra con `AUTOPILOT: APLAZADO <KEY> <url>`, que se lee como `cerrar`). Aditivo (13-11-2026): `fase` `security` (un
       `PARA DANI` sin dinero repetido tras `devolver`: el turno lo pasa a security por su ticket y acaba con `PARA SECURITY:`).
+      Deprecado (14-11-2026): el plugin dejó de llamar a esta ruta — el autopilot pasó a ser la sesión auditora B del
+      supervisor (`http.supervisor.autopilot.v1`), que es quien decide el siguiente paso. La ruta sigue servida
+      (service/autopilot.ts) hasta el PR que la retire junto al consumo del supervisor.
+    replaced_by: http.supervisor.autopilot.v1
+    remove_after: 2026-11-28
   - id: file.paseo.delegations.v1
     kind: file-schema
     value: "rutador-coordinaciones.json"
     role: consumer
     files:
       - server/delegation.ts
-    status: active
+    status: deprecated
     note: >-
       09-11-2026 (coordinación de sesiones). Productor: paseo-rutador (su alta vive en su CONTRACTS.yaml); consumidor: el plugin de este repo.
       Fichero en $PASEO_HOME (default ~/.paseo) con el store de coordinaciones, schema v1: {version:1,
@@ -71,3 +77,37 @@ contracts:
       lee validado (server/delegation.ts): ausente = normal; ilegible, no-JSON o v1 incompleto = fail closed (el autopilot
       no reclama la sesión: rechaza encenderse y para a rojo sin enviar ni archivar). El rutador no escribe
       autopilot.json y el plugin no escribe este fichero.
+      Deprecado (14-11-2026): el bucle del plugin y su lector (server/delegation.ts) murieron con él; la valla contra un
+      producer pilotado la ponen ahora el rutador (lee `file.autopilot.pares.v1`) y el supervisor (POST /autopilot/par
+      responde 409 con una delegación activa).
+    replaced_by: file.autopilot.pares.v1
+    remove_after: 2026-11-28
+  - id: http.supervisor.autopilot.v1
+    kind: http-route
+    value: "POST /autopilot/par"
+    anchor: "/autopilot/par"
+    role: consumer
+    files:
+      - server/supervisor.ts
+    status: active
+    note: >-
+      14-11-2026 (autopilot como sesión auditora). Productor: el supervisor de la compañía (x86-host-runtime, que lleva la
+      entrada canónica en su CONTRACTS.yaml); consumidor: el plugin de este repo, que solo arranca y para la pareja y enseña
+      su estado — no pilota. POST {a{id,tipo,cwd,titulo}, objetivo{modo plan+key|prompt+texto}, modelo?, origen} → 201 par
+      creado, 409 ya hay pareja viva o A es una B, 422 cuerpo inválido o A sin cwd, 503 supervisor no disponible; DELETE
+      /autopilot/par/<a_id> → 200 (también 404: no había pareja). Base http://company.paseo.svc.cluster.local:19911 (env
+      SUPERVISOR_URL) y cabecera X-Company-Token (~/.company/jira-trigger/secret).
+  - id: file.autopilot.pares.v1
+    kind: file-schema
+    value: "autopilot-pares.json"
+    role: consumer
+    files:
+      - server/pares.ts
+    status: active
+    note: >-
+      14-11-2026 (autopilot como sesión auditora). Productor: el supervisor de la compañía, único escritor (escritura
+      atómica), en ~/.company/jira-trigger/autopilot-pares.json — el mismo home donde corre el plugin (paseo-0). Schema v1:
+      {version:1, pares:{[a_id]: {a_id, b_id, tipo, origen, modelo, objetivo, key, estado
+      activa|pensando|esperando|humano|degradada|entregada, motivo, desde, actualizado, pasos{total, seguidos},
+      ultimo_envio}}}. Consumidor: el plugin lo lee para el estado de la ✦ (server/pares.ts): ausente = sin pareja;
+      ilegible, no-JSON o v1 incompleto = estado desconocido, sin romper la píldora. El plugin nunca escribe este fichero.

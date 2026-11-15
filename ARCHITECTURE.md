@@ -25,18 +25,15 @@ al modelo de la sesión, sin compartir la caché de la sesión.
 - `server/session.ts` — localizar el transcript y la única llamada a LiteLLM (fetch).
 - `server/suggest.ts` — ventana de silencio de 60 s con `seq`: un turno nuevo mata la
   sugerencia pendiente y descarta una respuesta en vuelo.
-- `server/autopilot.ts` — el autopilot por agente: estado en `~/.local/state/paseo-sugiere/autopilot.json`, una llamada a
-  `/v1/autopilot` por turno `completed` y obediencia (enviar · esperar · humano · cerrar). Usa el mismo `seq` de `suggest.ts` para
-  descartar una respuesta tardía; no razona: toda la lógica es del servicio (spec §12). Con el store del rutador enlazado al
-  agente (coordinación de sesiones) no pilota: `set(true)` rechaza (lectura antes y después del put — el rutador comprueba `autopilot.json`
-  antes de reclamar), `decide` para a rojo sin preguntar, y hay relectura justo antes de enviar/archivar (el enlace puede caer
-  con la request al servicio en vuelo). El autoenvío pasa `{ activeTurnBehavior: "steer" }`; `sourceAgentId` no existe todavía
-  en `send` de la SDK 0.11.2 (pendiente de SDK, no se fuerza con cast).
-- `server/delegation.ts` — lectura validada del store de coordinaciones del rutador (`$PASEO_HOME/rutador-coordinaciones.json`,
-  contrato `file.paseo.delegations.v1`, productor `paseo-rutador`): `{version:1, delegations:{[producerId]:{ownerId, producerId,
-  state watching|result|dispatching|paused, …}}}`. Todo registro activo reserva al producer (también `paused`; release = borrarlo);
-  campos extra de la entrada pasan. Ausente = normal; ilegible/corrupto/v1 incompleto = **fail closed** (no se reclama la sesión).
-  Solo lectura: el plugin no escribe este fichero y el rutador no escribe `autopilot.json`.
+- `server/pares.ts` — lectura del registro de parejas del supervisor (`~/.company/jira-trigger/autopilot-pares.json`, contrato
+  `file.autopilot.pares.v1`, productor el supervisor de la compañía): `{version:1, pares:{[a_id]: Par}}`. Solo lectura: ausente =
+  sin pareja; ilegible / no-JSON / v1 incompleto = estado desconocido sin romper la píldora. El plugin nunca escribe este fichero.
+- `server/supervisor.ts` — la mitad del plugin de la API de autopilot del supervisor (contrato `http.supervisor.autopilot.v1`):
+  `POST /autopilot/par` (cuerpo del contrato: id/cwd/título de A, objetivo — la `key` del ancla de paseo-plan o un prompt —,
+  modelo del auditor, `origen: "paseo"`) y `DELETE /autopilot/par/<a_id>`, con `X-Company-Token` de
+  `~/.company/jira-trigger/secret` y base `http://company.paseo.svc.cluster.local:19911` (env `SUPERVISOR_URL`). La respuesta se
+  convierte en `{ok, error?}` y el error se enseña una vez en el popover. El plugin no pilota ni decide: eso es de la sesión
+  auditora B, que crea el supervisor.
 - `client/suggest-pill.tsx` — píldora en el composer; sondea 10 s solo agentes
   `idle`; el texto se tira al salir de idle, al enviar y al pasarlo al prompt. Su icono es el ancla del puente. Nada entra en el prompt
   por su cuenta: una generación terminada se queda en la píldora de su ventana hasta que se pulsa su botón (Dani 02-11). El popover intenta
@@ -59,18 +56,23 @@ al modelo de la sesión, sin compartir la caché de la sesión.
   `arm` deja de programar generaciones; `quietSeconds` es la ventana de silencio. La instrucción del modelo no
   pasa por aquí: vive solo en el servicio (decisión 5). Con «Garantizar plan» (`anchor-<agentId>.json` de paseo-plan con
   `guard` y criterios) `arm` genera al acabar el turno, sin ventana, y manda el ancla en `contexto.plan`; `suggest.feedback` cuenta
-  los «no es esto» (tres seguidos callan la ✦ hasta un clic). Con el autopilot del agente encendido, `agent.turn_ended` va a
-  `autopilot.decide` en vez de a `arm` (una sola generación por turno), y `agent.turn_started` limpia su «esperando» y su rojo.
+  los «no es esto» (tres seguidos callan la ✦ hasta un clic). El autopilot ya no cuelga de aquí (14-11-2026): con pareja viva la
+  píldora pinta el estado del registro y la única generación por turno la decide el supervisor; `agent.turn_ended` va a `arm` y
+  `agent.turn_started` a `cancel`, como sin autopilot. El RPC `suggest.get` añade la pareja leída por `pares.ts` (con el auditor
+  mejorado al título de B vía `paseo.agents.list`) y el plan del ancla para el formulario; `autopilot.start` y `autopilot.stop`
+  atienden el formulario y llaman a `supervisor.ts`.
   Arranca además `scripts/autodeploy.sh` cada 5 min: el plugin se redespliega solo cuando el tronco de GitHub
   trae un commit nuevo (`deploy.sh` acepta un árbol sin git por `DEPLOY_SHA`).
 - `client/suggest-settings.tsx` — pantalla de ajustes propia (`addSettingsScreen` + `useSettings`):
-  interruptor, ventana y topes del autopilot; el documento compartido está en `shared/settings.ts`.
+  interruptor y ventana de silencio (los topes del autopilot murieron con su bucle: los pasos los decide el supervisor); el documento compartido está en `shared/settings.ts`.
 
 ## Superficie
 
 Los RPCs del plugin solo los consume su propio client. El servicio `sugiere` sí publica hacia otros repos: el supervisor de
-la compañía (x86-host-runtime, `libexec/sugiere_puerta.py`) consume `/v1/suggest` y `/v1/verdict`, y `/v1/autopilot` lo
-consume el plugin (`server/autopilot.ts`) y lo consumirá el supervisor (F5). Esa superficie está en `CONTRACTS.yaml` de la raíz.
+la compañía (x86-host-runtime, `libexec/sugiere_puerta.py`) consume `/v1/suggest` y `/v1/verdict`; `/v1/autopilot` está
+deprecada desde el 14-11-2026 (el plugin dejó de llamarla: el autopilot es la sesión auditora del supervisor, que produce
+`file.autopilot.pares.v1` y sirve `http.supervisor.autopilot.v1`, los dos consumidos por el plugin). Esa superficie está en
+`CONTRACTS.yaml` de la raíz.
 `service/cierre.ts` es una copia declarada y permanente de la gramática del cierre del supervisor; el corpus
 `test/fixtures/cierre.json` lo genera su Python (spec §12).
 

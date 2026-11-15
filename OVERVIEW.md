@@ -21,13 +21,17 @@ prompt, ready to edit and send with Enter.
   not the one in front it writes nothing rather than into the one you are looking at. Where it cannot reach the prompt (phones,
   narrow layouts, or a prompt it cannot tell apart from another pane's), the pill opens a small editable card instead, with a send
   button.
-- A new turn drops the pending suggestion. Nothing is sent for you unless you switch on the agent's **Autopilot**.
-- **Autopilot** (a switch in the ✦'s popover and in the mobile card, per agent; off by default): every completed turn asks the
-  cluster's `sugiere` service (`POST /v1/autopilot`) what to do and the plugin obeys — it sends the next message, waits (gold ✦,
-  «esperando: …»), turns the ✦ bright red and pulsing when a person is needed (no motion with reduced motion; your next message
-  clears it), or archives the agent once it is delivered. It is not the «suggest automatically» setting, which only proposes.
-  While it is on, no suggestion is generated: one model call per turn. Its state lives in `~/.local/state/paseo-sugiere/autopilot.json`.
-- Settings (plugin settings screen): on/off, the quiet window, and the autopilot's caps (steps in a row and per session; 0 = no cap).
+- A new turn drops the pending suggestion. Nothing is sent for you unless you start the agent's **Autopilot**.
+- **Autopilot** (a start form in the ✦'s popover and in the mobile card, per agent; since 14-11-2026): «Empezar» asks the
+  company supervisor to pair this session with an auditor session B — another model (Opus 5.5 by default, from your provider's
+  model list) that plans, audits against the criteria and writes A's next prompt; B never implements. The objective is the plan
+  the session is anchored to or a prompt you write. The plugin only starts and stops the pair and shows its state: gold and
+  spinning while it works or waits, bright red and pulsing when a person is needed (fixed red when the auditor stopped
+  answering), green once delivered; the popover carries the reason, the steps, the last send, the auditor and «Parar». Its
+  state comes from the supervisor's registry (`~/.company/jira-trigger/autopilot-pares.json`): no file means no pair. It is
+  not the «suggest automatically» setting, which only proposes.
+- Settings (plugin settings screen): on/off and the quiet window (the autopilot's caps died with the plugin's loop — the
+  supervisor decides the steps).
 
 ## Requirements
 

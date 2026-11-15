@@ -292,6 +292,13 @@ por LAN sin que quede abierto a quien no lo tenga: la ruta y el token son un sol
 
 ## 12. `POST /v1/autopilot`
 
+> **Deprecada (14-11-2026)**: el plugin de Paseo ya no llama a esta ruta. El autopilot es ahora la sesión auditora B del
+> supervisor de la compañía: `POST /autopilot/par` crea la pareja y `DELETE /autopilot/par/<a_id>` la apaga
+> (contrato `http.supervisor.autopilot.v1`), y el estado que enseña la ✦ lo escribe el supervisor en
+> `~/.company/jira-trigger/autopilot-pares.json` (contrato `file.autopilot.pares.v1`). La ruta sigue servida y documentada
+> abajo hasta el PR que la retire junto a su consumo.
+
+
 El autopilot de Paseo y, más adelante, la compañía: al acabar un turno el llamante pregunta qué hace y el servicio contesta
 **una** acción. Toda la lógica vive aquí (Dani, 07-11); el llamante solo obedece. Sigue sin estado: la racha de pasos, la fase
 anterior y el cierre del turno salen del transcript que llega en la petición. Contrato `http.sugiere.autopilot.v1`
