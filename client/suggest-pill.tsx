@@ -1,15 +1,15 @@
 import type { PluginButtonContentProps, PluginButtonIconProps, PluginClientContext } from "@getpaseo/plugin/client";
 import { Icon, TextInput } from "@getpaseo/plugin/client/react-native";
-import { SettingsAction, SettingsSwitch } from "@getpaseo/plugin/client/ui";
+import { SettingsAction, SettingsSelect } from "@getpaseo/plugin/client/ui";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AccessibilityInfo, Animated, Easing, Pressable, Text, View } from "react-native";
-import { autopilotSet, suggestFeedback, suggestForce, suggestGet } from "../shared/contract.ts";
+import { autopilotStart, autopilotStop, suggestFeedback, suggestForce, suggestGet } from "../shared/contract.ts";
 import { SUGGEST_WAIT_MS } from "../shared/suggest.ts";
 import { insertSuggestion, registerPillAnchor } from "./composer-bridge.ts";
 import { gira } from "./estrella.ts";
 
-// One composer pill per idle agent (with the autopilot on, also mid-turn): with a suggestion ready it opens the card, without one it is a small ✦ whose popover forces a
-// generation now (Dani 19-10) or switches the agent's autopilot on (Dani 07-11; then the ✦ is gold, or red when it needs a person). Nothing reaches the prompt without a press: a generation that finishes while another window is in
+// One composer pill per idle agent (with an autopilot pair alive, also mid-turn): with a suggestion ready it opens the card, without one it is a small ✦ whose popover forces a
+// generation now (Dani 19-10) or starts the agent's autopilot pair (Dani 07-11; then the ✦ is gold, or red when it needs a person). Nothing reaches the prompt without a press: a generation that finishes while another window is in
 // front stays on this pill (Dani 02-11). Tapping a suggestion puts the text in the agent's prompt (composer-bridge.ts, web and
 // desktop; Dani 18-10) and, where that cannot be done, opens the text already editable in place, and Enter sends it as the
 // next user message (Dani 16-10: «editar» must edit the suggestion in place; 17-10: the two buttons were dead weight — the field
@@ -24,8 +24,10 @@ const BADGE: Record<string, string> = { "en-plan": "▸", "trabajo-nuevo": "✚"
 // The star's color says the pill's state (Dani 07-11): amarillo = generating (the star spins), verde = a suggestion is ready,
 // azul = it can be asked for, rojo = the last force failed. No ring around it (Dani 08-11: «saca el círculo y deja solo las
 // estrellas»): the host paints the pill's frame with one global theme token, so the star is the only thing that carries the state.
-// With the autopilot on: amarillo and spinning the whole time it is on — working, asking the service or waiting for an event
-// (Dani 08-11: «tienes que tener la estrella amarilla mientras está en marcha rodando») —, rojo brillante beating when it needs a person.
+// With an autopilot pair (the auditor session B pilots this one, 14-11): amarillo and spinning while it works or waits —
+// `activa`, `pensando`, `esperando` (Dani 08-11: «tienes que tener la estrella amarilla mientras está en marcha rodando») —,
+// rojo brillante beating when a person is needed (`humano`), rojo fijo when the auditor stopped answering (`degradada`: a
+// message here does not clear it, so it does not beat), verde when the work was delivered (`entregada`).
 const ESTADO_COLOR: Record<string, string> = {
   generando: "#eab308",
   lista: "#22c55e",
@@ -34,14 +36,25 @@ const ESTADO_COLOR: Record<string, string> = {
   autopilot: "#eab308",
   pensando: "#eab308",
   humano: "#ff1744",
+  degradada: "#ff1744",
+  entregada: "#22c55e",
 };
-type Autopilot = { on: boolean; estado: string; motivo: string; desde?: string; decidido?: string; pasos?: { seguidos: number; total: number }; enviado?: string };
-const OFF: Autopilot = { on: false, estado: "apagado", motivo: "" };
+/** The pair of this agent as the supervisor's registry reports it (`file.autopilot.pares.v1`): `sin-par` when there is none,
+ * `desconocido` when the registry could not be read, and otherwise the Par's estado with what the popover shows. */
+type Par = { estado: string; motivo: string; desde?: string; actualizado?: string; pasos?: { seguidos: number; total: number }; ultimo_envio?: string; auditor?: string; key?: string | null; modelo?: string };
+type Plan = { key: string; criterios: number };
+const SIN_PAR: Par = { estado: "sin-par", motivo: "" };
+/** Alive states: the auditor is piloting (or stuck needing a person) — the ✦ speaks for it and the popover offers «Parar».
+ * `entregada` is terminal: the ✦ goes green and the popover is the form for the next pair. */
+const esViva = (par: Par): boolean => ["activa", "pensando", "esperando", "humano", "degradada"].includes(par.estado);
 /** What the autopilot is doing, in one line: the pill's label and the popover's status. */
-export function autopilotLine({ estado, motivo }: Autopilot): string {
+export function autopilotLine({ estado, motivo }: Par): string {
   if (estado === "humano") return `necesita acción: ${motivo || "sin motivo"}`;
+  if (estado === "degradada") return `autopilot degradado: ${motivo || "el auditor no responde"}`;
   if (estado === "esperando") return `esperando: ${motivo || "un evento"}`;
-  if (estado === "pensando") return `autopilot: ${motivo || "pidiendo el siguiente paso"}`;
+  if (estado === "pensando") return `autopilot: ${motivo || "el auditor está pensando"}`;
+  if (estado === "entregada") return `entregado: ${motivo || "sin motivo"}`;
+  if (estado === "desconocido") return `estado del autopilot desconocido${motivo ? `: ${motivo}` : ""}`;
   return "autopilot: trabajando";
 }
 function hace(iso: string | undefined, now = Date.now()): string {
@@ -51,14 +64,15 @@ function hace(iso: string | undefined, now = Date.now()): string {
   return s < 60 ? `hace ${s} s` : s < 3600 ? `hace ${Math.round(s / 60)} min` : `hace ${Math.round(s / 3600)} h`;
 }
 /** The popover's lines under the status (Dani 08-11: «ver si está en marcha, cuántas lleva»): who wakes a wait, the step count,
- * since when it is on and when the service last decided, and the last message it sent. */
-export function autopilotDetails(a: Autopilot, now = Date.now()): string[] {
+ * since when the pair is on and when the supervisor last touched it, the last message it sent, and the auditor (B's title, or its id). */
+export function autopilotDetails(par: Par, now = Date.now()): string[] {
   const out: string[] = [];
-  if (a.estado === "esperando") out.push("sigue solo cuando llegue el EVENTO del supervisor");
-  if (a.pasos) out.push(`${a.pasos.seguidos} pasos seguidos · ${a.pasos.total} en la sesión`);
-  const cuando = [a.desde ? `encendido ${hace(a.desde, now)}` : "", a.decidido ? `última decisión ${hace(a.decidido, now)}` : ""].filter(Boolean);
+  if (par.estado === "esperando") out.push("sigue solo cuando llegue el EVENTO del supervisor");
+  if (par.pasos) out.push(`${par.pasos.seguidos} pasos seguidos · ${par.pasos.total} en la sesión`);
+  const cuando = [par.desde ? `en marcha ${hace(par.desde, now)}` : "", par.actualizado ? `actualizado ${hace(par.actualizado, now)}` : ""].filter(Boolean);
   if (cuando.length) out.push(cuando.join(" · "));
-  if (a.enviado) out.push(`último envío: «${a.enviado.length > 140 ? `${a.enviado.slice(0, 140)}…` : a.enviado}»`);
+  if (par.ultimo_envio) out.push(`último envío: «${par.ultimo_envio.length > 140 ? `${par.ultimo_envio.slice(0, 140)}…` : par.ultimo_envio}»`);
+  if (par.auditor) out.push(`auditor: ${par.auditor}`);
   return out;
 }
 const LINE = 18; // one row of the field; `rows` is not in the host's react-native types, so the height is set from here
@@ -84,11 +98,25 @@ function SuggestCard({
   send,
   agentId,
   onInserted,
-  autopilot,
-  toggle,
+  par,
+  plan,
+  empezar,
+  parar,
   refresh,
+  models,
   layout: { compact },
-}: PluginButtonContentProps & { text: string; send: (text: string) => void; agentId: string; onInserted: () => void; autopilot: Autopilot; toggle: (on: boolean) => Promise<Autopilot>; refresh: () => Promise<Autopilot> }) {
+}: PluginButtonContentProps & {
+  text: string;
+  send: (text: string) => void;
+  agentId: string;
+  onInserted: () => void;
+  par: Par;
+  plan: Plan | null;
+  empezar: (input: { modo: "plan" | "prompt"; texto?: string; modelo?: string }) => Promise<{ ok: boolean; error?: string; par?: Par }>;
+  parar: () => Promise<{ ok: boolean; error?: string; par?: Par }>;
+  refresh: () => Promise<{ par: Par; plan: Plan | null }>;
+  models: () => Promise<{ id: string; label: string }[]>;
+}) {
   const [inserted, setInserted] = useState<boolean | null>(null); // null while the bridge decides
   useEffect(() => {
     const done = text !== "" && insertSuggestion(agentId, text);
@@ -130,7 +158,7 @@ function SuggestCard({
           <Text style={styles.arrow}>{compact ? "Send ↑" : "↑"}</Text>
         </Pressable>
       </View>
-      <AutopilotPanel theme={theme} autopilot={autopilot} toggle={toggle} refresh={refresh} />
+      <AutopilotPanel theme={theme} par={par} plan={plan} empezar={empezar} parar={parar} refresh={refresh} models={models} />
     </View>
   );
 }
@@ -204,37 +232,122 @@ function SuggestIcon(props: PluginButtonIconProps) {
   );
 }
 
-// The «Autopilot» switch (Dani 07-11): on, the session is piloted alone until it is done — at the end of every turn the sugiere
-// service says what to do and the plugin obeys. Not «Sugerir automáticamente», which only proposes messages for the user to send.
-// In the ✦'s popover (with «Sugerir ahora» while it is off) and in the mobile card.
-function AutopilotPanel({ theme, autopilot, toggle, refresh, suggestNow }: { theme: PluginButtonContentProps["theme"]; autopilot: Autopilot; toggle: (on: boolean) => Promise<Autopilot>; refresh: () => Promise<Autopilot>; suggestNow?: () => void }) {
-  const [state, setState] = useState(autopilot);
+// The autopilot of this agent (14-11): no longer a switch on the plugin's own loop — a start FORM. «Empezar» asks the supervisor
+// (POST /autopilot/par) to create the auditor session B, which plans, audits against the criteria and writes A's next prompt;
+// the plugin only starts and stops the pair and shows its state. The objective is the plan the session is anchored to (the
+// anchor's ticket and criterion count) or a prompt the user writes; the auditor's model comes from A's provider, Opus 5.5 by
+// default. While a pair is alive the popover is the status and the «Parar» button. Not «Sugerir automáticamente», which only proposes.
+const MODELO_AUDITOR = "claude-opus-5-5";
+type PanelProps = {
+  theme: PluginButtonContentProps["theme"];
+  par: Par;
+  plan: Plan | null;
+  empezar: (input: { modo: "plan" | "prompt"; texto?: string; modelo?: string }) => Promise<{ ok: boolean; error?: string; par?: Par }>;
+  parar: () => Promise<{ ok: boolean; error?: string; par?: Par }>;
+  refresh: () => Promise<{ par: Par; plan: Plan | null }>;
+  models: () => Promise<{ id: string; label: string }[]>;
+  suggestNow?: () => void;
+};
+function AutopilotPanel({ theme, par: inicial, plan, empezar, parar, refresh, models, suggestNow }: PanelProps) {
+  const [par, setPar] = useState(inicial);
   const [busy, setBusy] = useState(false);
-  // Open, it reads its own state every few seconds: the host does not repaint an open popover, and «what is it doing» is the point.
+  const [error, setError] = useState<string | null>(null);
+  const [modo, setModo] = useState<"plan" | "prompt">(plan ? "plan" : "prompt");
+  const [texto, setTexto] = useState("");
+  const [modelos, setModelos] = useState<{ id: string; label: string }[]>([]);
+  const [modelo, setModelo] = useState<string | null>(null);
+  const viva = esViva(par);
+  // Open and alive, it re-reads its own state every few seconds: the host does not repaint an open popover, and «what is it doing» is the point.
   useEffect(() => {
-    if (!state.on) return;
-    const timer = setInterval(() => void refresh().then(setState, () => {}), 3_000);
+    if (!viva) return;
+    const timer = setInterval(() => void refresh().then(({ par: next }) => setPar(next), () => {}), 3_000);
     return () => clearInterval(timer);
-  }, [state.on]);
+  }, [viva]);
+  // The form asks A's provider for its models once (the same call the rutador's cards make); Opus 5.5 when it is offered.
+  useEffect(() => {
+    if (viva) return;
+    void models().then((ms) => {
+      setModelos(ms);
+      setModelo((prev) => prev ?? (ms.some((m) => m.id === MODELO_AUDITOR) ? MODELO_AUDITOR : ms[0]?.id ?? null));
+    }, () => {});
+  }, [viva]);
+  const pedir = (fn: () => Promise<{ ok: boolean; error?: string; par?: Par }>) => {
+    setBusy(true);
+    setError(null);
+    void fn()
+      .then((r) => {
+        if (!r.ok) {
+          setError(r.error ?? "el supervisor no respondió");
+          return;
+        }
+        if (r.par) setPar(r.par);
+      }, (e: unknown) => setError(e instanceof Error ? e.message : "el supervisor no respondió"))
+      .finally(() => setBusy(false));
+  };
+  const opciones = plan
+    ? [
+        { label: `Plan vinculado · ${plan.key} · ${plan.criterios} criterios`, value: "plan" },
+        { label: "Prompt", value: "prompt" },
+      ]
+    : [{ label: "Prompt", value: "prompt" }];
   return (
     <View style={{ gap: 4, minWidth: 260, maxWidth: 340 }}>
-      {suggestNow && !state.on ? <SettingsAction label="Sugerencia" hint="Propone ahora el siguiente mensaje; lo envías tú" actionLabel="Sugerir ahora" onPress={suggestNow} /> : null}
-      <SettingsSwitch
-        label="Autopilot"
-        hint="Pilota esta sesión sola hasta terminar: envía cada paso, espera los eventos y archiva al entregar. Se pone en rojo si necesita a una persona."
-        value={state.on}
-        disabled={busy}
-        onValueChange={(on) => {
-          setBusy(true);
-          void toggle(on).then(setState, () => {}).finally(() => setBusy(false));
-        }}
-      />
-      {state.on ? (
-        <Text style={{ color: state.estado === "humano" ? ESTADO_COLOR.humano : theme.colors.foreground, fontSize: 13 }}>{autopilotLine(state)}</Text>
-      ) : null}
-      {state.on ? autopilotDetails(state).map((detail) => (
-        <Text key={detail} style={{ color: theme.colors.foregroundMuted, fontSize: 12 }}>{detail}</Text>
-      )) : null}
+      {suggestNow && !viva ? <SettingsAction label="Sugerencia" hint="Propone ahora el siguiente mensaje; lo envías tú" actionLabel="Sugerir ahora" onPress={suggestNow} /> : null}
+      {viva ? (
+        <>
+          <Text style={{ color: ESTADO_COLOR[par.estado] ?? theme.colors.foreground, fontSize: 13 }}>{autopilotLine(par)}</Text>
+          {autopilotDetails(par).map((detail) => (
+            <Text key={detail} style={{ color: theme.colors.foregroundMuted, fontSize: 12 }}>{detail}</Text>
+          ))}
+          <SettingsAction
+            label="Autopilot"
+            hint="Para la pareja: el supervisor desregistra el par y archiva al auditor"
+            actionLabel="Parar"
+            onPress={() => pedir(parar)}
+            disabled={busy}
+          />
+        </>
+      ) : (
+        <>
+          {par.estado !== "sin-par" ? <Text style={{ color: ESTADO_COLOR[par.estado] ?? theme.colors.foregroundMuted, fontSize: 13 }}>{autopilotLine(par)}</Text> : null}
+          <SettingsSelect
+            label="Objetivo"
+            hint="Qué persigue el auditor: el plan de paseo-plan de esta sesión, o un prompt que él convierte en plan"
+            value={modo}
+            options={opciones}
+            disabled={busy}
+            onValueChange={(v) => setModo(v === "plan" ? "plan" : "prompt")}
+          />
+          {modo === "plan" && plan ? (
+            <Text style={{ color: theme.colors.foregroundMuted, fontSize: 12 }}>{`${plan.key} · ${plan.criterios} criterios`}</Text>
+          ) : modo === "prompt" ? (
+            <TextInput
+              accessibilityLabel="Objetivo para el auditor"
+              multiline
+              defaultValue={texto}
+              onChangeText={setTexto}
+              placeholder="Qué debe conseguir esta sesión, con sus criterios"
+              style={{ height: LINE * 3, padding: 6, borderWidth: 1, borderColor: theme.colors.border, borderRadius: 8, color: theme.colors.foreground, fontSize: 13, lineHeight: LINE, outlineWidth: 0, outlineColor: "transparent" }}
+            />
+          ) : null}
+          <SettingsSelect
+            label="Modelo del auditor"
+            hint="El modelo con el que piensa la sesión B que pilota esta"
+            value={modelo ?? ""}
+            options={modelos.map((m) => ({ label: m.label, value: m.id }))}
+            disabled={busy || modelos.length === 0}
+            onValueChange={setModelo}
+          />
+          <SettingsAction
+            label="Autopilot"
+            hint="Una sesión auditora B planifica, audita contra los criterios y escribe el siguiente mensaje de esta; nunca implementa"
+            actionLabel="Empezar"
+            onPress={() => pedir(() => empezar({ modo, ...(modo === "prompt" ? { texto } : {}), ...(modelo ? { modelo } : {}) }))}
+            disabled={busy || (modo === "prompt" && !texto.trim())}
+          />
+          {error ? <Text style={{ color: ESTADO_COLOR.error, fontSize: 13, maxWidth: 300 }}>{error}</Text> : null}
+        </>
+      )}
     </View>
   );
 }
@@ -255,16 +368,43 @@ export function addSuggestPill(client: PluginClientContext): () => void {
   const anchors = new Map<string, { en_plan: string | null; criterio: string | null }>(); // badge and criterion of the anchored suggestion
   const muted = new Set<string>(); // three «no es esto» in a row: the ✦ says it is quiet until clicked
   const noPills = new Map<string, ReturnType<PluginClientContext["addComposerPill"]>>(); // «no es esto», next to an anchored suggestion
-  const autopilots = new Map<string, Autopilot>(); // the autopilot of each agent, as the server last reported it
-  const pedido = new Set<string>(); // agents whose autopilot state we already asked the service for
-  const toggle = (agentId: string) => async (on: boolean) => {
-    const next = await client.rpc(autopilotSet, { agentId, on });
-    autopilots.set(agentId, next);
+  const autopilots = new Map<string, Par>(); // the pair of each agent, as the server last read it from the supervisor's registry
+  const planes = new Map<string, Plan | null>(); // the plan the popover can link (the anchor's ticket and criterion count)
+  const pedido = new Set<string>(); // agents whose autopilot state we already asked the server for
+  // Reading the pair repaints the pill only when what it paints changed: the open popover polls every 3 s and must not
+  // rebuild itself (that would reset the form and flicker the star).
+  const refrescar = (agentId: string) => async (): Promise<{ par: Par; plan: Plan | null }> => {
+    const r = await client.rpc(suggestGet, { agentId });
+    const par = r.autopilot ?? SIN_PAR;
+    const antes = autopilots.get(agentId);
+    const cambio = !antes || antes.estado !== par.estado || antes.motivo !== par.motivo || antes.ultimo_envio !== par.ultimo_envio;
+    autopilots.set(agentId, par);
+    planes.set(agentId, r.plan ?? null);
     const current = agents.get(agentId);
-    if (current) show(current);
-    return next;
+    if (current && cambio) show(current);
+    return { par, plan: r.plan ?? null };
   };
-  const refresh = (agentId: string) => () => client.rpc(suggestGet, { agentId }).then(({ autopilot = OFF }) => autopilot);
+  const refresh = (agentId: string) => refrescar(agentId);
+  // Start and stop answer with the pair as the registry now has it, so the pill repaints at once and not at the next poll.
+  const empezar = (agentId: string) => async (input: { modo: "plan" | "prompt"; texto?: string; modelo?: string }) => {
+    const r = await client.rpc(autopilotStart, { agentId, ...input });
+    return r.ok ? { ...r, ...(await refrescar(agentId)()) } : r;
+  };
+  const parar = (agentId: string) => async () => {
+    const r = await client.rpc(autopilotStop, { agentId });
+    return r.ok ? { ...r, ...(await refrescar(agentId)()) } : r;
+  };
+  // The auditor's model list: A's provider, the same call the rutador's cards make (herramientas.ts).
+  const modelos = (agentId: string) => async (): Promise<{ id: string; label: string }[]> => {
+    try {
+      const agent = (await client.paseo.agents.ref(agentId).refresh())?.agent;
+      if (!agent) return [];
+      const list = await client.paseo.providers.listModels(agent.provider);
+      return (list.models ?? []).map((m) => ({ id: m.id, label: m.label ?? m.id }));
+    } catch {
+      return [];
+    }
+  };
   const feedback = (agentId: string, verdict: "no-es-esto" | "usada") =>
     client.rpc(suggestFeedback, { agentId, verdict }).catch(() => ({ muted: false }));
   let stopped = false;
@@ -286,6 +426,7 @@ export function addSuggestPill(client: PluginClientContext): () => void {
     compactReported.delete(id);
     estadoFor.delete(id);
     autopilots.delete(id);
+    planes.delete(id);
     pedido.delete(id);
   };
   const show = (agent: Agent) => {
@@ -301,21 +442,22 @@ export function addSuggestPill(client: PluginClientContext): () => void {
     const text = agent.status === "idle" ? (texts.get(agent.id) ?? null) : null;
     const pending = pendingFor.get(agent.id) ?? false;
     const error = errors.get(agent.id) ?? null;
-    // While a turn runs the autopilot is working, whatever it last reported; idle, the poll brings what it decided.
-    // A page opened mid-turn knows nothing yet (the poll only asks idle agents), and the ✦ of an autopilot must be gold and
-    // turning for as long as it is on (Dani 08-11): it is asked once, the first time the agent is seen.
-    const autopilot = autopilots.get(agent.id) ?? OFF;
+    // The pair is the supervisor's, not this plugin's: whatever the last turn did, the registry says what the auditor is doing.
+    // A page opened mid-turn knows nothing yet (the poll only asks idle agents), and the ✦ of a live pair must be gold and
+    // turning (Dani 08-11): it is asked once, the first time the agent is seen.
+    const par = autopilots.get(agent.id) ?? SIN_PAR;
     if (!autopilots.has(agent.id) && !pedido.has(agent.id)) {
       pedido.add(agent.id);
-      void client.rpc(suggestGet, { agentId: agent.id }).then(({ autopilot: asked = OFF }) => {
+      void client.rpc(suggestGet, { agentId: agent.id }).then((asked) => {
         if (stopped) return;
-        autopilots.set(agent.id, asked);
+        autopilots.set(agent.id, asked.autopilot ?? SIN_PAR);
+        planes.set(agent.id, asked.plan ?? null);
         show(agents.get(agent.id) ?? agent);
       }, () => {});
     }
-    const piloted = autopilot.on ? (agent.status === "idle" ? autopilot : { ...autopilot, estado: "activo", motivo: "" }) : null;
+    const piloted = par.estado === "sin-par" || par.estado === "desconocido" ? null : par;
     estadoFor.set(agent.id, piloted
-      ? (piloted.estado === "humano" || piloted.estado === "pensando" ? piloted.estado : "autopilot")
+      ? (["humano", "degradada", "pensando", "entregada"].includes(piloted.estado) ? piloted.estado : "autopilot")
       : pending ? "generando" : text ? "lista" : error ? "error" : "pedible");
     const pill = pills.get(agent.id);
     compactReported.set(agent.id, (next) => {
@@ -334,15 +476,25 @@ export function addSuggestPill(client: PluginClientContext): () => void {
     const panel = (suggestNow?: () => void) => ({
       kind: "popover" as const,
       Content: (props: PluginButtonContentProps) => (
-        <AutopilotPanel theme={props.theme} autopilot={autopilot} toggle={toggle(agent.id)} refresh={refresh(agent.id)} suggestNow={suggestNow && (() => { props.close(); void suggestNow(); })} />
+        <AutopilotPanel
+          theme={props.theme}
+          par={par}
+          plan={planes.get(agent.id) ?? null}
+          empezar={empezar(agent.id)}
+          parar={parar(agent.id)}
+          refresh={refresh(agent.id)}
+          models={modelos(agent.id)}
+          suggestNow={suggestNow && (() => { props.close(); void suggestNow(); })}
+        />
       ),
     });
-    // The autopilot speaks with the ✦ alone: gold while it works or waits, red when it needs a person, and its popover is the switch.
+    // The pair speaks with the ✦ alone: gold and turning while the auditor pilots it, red when it needs a person or stopped
+    // answering, green when delivered; its popover is the status and the «Parar» button.
     const button = piloted ? {
       title: autopilotLine(piloted),
       icon: SuggestIcon,
-      label: compact ? "\u200b" : piloted.estado === "activo" ? "autopilot" : autopilotLine(piloted).slice(0, 60),
-      visible: true, // also while a turn runs: the switch must be reachable to stop it mid-turn
+      label: compact ? "\u200b" : piloted.estado === "activa" ? "autopilot" : autopilotLine(piloted).slice(0, 60),
+      visible: true, // also while a turn runs: the stop button must be reachable mid-turn
       disabled: false,
       behavior: panel(),
     } : {
@@ -353,8 +505,8 @@ export function addSuggestPill(client: PluginClientContext): () => void {
       label: !compact && text ? (badge ? `${badge} ${meta?.criterio ? `${meta.criterio} · ` : ""}${text}` : text)
         : text && badge ? badge : pending ? "\u200b" : error ? "!" : quiet ? "callada" : "\u200b", // sin «…» ni ✦ repetida (la ✦ es el icono, Dani 08-11): la estrella amarilla gira (Dani 07-11); el host rechaza label vacía o en blanco (validation.ts requireText), el espacio de ancho cero la pasa y no se ve
       // Idle agents always carry the pill: with a suggestion it opens the card, without one the small ✦ opens «Sugerir ahora»,
-      // which forces a generation (Dani 19-10), next to the Autopilot switch (Dani 07-11); it spins while the generation resolves
-      // and shows the failure once if it does not.
+      // which forces a generation (Dani 19-10), next to the autopilot form (Dani 07-11, now the auditor's start form); it spins
+      // while the generation resolves and shows the failure once if it does not.
       // Hidden while a turn runs — a suggestion is never asked for mid-turn.
       visible: agent.status === "idle",
       disabled: pending,
@@ -366,9 +518,12 @@ export function addSuggestPill(client: PluginClientContext): () => void {
                 {...props}
                 text={text}
                 agentId={agent.id}
-                autopilot={autopilot}
-                toggle={toggle(agent.id)}
+                par={par}
+                plan={planes.get(agent.id) ?? null}
+                empezar={empezar(agent.id)}
+                parar={parar(agent.id)}
                 refresh={refresh(agent.id)}
+                models={modelos(agent.id)}
                 onInserted={() => {
                   consumed.set(agent.id, text);
                   texts.set(agent.id, null);
@@ -483,13 +638,14 @@ export function addSuggestPill(client: PluginClientContext): () => void {
     for (const agent of agents.values()) {
       if (agent.status !== "idle") continue;
       void client.rpc(suggestGet, { agentId: agent.id }).then(
-        ({ text, en_plan, criterio, muted: quiet, autopilot = OFF }) => {
+        ({ text, en_plan, criterio, muted: quiet, autopilot = SIN_PAR, plan = null }) => {
           if (stopped) return;
           const shown = text === consumed.get(agent.id) ? null : text;
-          const before = autopilots.get(agent.id) ?? OFF;
+          const before = autopilots.get(agent.id) ?? SIN_PAR;
           const changed = texts.get(agent.id) !== shown || muted.has(agent.id) !== quiet
-            || before.on !== autopilot.on || before.estado !== autopilot.estado || before.motivo !== autopilot.motivo;
+            || before.estado !== autopilot.estado || before.motivo !== autopilot.motivo || before.ultimo_envio !== autopilot.ultimo_envio;
           autopilots.set(agent.id, autopilot);
+          planes.set(agent.id, plan);
           texts.set(agent.id, shown);
           anchors.set(agent.id, { en_plan, criterio });
           if (quiet) muted.add(agent.id);

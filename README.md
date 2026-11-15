@@ -35,7 +35,7 @@ no consume su contrato `file.claude-cuentas.v1`: la llamada va a LiteLLM con la 
   aparece. El envío de una sugerencia es siempre un toque del usuario.
 - Configurable: pantalla propia «Sugerencia del siguiente mensaje» en los ajustes de Paseo — interruptor
   `enabled` (al desactivar se tiran las sugerencias pendientes y mostradas) y ventana de silencio
-  (30/60/120/300 s) y los topes del autopilot (pasos seguidos y por sesión; 0 = sin tope, lo de fábrica). El documento vive en
+  (30/60/120/300 s). El documento vive en
   el host (`shared/settings.ts`); el server lo obedece al vuelo.
 - La instrucción vive solo en el servicio `sugiere` (decisión 5 de Dani): el plugin no manda ninguna y
   `~/.local/state/paseo-sugiere/prompt.txt` ya no se lee. No hay editor en la píldora: la píldora es para enviar (Dani 17-10).
@@ -43,16 +43,19 @@ no consume su contrato `file.claude-cuentas.v1`: la llamada va a LiteLLM con la 
   `guard: true` y criterios, al acabar cada turno de ese agente se pide la sugerencia con el plan, sin ventana de silencio y aunque
   `auto` esté apagado. La ✦ enseña la insignia (▸ paso del plan, ✚ trabajo nuevo, ✓ verificar) y el criterio; al lado sale
   «no es esto», y tres seguidos callan la ✦ hasta que la pulses. Enviar sigue siendo tu toque.
-- La ✦ sin sugerencia abre un popover: «Sugerir ahora» (el force de siempre) y el interruptor **Autopilot** de ese agente (también
-  en la tarjeta del móvil). Encendido, al acabar cada turno `completed` el plugin pregunta a `POST /v1/autopilot` del servicio
-  (`contexto.kind: "live"`, `cwd`, la `key` del ancla, el plan si hay guarda, `nativa` solo sin plan, y `topes` de los ajustes;
-  plazo 330 s) y obedece: `enviar` → manda el mensaje si no empezó otro turno (`seq`); `esperar` → ✦ dorada «esperando: …»;
-  `humano` → ✦ rojo brillante con pulso (sin animación con movimiento reducido) hasta el siguiente mensaje; `cerrar` → archiva el
-  agente. Un 503, sin respuesta o una lectura fallida de la sesión se reintenta una vez a los 60 s; si vuelve a fallar, rojo con la causa. Con el autopilot encendido no se genera
-  sugerencia (una sola llamada por turno). Estado en `~/.local/state/paseo-sugiere/autopilot.json`
-  (`{agentId: {on, desde, estado, motivo, decidido?, pasos?, enviado?}}`). Al arrancar, una evaluación de los agentes con autopilot `idle` cuyo último mensaje es
-  del asistente (en la primera llamada que trae el host: la SDK no da `paseo` al arrancar). Es distinto de «Sugerir
-  automáticamente», que solo propone.
+- La ✦ sin sugerencia abre un popover: «Sugerir ahora» (el force de siempre) y el **Autopilot** de ese agente (también
+  en la tarjeta del móvil), que ya no es un interruptor del plugin sino un formulario de arranque (14-11-2026): objetivo —
+  «Plan vinculado» (elegible solo si el ancla de paseo-plan tiene ticket y al menos un criterio; se muestra como
+  `CLAVE · n criterios`) o «Prompt» (texto) — y modelo del auditor (los modelos del proveedor de la sesión,
+  `claude-opus-5-5` si lo ofrece). «Empezar» llama al supervisor de la compañía (`POST /autopilot/par`, cabecera
+  `X-Company-Token` de `~/.company/jira-trigger/secret`, base `http://company.paseo.svc.cluster.local:19911`, env
+  `SUPERVISOR_URL`), que crea la sesión auditora B: B planifica, audita contra los criterios y escribe el siguiente mensaje
+  de A; el plugin solo arranca y para la pareja y enseña su estado («Parar» = `DELETE /autopilot/par/<a_id>`). Con la pareja
+  viva la ✦ habla por ella: amarilla y girando (`activa`/`pensando`/`esperando`), roja brillante con pulso cuando hace falta
+  una persona (`humano`) o roja fija cuando el auditor dejó de responder (`degradada`), verde al entregar (`entregada`); el
+  popover da el motivo, los pasos, el último envío y el auditor. El estado viene del registro del supervisor
+  (`~/.company/jira-trigger/autopilot-pares.json`): fichero ausente = sin pareja; ilegible = estado desconocido sin romper la
+  píldora. Un error del supervisor se enseña una vez en el popover. Es distinto de «Sugerir automáticamente», que solo propone.
 
 ## Qué lee y envía
 

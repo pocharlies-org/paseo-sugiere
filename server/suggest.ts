@@ -47,10 +47,14 @@ export function guardedPlan(agentId: string): object | null {
   return anchor?.guard === true && Array.isArray(anchor.criterios) && anchor.criterios.length ? anchor : null;
 }
 
-/** The ticket the agent is anchored to, guard or not: the autopilot sends it as `contexto.key`. */
-export function anchorKey(agentId: string): string {
-  const key = anchorOf(agentId)?.ticketKey;
-  return typeof key === "string" ? key : "";
+/** The plan the ✦'s popover can link to the auditor: an anchor with `ticketKey` and at least one criterion, shown as
+ * «SC-… · n criterios» and sent as `objetivo.key`. Unlike `guardedPlan` it does not require `guard`: the auditor gets the
+ * plan whether or not the pill's guard is on. Null without a file, without a key or without criteria. */
+export function planAnchor(agentId: string): { key: string; criterios: number } | null {
+  const anchor = anchorOf(agentId);
+  const key = typeof anchor?.ticketKey === "string" ? anchor.ticketKey : "";
+  const criterios = Array.isArray(anchor?.criterios) ? anchor.criterios.length : 0;
+  return key && criterios ? { key, criterios } : null;
 }
 
 /** Three «no es esto» in a row and the ✦ goes quiet: no guarded generation until the user clicks it (the plan, «Deriva»).
@@ -106,13 +110,6 @@ export function cancel(agentId: string): void {
   entry.timer = undefined;
   entry.seq += 1;
   clear(entry);
-}
-
-/** The agent's turn counter (the `seq`): every turn start bumps it, so the autopilot drops an answer that lands after one. */
-export function turn(agentId: string): number {
-  const entry = agents.get(agentId) ?? fresh();
-  agents.set(agentId, entry);
-  return entry.seq;
 }
 
 export function get(agentId: string): string | null {

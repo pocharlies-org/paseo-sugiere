@@ -26,9 +26,9 @@ test("suggestion card uses the sheet-aware input, edits before sending and has a
       useMemo: (factory: () => unknown) => factory(),
     },
     "react-native": { View: "View", Text: "Text", Pressable: "Pressable", TextInput: "UnsafeInput", AccessibilityInfo: {} },
-    "@getpaseo/plugin/client/ui": { SettingsAction: "SettingsAction", SettingsSwitch: "SettingsSwitch" },
+    "@getpaseo/plugin/client/ui": { SettingsAction: "SettingsAction", SettingsSelect: "SettingsSelect" },
     "@getpaseo/plugin/client/react-native": { Icon: "Icon", TextInput: "SheetAwareInput" },
-    "../shared/contract.ts": { suggestGet: "get", suggestForce: "force", suggestFeedback: "feedback", autopilotSet: "autopilot" },
+    "../shared/contract.ts": { suggestGet: "get", suggestForce: "force", suggestFeedback: "feedback", autopilotStart: "start", autopilotStop: "stop" },
     "../shared/suggest.ts": { SUGGEST_WAIT_MS: 300_000 },
     "./composer-bridge.ts": { insertSuggestion: () => false },
     "./estrella.ts": { gira },
@@ -72,7 +72,7 @@ test("suggestion card uses the sheet-aware input, edits before sending and has a
     let card = render();
     const [row, autopilot] = card.props.children;
     const [input, hint, send] = row.props.children;
-    assert.equal(autopilot.props.autopilot.on, false, "the card carries the Autopilot switch (the mobile card)");
+    assert.equal(autopilot.props.par.estado, "sin-par", "the card carries the autopilot start form (the mobile card)");
     assert.equal(hint, null, "a short suggestion needs no scroll hint");
     assert.equal(input.type, "SheetAwareInput");
     assert.equal(closed, false);
@@ -111,9 +111,9 @@ test("a forced suggestion stays on the pill until its button is pressed", async 
     "react/jsx-runtime": { jsx, jsxs: jsx },
     react: { useState: (i: unknown) => [typeof i === "function" ? (i as () => unknown)() : i, () => {}], useEffect: () => {}, useMemo: (f: () => unknown) => f(), useRef: () => ({ current: null }) },
     "react-native": { View: "View", Text: "Text", Pressable: "Pressable", AccessibilityInfo: {} },
-    "@getpaseo/plugin/client/ui": { SettingsAction: "SettingsAction", SettingsSwitch: "SettingsSwitch" },
+    "@getpaseo/plugin/client/ui": { SettingsAction: "SettingsAction", SettingsSelect: "SettingsSelect" },
     "@getpaseo/plugin/client/react-native": { Icon: "Icon", TextInput: "Input" },
-    "../shared/contract.ts": { suggestGet: "get", suggestForce: "force", suggestFeedback: "feedback", autopilotSet: "autopilot" },
+    "../shared/contract.ts": { suggestGet: "get", suggestForce: "force", suggestFeedback: "feedback", autopilotStart: "start", autopilotStop: "stop" },
     "../shared/suggest.ts": { SUGGEST_WAIT_MS: 300_000 },
     "./composer-bridge.ts": {
       insertSuggestion: (agentId: string, text: string) => { inserted.push(`${agentId} ${text}`); return true; },
@@ -150,7 +150,7 @@ test("a forced suggestion stays on the pill until its button is pressed", async 
   assert.equal(button.behavior.kind, "popover", "an idle agent with no suggestion yet shows the plain ✦, whose popover offers «Sugerir ahora»");
   let closed = false;
   const panel = button.behavior.Content({ theme: { colors: {} }, close: () => { closed = true; } });
-  assert.equal(panel.props.autopilot.on, false, "next to the Autopilot switch");
+  assert.equal(panel.props.par.estado, "sin-par", "next to the autopilot start form");
   panel.props.suggestNow();
   assert.ok(closed, "pressing it closes the popover");
   await settled();
@@ -163,9 +163,10 @@ test("a forced suggestion stays on the pill until its button is pressed", async 
   stop();
 });
 
-// With the autopilot on (Dani 07-11) the ✦ only speaks for it: gold with «esperando: …», red with «necesita acción: …», its
-// popover is the switch, it stays reachable while a turn runs, and no suggestion or «no es esto» shows next to it.
-test("a piloted ✦ is gold while it waits, red when it needs a person, and its popover is the switch", async () => {
+// With a live autopilot pair (the auditor pilots the session, 14-11) the ✦ only speaks for it: gold with «esperando: …», red
+// with «necesita acción: …», its popover is the status and the «Parar» button, it stays reachable while a turn runs, and no
+// suggestion or «no es esto» shows next to it.
+test("a piloted ✦ is gold while it waits, red when it needs a person, and its popover is the status with «Parar»", async () => {
   const source = readFileSync(new URL("../client/suggest-pill.tsx", import.meta.url), "utf8");
   const { outputText } = ts.transpileModule(source, {
     compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX },
@@ -175,9 +176,9 @@ test("a piloted ✦ is gold while it waits, red when it needs a person, and its 
     "react/jsx-runtime": { jsx, jsxs: jsx },
     react: { useState: (i: unknown) => [i, () => {}], useEffect: () => {}, useMemo: (f: () => unknown) => f(), useRef: () => ({ current: null }) },
     "react-native": { View: "View", Text: "Text", Pressable: "Pressable", AccessibilityInfo: {} },
-    "@getpaseo/plugin/client/ui": { SettingsAction: "SettingsAction", SettingsSwitch: "SettingsSwitch" },
+    "@getpaseo/plugin/client/ui": { SettingsAction: "SettingsAction", SettingsSelect: "SettingsSelect" },
     "@getpaseo/plugin/client/react-native": { Icon: "Icon", TextInput: "Input" },
-    "../shared/contract.ts": { suggestGet: "get", suggestForce: "force", suggestFeedback: "feedback", autopilotSet: "autopilot" },
+    "../shared/contract.ts": { suggestGet: "get", suggestForce: "force", suggestFeedback: "feedback", autopilotStart: "start", autopilotStop: "stop" },
     "../shared/suggest.ts": { SUGGEST_WAIT_MS: 300_000 },
     "./composer-bridge.ts": { insertSuggestion: () => false, registerPillAnchor: () => () => {} },
     "./estrella.ts": { gira },
@@ -190,8 +191,8 @@ test("a piloted ✦ is gold while it waits, red when it needs a person, and its 
     (callback: () => void) => { poll = callback; return 1; },
     () => {},
   );
-  let reply: any = { text: "una sugerencia vieja", en_plan: "en-plan", criterio: "c", muted: false, autopilot: { on: true, estado: "esperando", motivo: "ESPERA: ci" } };
-  const toggles: unknown[] = [];
+  let reply: any = { text: "una sugerencia vieja", en_plan: "en-plan", criterio: "c", muted: false, autopilot: { estado: "esperando", motivo: "ESPERA: ci" }, plan: null };
+  const paros: unknown[] = [];
   const buttons: Record<string, any> = {};
   let update: (agent: object) => void = () => {};
   const stop = exports.addSuggestPill({
@@ -200,9 +201,10 @@ test("a piloted ✦ is gold while it waits, red when it needs a person, and its 
       return { update: (next: unknown) => { buttons[id] = next; }, remove() {} };
     },
     rpc: async (name: string, input: any) => {
-      if (name !== "autopilot") return reply;
-      toggles.push(input);
-      return { on: input.on, estado: input.on ? "activo" : "apagado", motivo: "" };
+      if (name !== "stop") return reply;
+      paros.push(input);
+      reply = { ...reply, autopilot: { estado: "sin-par", motivo: "" } }; // the supervisor unregistered the pair
+      return { ok: true };
     },
     paseo: { agents: {
       list: async () => ({ subscription: { subscribe: ({ snapshot, update: u }: any) => {
@@ -219,28 +221,31 @@ test("a piloted ✦ is gold while it waits, red when it needs a person, and its 
   assert.equal(buttons.suggest.label, "esperando: ESPERA: ci", "gold, saying what it waits for — not the stale suggestion");
   assert.equal(buttons["suggest-no"].visible, false, "no «no es esto» next to a piloted ✦");
   const panel = buttons.suggest.behavior.Content({ theme: { colors: {} }, close() {} });
-  assert.equal(panel.props.autopilot.on, true);
-  assert.equal(panel.props.suggestNow, undefined, "no «Sugerir ahora» while it pilots: one generation per turn");
-  reply = { ...reply, autopilot: { on: true, estado: "humano", motivo: "dinero" } };
+  assert.equal(panel.props.par.estado, "esperando");
+  assert.equal(panel.props.suggestNow, undefined, "no «Sugerir ahora» while the auditor pilots: one generation per turn");
+  reply = { ...reply, autopilot: { estado: "humano", motivo: "dinero" } };
   poll();
   await settled();
   assert.equal(buttons.suggest.label, "necesita acción: dinero");
   update({ id: "a", workspaceId: "w", status: "running" });
-  assert.equal(buttons.suggest.visible, true, "reachable mid-turn, to switch it off");
-  assert.equal(buttons.suggest.label, "autopilot");
-  const next = await panel.props.toggle(false);
-  assert.deepEqual(toggles, [{ agentId: "a", on: false }]);
-  assert.equal(next.on, false);
-  assert.equal(buttons.suggest.visible, false, "off, the ✦ is the plain one again: hidden while the turn runs");
-  assert.equal(exports.autopilotLine({ on: true, estado: "pensando", motivo: "" }), "autopilot: pidiendo el siguiente paso");
+  assert.equal(buttons.suggest.visible, true, "reachable mid-turn, to stop the pair");
+  assert.equal(buttons.suggest.label, "necesita acción: dinero", "mid-turn the pill keeps saying what the auditor needs");
+  const r = await panel.props.parar();
+  assert.deepEqual(paros, [{ agentId: "a" }]);
+  assert.equal(r.ok, true);
+  assert.equal(r.par!.estado, "sin-par");
+  assert.equal(buttons.suggest.visible, false, "stopped, the ✦ is the plain one again: hidden while the turn runs");
+  assert.equal(exports.autopilotLine({ estado: "pensando", motivo: "" }), "autopilot: el auditor está pensando");
+  assert.equal(exports.autopilotLine({ estado: "degradada", motivo: "" }), "autopilot degradado: el auditor no responde");
+  assert.equal(exports.autopilotLine({ estado: "entregada", motivo: "TAREA-1000001 verificado" }), "entregado: TAREA-1000001 verificado");
   const now = Date.parse("2026-11-08T12:00:00Z");
   assert.deepEqual(
     exports.autopilotDetails(
-      { on: true, estado: "esperando", motivo: "jira ticket-1", desde: "2026-11-08T11:00:00Z", decidido: "2026-11-08T11:59:30Z", pasos: { seguidos: 2, total: 9 }, enviado: "[AUTOPILOT] sigue" },
+      { estado: "esperando", motivo: "jira ticket-1", desde: "2026-11-08T11:00:00Z", actualizado: "2026-11-08T11:59:30Z", pasos: { seguidos: 2, total: 9 }, ultimo_envio: "[AUTOPILOT] sigue", auditor: "Auditor de la historia" },
       now,
     ),
-    ["sigue solo cuando llegue el EVENTO del supervisor", "2 pasos seguidos · 9 en la sesión", "encendido hace 1 h · última decisión hace 30 s", "último envío: «[AUTOPILOT] sigue»"],
+    ["sigue solo cuando llegue el EVENTO del supervisor", "2 pasos seguidos · 9 en la sesión", "en marcha hace 1 h · actualizado hace 30 s", "último envío: «[AUTOPILOT] sigue»", "auditor: Auditor de la historia"],
   );
-  assert.deepEqual(exports.autopilotDetails({ on: true, estado: "activo", motivo: "" }, now), [], "nothing invented before the first decision");
+  assert.deepEqual(exports.autopilotDetails({ estado: "activa", motivo: "" }, now), [], "nothing invented before the first decision");
   stop();
 });
