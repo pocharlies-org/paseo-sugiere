@@ -112,13 +112,6 @@ export function cancel(agentId: string): void {
   clear(entry);
 }
 
-/** The agent's turn counter (the `seq`): every turn start bumps it, so the autopilot drops an answer that lands after one. */
-export function turn(agentId: string): number {
-  const entry = agents.get(agentId) ?? fresh();
-  agents.set(agentId, entry);
-  return entry.seq;
-}
-
 export function get(agentId: string): string | null {
   return enabled ? (agents.get(agentId)?.text ?? null) : null;
 }

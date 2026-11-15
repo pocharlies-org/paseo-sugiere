@@ -8,8 +8,8 @@ import { SUGGEST_WAIT_MS } from "../shared/suggest.ts";
 import { insertSuggestion, registerPillAnchor } from "./composer-bridge.ts";
 import { gira } from "./estrella.ts";
 
-// One composer pill per idle agent (with the autopilot on, also mid-turn): with a suggestion ready it opens the card, without one it is a small ✦ whose popover forces a
-// generation now (Dani 19-10) or switches the agent's autopilot on (Dani 07-11; then the ✦ is gold, or red when it needs a person). Nothing reaches the prompt without a press: a generation that finishes while another window is in
+// One composer pill per idle agent (with an autopilot pair alive, also mid-turn): with a suggestion ready it opens the card, without one it is a small ✦ whose popover forces a
+// generation now (Dani 19-10) or starts the agent's autopilot pair (Dani 07-11; then the ✦ is gold, or red when it needs a person). Nothing reaches the prompt without a press: a generation that finishes while another window is in
 // front stays on this pill (Dani 02-11). Tapping a suggestion puts the text in the agent's prompt (composer-bridge.ts, web and
 // desktop; Dani 18-10) and, where that cannot be done, opens the text already editable in place, and Enter sends it as the
 // next user message (Dani 16-10: «editar» must edit the suggestion in place; 17-10: the two buttons were dead weight — the field

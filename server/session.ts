@@ -72,7 +72,7 @@ export async function sugiereRequest(
 }
 
 /** One POST to the `sugiere` service: the status and the JSON body (empty if it is not JSON). No answer in time is `SessionError("servicio")`. */
-export async function sugierePost(path: string, body: object, timeoutMs: number): Promise<{ status: number; out: Record<string, unknown> }> {
+async function sugierePost(path: string, body: object, timeoutMs: number): Promise<{ status: number; out: Record<string, unknown> }> {
   const base = (process.env.SUGIERE_URL || "http://sugiere.llm.svc:8080").replace(/\/+$/, "");
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
@@ -83,7 +83,7 @@ export async function sugierePost(path: string, body: object, timeoutMs: number)
       body: JSON.stringify(body),
       signal: controller.signal,
     });
-    // Also on a refusal: its `{error}` says why (the autopilot shows it); callers read only typed fields, so an error body is inert.
+    // Also on a refusal: its `{error}` says why; callers read only typed fields, so an error body is inert.
     return { status: response.status, out: (await response.json().catch(() => ({}))) as Record<string, unknown> };
   } catch {
     throw new SessionError("servicio");
