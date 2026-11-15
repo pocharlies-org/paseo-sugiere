@@ -39,7 +39,7 @@ al modelo de la sesión, sin compartir la caché de la sesión.
   por su cuenta: una generación terminada se queda en la píldora de su ventana hasta que se pulsa su botón (Dani 02-11). El popover intenta
   primero el puente y solo pinta su tarjeta si no pudo: el propio campo más un botón pequeño de enviar a su derecha, sin caja ni
   bordes y con la altura del texto (el popover del host ya enmarca).
-- `client/composer-bridge.ts` — **atajo declarado** (`shortcut:`): la SDK de Paseo (0.11.2 y 0.12.0-beta.1) no tiene API del borrador
+- `client/composer-bridge.ts` — **atajo declarado** (`shortcut:`): la SDK de Paseo (hasta 0.15.4; 0.16 trae `useComposer`) no tiene API del borrador
   del composer, así que desde el icono de la píldora sube por el DOM hasta el primer ancestro que tenga un `textarea[data-composer-input]`
   y lo toma solo si es el único y está a la vista; le añade el texto como si se tecleara (`execCommand("insertText")`, y de respaldo el
   setter del prototipo más un evento
@@ -78,9 +78,8 @@ deprecada desde el 14-11-2026 (el plugin dejó de llamarla: el autopilot es la s
 
 ## Riesgos conocidos
 
-- `requirements.paseo` fija `>=0.11.2 <0.12.0`: un bump mayor de Paseo deja el
-  plugin inactivo hasta adaptar el SDK (el `paseo-update.timer` del host puede
-  traerlo; es un Task de empaquetado aparte, hallazgo 4 del architect).
+- `requirements.paseo` pide `>=0.15.4`, sin tope: `deploy.sh` no despliega en un host más viejo, pero un Paseo
+  nuevo que rompa el SDK solo se ve al cargar el plugin; el tipado y los tests van contra 0.15.4.
 - El ahorro por KV-cache (APC) es la hipótesis de diseño, no una medición en vivo.
 
 ## Publicación
