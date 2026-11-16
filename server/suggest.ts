@@ -25,12 +25,18 @@ export function setQuietSeconds(seconds: number): void {
   quietMs = seconds * 1000;
 }
 
+// Who hears that an agent's state may have changed: the server's vigilia, which pushes it to the pills.
+let avisa: (agentId: string) => void = () => {};
+export function alCambiar(listener: (agentId: string) => void): void {
+  avisa = listener;
+}
+
 // The instruction is the service's alone (Dani's decision 5): the plugin sends none. The old hand-edited
 // ~/.local/state/paseo-sugiere/prompt.txt is no longer read.
 
 // The plan anchor paseo-plan writes per agent (paseo-plan's file contract). Read with every turn end and generation, so «Garantizar
 // plan» switched in the pill takes effect on the next turn without restarting the host.
-const ANCHOR_DIR = join(homedir(), ".local", "state", "paseo-plan");
+export const ANCHOR_DIR = join(homedir(), ".local", "state", "paseo-plan");
 
 function anchorOf(agentId: string): Record<string, unknown> | null {
   try {
@@ -93,6 +99,7 @@ export function arm(agentId: string, context: PluginHookContext): void {
   entry.timer = undefined;
   entry.seq += 1;
   clear(entry);
+  avisa(agentId);
   const seq = entry.seq;
   if (guarded) {
     void generate(agentId, seq, context);
@@ -112,6 +119,7 @@ export function cancel(agentId: string): void {
   entry.timer = undefined;
   entry.seq += 1;
   clear(entry);
+  avisa(agentId);
 }
 
 export function get(agentId: string): string | null {
@@ -140,6 +148,7 @@ export function feedback(agentId: string, verdict: "no-es-esto" | "usada"): { mu
     entry.muted = entry.noes >= MAX_NOES;
     entry.text = entry.en_plan = entry.criterio = null;
   }
+  avisa(agentId);
   return { muted: entry.muted };
 }
 
@@ -157,13 +166,16 @@ export function force(agentId: string, context: PluginHandlerContext): boolean {
   entry.noes = 0; // the user asked: a quiet ✦ speaks again
   entry.muted = false;
   agents.set(agentId, entry);
+  avisa(agentId);
   void generate(agentId, entry.seq, context, true);
   return true;
 }
 
 export function dispose(): void {
-  for (const [id] of agents) cancel(id);
+  const ids = [...agents.keys()];
+  for (const id of ids) cancel(id);
   agents.clear();
+  for (const id of ids) avisa(id); // the streak and the quiet ✦ went with the entries
 }
 
 /** Silent by design: no transcript, a missing file, a refused call — there is simply no suggestion, and the pill shows nothing. */
@@ -219,5 +231,7 @@ async function generate(agentId: string, seq: number, context: PluginHandlerCont
     const message = error instanceof SessionError ? error.message : error instanceof Error ? error.message : "unknown";
     console.warn(`suggest: no generation for ${agentId}: ${message}`);
     settle(message);
+  } finally {
+    avisa(agentId); // whatever the generation left — text, nada, error, or nothing because the session moved on
   }
 }

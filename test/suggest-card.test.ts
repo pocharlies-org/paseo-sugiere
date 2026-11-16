@@ -4,6 +4,24 @@ import { test } from "node:test";
 import ts from "typescript";
 import { gira } from "../client/estrella.ts";
 
+// The pills' state is pushed through one held `suggest.watch`: `canal()` is that call, answered when the test pushes.
+function canal() {
+  const cola: unknown[] = [];
+  let espera: ((respuesta: unknown) => void) | null = null;
+  return {
+    pide: () => (cola.length ? Promise.resolve(cola.shift()) : new Promise((sigue) => { espera = sigue; })),
+    empuja: (respuesta: unknown) => {
+      if (!espera) return void cola.push(respuesta);
+      const sigue = espera;
+      espera = null;
+      sigue(respuesta);
+    },
+  };
+}
+const estado = (extra: object = {}) => ({ text: null, pending: false, error: null, nada: false, en_plan: null, criterio: null, muted: false, autopilot: { estado: "sin-par", motivo: "" }, plan: null, ...extra });
+const sinSondeo = () => { throw new Error("the client never asks on a clock"); };
+const contrato = { suggestWatch: "watch", suggestForce: "force", suggestFeedback: "feedback", autopilotStart: "start", autopilotStop: "stop", ESTADO_VACIO: estado() };
+
 // Render the plugin with host primitives, without loading React Native's native runtime in Node.
 test("suggestion card uses the sheet-aware input, edits before sending and has a reachable mobile button", async () => {
   const source = readFileSync(new URL("../client/suggest-pill.tsx", import.meta.url), "utf8");
@@ -28,28 +46,28 @@ test("suggestion card uses the sheet-aware input, edits before sending and has a
     "react-native": { View: "View", Text: "Text", Pressable: "Pressable", TextInput: "UnsafeInput", AccessibilityInfo: {} },
     "@getpaseo/plugin/client/ui": { SettingsAction: "SettingsAction", SettingsSelect: "SettingsSelect" },
     "@getpaseo/plugin/client/react-native": { Icon: "Icon", TextInput: "SheetAwareInput" },
-    "../shared/contract.ts": { suggestGet: "get", suggestForce: "force", suggestFeedback: "feedback", autopilotStart: "start", autopilotStop: "stop" },
-    "../shared/suggest.ts": { SUGGEST_WAIT_MS: 300_000 },
+    "../shared/contract.ts": contrato,
     "./composer-bridge.ts": { insertSuggestion: () => false },
     "./estrella.ts": { gira },
   };
   const exports: any = {};
-  let poll: () => void = () => {};
-  new Function("require", "exports", "setInterval", "clearInterval", outputText)(
+  new Function("require", "exports", "setInterval", "setTimeout", outputText)(
     (name: string) => { assert.ok(name in modules, name); return modules[name]; },
     exports,
-    (callback: () => void) => { poll = callback; return 1; },
-    () => {},
+    sinSondeo,
+    sinSondeo,
   );
   let button: any;
   const sent: string[] = [];
+  const watch = canal();
+  watch.empuja({ version: 1, completo: true, agentes: { a: estado({ text: "Original suggestion" }) } });
   const stop = exports.addSuggestPill({
     addComposerPill: ({ id, button: next }: any) => {
       if (id !== "suggest") return { update() {}, remove() {} }; // «no es esto» lives in its own pill
       button = next;
       return { update: (next: unknown) => { button = next; }, remove() {} };
     },
-    rpc: async () => ({ text: "Original suggestion" }),
+    rpc: (name: string) => (name === "watch" ? watch.pide() : Promise.resolve({})),
     paseo: { agents: {
       list: async () => ({ subscription: { subscribe: ({ snapshot }: any) => snapshot({
         entries: [{ agent: { id: "a", workspaceId: "w", status: "idle" } }],
@@ -58,7 +76,6 @@ test("suggestion card uses the sheet-aware input, edits before sending and has a
     } },
   });
   await new Promise<void>((resolve) => setImmediate(resolve));
-  poll();
   await new Promise<void>((resolve) => setImmediate(resolve));
   assert.equal(button.behavior.kind, "popover", JSON.stringify(button));
   const theme = { colors: { foreground: "white", accent: "green", accentForeground: "black" } };
@@ -113,22 +130,22 @@ test("a forced suggestion stays on the pill until its button is pressed", async 
     "react-native": { View: "View", Text: "Text", Pressable: "Pressable", AccessibilityInfo: {} },
     "@getpaseo/plugin/client/ui": { SettingsAction: "SettingsAction", SettingsSelect: "SettingsSelect" },
     "@getpaseo/plugin/client/react-native": { Icon: "Icon", TextInput: "Input" },
-    "../shared/contract.ts": { suggestGet: "get", suggestForce: "force", suggestFeedback: "feedback", autopilotStart: "start", autopilotStop: "stop" },
-    "../shared/suggest.ts": { SUGGEST_WAIT_MS: 300_000 },
+    "../shared/contract.ts": contrato,
     "./composer-bridge.ts": {
       insertSuggestion: (agentId: string, text: string) => { inserted.push(`${agentId} ${text}`); return true; },
       registerPillAnchor: () => () => {},
     },
     "./estrella.ts": { gira },
   };
-  let tick: () => void = () => {};
   const exports: any = {};
-  new Function("require", "exports", "setInterval", "clearInterval", outputText)(
+  new Function("require", "exports", "setInterval", "setTimeout", outputText)(
     (name: string) => { assert.ok(name in modules, name); return modules[name]; },
     exports,
-    (callback: () => void) => { tick = callback; return 1; },
-    () => {},
+    sinSondeo,
+    sinSondeo,
   );
+  const watch = canal();
+  watch.empuja({ version: 1, completo: true, agentes: {} });
   let button: any;
   const stop = exports.addSuggestPill({
     // The host's rule (validation.ts requireText): a label is undefined or non-blank, or the pill is never drawn.
@@ -137,7 +154,7 @@ test("a forced suggestion stays on the pill until its button is pressed", async 
       accept(next);
       return { update: accept, remove() {} };
     },
-    rpc: async () => ({ started: true, text: "Forzada" }),
+    rpc: (name: string) => (name === "watch" ? watch.pide() : Promise.resolve({ started: true })),
     paseo: {
       agents: {
         list: async () => ({ subscription: { subscribe: ({ snapshot }: any) => snapshot({ entries: [{ agent: { id: "a", workspaceId: "w", status: "idle" } }] }) } }),
@@ -156,7 +173,7 @@ test("a forced suggestion stays on the pill until its button is pressed", async 
   await settled();
   await settled();
   assert.deepEqual(inserted, [], "the click only asks for a generation");
-  tick(); // the resident answers
+  watch.empuja({ version: 2, completo: false, agentes: { a: estado({ text: "Forzada" }) } }); // the resident answers, pushed
   await settled();
   assert.deepEqual(inserted, [], "the answer is not written into any prompt by itself");
   assert.equal(button.label, "Forzada", "it waits on the pill of its own window (the icon is already a Sparkles)");
@@ -178,20 +195,19 @@ test("a piloted ✦ is gold while it waits, red when it needs a person, and its 
     "react-native": { View: "View", Text: "Text", Pressable: "Pressable", AccessibilityInfo: {} },
     "@getpaseo/plugin/client/ui": { SettingsAction: "SettingsAction", SettingsSelect: "SettingsSelect" },
     "@getpaseo/plugin/client/react-native": { Icon: "Icon", TextInput: "Input" },
-    "../shared/contract.ts": { suggestGet: "get", suggestForce: "force", suggestFeedback: "feedback", autopilotStart: "start", autopilotStop: "stop" },
-    "../shared/suggest.ts": { SUGGEST_WAIT_MS: 300_000 },
+    "../shared/contract.ts": contrato,
     "./composer-bridge.ts": { insertSuggestion: () => false, registerPillAnchor: () => () => {} },
     "./estrella.ts": { gira },
   };
-  let poll: () => void = () => {};
   const exports: any = {};
-  new Function("require", "exports", "setInterval", "clearInterval", outputText)(
+  new Function("require", "exports", "setInterval", "setTimeout", outputText)(
     (name: string) => modules[name],
     exports,
-    (callback: () => void) => { poll = callback; return 1; },
-    () => {},
+    sinSondeo,
+    sinSondeo,
   );
-  let reply: any = { text: "una sugerencia vieja", en_plan: "en-plan", criterio: "c", muted: false, autopilot: { estado: "esperando", motivo: "ESPERA: ci" }, plan: null };
+  const watch = canal();
+  watch.empuja({ version: 1, completo: true, agentes: { a: estado({ text: "una sugerencia vieja", en_plan: "en-plan", criterio: "c", autopilot: { estado: "esperando", motivo: "ESPERA: ci" } }) } });
   const paros: unknown[] = [];
   const buttons: Record<string, any> = {};
   let update: (agent: object) => void = () => {};
@@ -200,11 +216,10 @@ test("a piloted ✦ is gold while it waits, red when it needs a person, and its 
       buttons[id] = button;
       return { update: (next: unknown) => { buttons[id] = next; }, remove() {} };
     },
-    rpc: async (name: string, input: any) => {
-      if (name !== "stop") return reply;
+    rpc: (name: string, input: any) => {
+      if (name === "watch") return watch.pide();
       paros.push(input);
-      reply = { ...reply, autopilot: { estado: "sin-par", motivo: "" } }; // the supervisor unregistered the pair
-      return { ok: true };
+      return Promise.resolve({ ok: true });
     },
     paseo: { agents: {
       list: async () => ({ subscription: { subscribe: ({ snapshot, update: u }: any) => {
@@ -216,24 +231,27 @@ test("a piloted ✦ is gold while it waits, red when it needs a person, and its 
   });
   const settled = () => new Promise<void>((resolve) => setImmediate(resolve));
   await settled();
-  poll();
   await settled();
   assert.equal(buttons.suggest.label, "esperando: ESPERA: ci", "gold, saying what it waits for — not the stale suggestion");
   assert.equal(buttons["suggest-no"].visible, false, "no «no es esto» next to a piloted ✦");
   const panel = buttons.suggest.behavior.Content({ theme: { colors: {} }, close() {} });
   assert.equal(panel.props.par.estado, "esperando");
   assert.equal(panel.props.suggestNow, undefined, "no «Sugerir ahora» while the auditor pilots: one generation per turn");
-  reply = { ...reply, autopilot: { estado: "humano", motivo: "dinero" } };
-  poll();
+  const oidos: string[] = [];
+  const deja = panel.props.escucha((par: any) => oidos.push(par.estado)); // the open popover follows its pair
+  watch.empuja({ version: 2, completo: false, agentes: { a: estado({ autopilot: { estado: "humano", motivo: "dinero" } }) } });
   await settled();
   assert.equal(buttons.suggest.label, "necesita acción: dinero");
+  assert.deepEqual(oidos, ["humano"], "the open popover repaints with the pushed pair");
+  deja();
   update({ id: "a", workspaceId: "w", status: "running" });
   assert.equal(buttons.suggest.visible, true, "reachable mid-turn, to stop the pair");
   assert.equal(buttons.suggest.label, "necesita acción: dinero", "mid-turn the pill keeps saying what the auditor needs");
   const r = await panel.props.parar();
   assert.deepEqual(paros, [{ agentId: "a" }]);
   assert.equal(r.ok, true);
-  assert.equal(r.par!.estado, "sin-par");
+  watch.empuja({ version: 3, completo: false, agentes: { a: estado() } }); // the supervisor unregistered the pair: pushed
+  await settled();
   assert.equal(buttons.suggest.visible, false, "stopped, the ✦ is the plain one again: hidden while the turn runs");
   assert.equal(exports.autopilotLine({ estado: "pensando", motivo: "" }), "autopilot: el auditor está pensando");
   assert.equal(exports.autopilotLine({ estado: "degradada", motivo: "" }), "autopilot degradado: el auditor no responde");
