@@ -29,7 +29,7 @@ al modelo de la sesión, sin compartir la caché de la sesión.
   `file.autopilot.pares.v1`, productor el supervisor de la compañía): `{version:1, pares:{[a_id]: Par}}`. Solo lectura: ausente =
   sin pareja; ilegible / no-JSON / v1 incompleto = estado desconocido sin romper la píldora. El plugin nunca escribe este fichero.
 - `server/supervisor.ts` — la mitad del plugin de la API de autopilot del supervisor (contrato `http.supervisor.autopilot.v1`):
-  `POST /autopilot/par` (cuerpo del contrato: id/cwd/título de A, objetivo — la `key` del ancla de paseo-plan o un prompt —,
+  `POST /autopilot/par` (cuerpo del contrato: id/cwd/workspace/título de A, objetivo — la `key` del ancla de paseo-plan o un prompt —,
   modelo del auditor, `origen: "paseo"`) y `DELETE /autopilot/par/<a_id>`, con `X-Company-Token` de
   `~/.company/jira-trigger/secret` y base `http://company.paseo.svc.cluster.local:19911` (env `SUPERVISOR_URL`). La respuesta se
   convierte en `{ok, error?}` y el error se enseña una vez en el popover. El plugin no pilota ni decide: eso es de la sesión
