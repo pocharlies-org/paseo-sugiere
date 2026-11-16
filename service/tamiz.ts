@@ -17,6 +17,14 @@ const RIESGO: Array<[Riesgo, string, RegExp]> = [
   ["dinero", "credenciales", /\b(clave|token|contrase[ñn]a|secreto|credencial\w*|api[ _-]?key)\b[^\n]{0,40}\b(rota\w*|regenera\w*|revoca\w*|publ\w+|sube\w*|compart\w+)/i],
   ["dinero", "publicar fuera", /\b(publica|publicar|anuncia|anunciar)\w*\b[^\n]{0,40}\b(web|internet|clientes?|p[uú]blico|redes|tienda)\b/i],
   ["alto", "irreversible", /\b(irreversible|no se deshace|sin vuelta atr[aá]s)\b/i],
+  // La entrega de un ticket es su PR fusionada POR LA PUERTA (`company-aprobar fusionar`, que solo fusiona en LISTA: CI verde y
+  // revisión); eso es `bajo` y lo dice la rúbrica (16-11). Saltarse la puerta con el gh de verdad, la API de merge o
+  // `--admin` (que pasa por encima de la protección de la rama) es `alto` sin preguntar al modelo. `gh pr merge` a secas NO
+  // entra: en el x86 `gh` es el envoltorio de company-aprobar, y las B escriben «company-aprobar fusionar … (nunca gh pr
+  // merge)» (auditoría 09-11 y 15-11): lo juzga la rúbrica, que lee la negación. Medido el 16-11: 0 de 2715 sugerencias de la
+  // auditoría nombran `--admin`, `gh.real … merge` o la API de merge (REST o la mutación GraphQL).
+  ["alto", "fusión sin la puerta",
+    /--admin\b|\bgh\.real\b[^\n]*\bmerge\b|\bgh\b[^\n]*\bapi\b[^\n]*\/pulls\/\d+\/merge\b|\bmergePullRequest\b/i],
 ];
 
 // Prosa: no dice nada del riesgo, pero repetida en la auditoría delata al modelo rellenando. Nunca veta.

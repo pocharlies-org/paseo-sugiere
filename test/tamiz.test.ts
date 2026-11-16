@@ -25,6 +25,31 @@ describe("el tamiz léxico", () => {
     assert.equal(tamizar("ese cambio es irreversible, no se deshace").riesgo, "alto");
   });
 
+  // 16-11: la fusión por company-aprobar es la entrega del ticket (la rúbrica la deja en bajo); saltarse la puerta en el literal
+  // es alto sin modelo. `gh pr merge` a secas lo juzga la rúbrica: en el x86 `gh` es el envoltorio de la puerta, y las B lo
+  // nombran para prohibirlo.
+  it("ve fusión sin la puerta en --admin, el gh de verdad y la API de merge", () => {
+    for (const t of [
+      "gh pr merge 12 --admin --squash",
+      "fusiona con --admin, que la protección de la rama estorba",
+      "gh.real pr merge 7 -R o/r --squash",
+      "gh api -X PUT repos/o/r/pulls/7/merge -f merge_method=squash",
+      "gh api graphql -f query='mutation { mergePullRequest(input: {pullRequestId: \"x\"}) { clientMutationId } }'",
+    ]) {
+      assert.equal(tamizar(t).riesgo, "alto", t);
+      assert.equal(tamizar(t).patron, "fusión sin la puerta", t);
+    }
+  });
+
+  it("no ve fusión sin la puerta en la puerta, en mirar una PR ni en nombrar gh pr merge para prohibirlo", () => {
+    for (const t of [
+      "Fusiona la PR #362 con `company-aprobar fusionar pocharlies-org/k8s-litellm-pocharlies#362 --rol devops` y confirma el merge (`gh pr view 362 -R pocharlies-org/k8s-litellm-pocharlies --json mergedAt,state`)",
+      "Fusiona la PR #4 con company-aprobar fusionar o/r#4 (nunca gh pr merge) y verifica el despliegue",
+      "mira los checks con gh.real pr checks 7 -R o/r y el estado con company-aprobar estado o/r#7",
+      "gh pr view 7 --json mergeable,mergeStateStatus",
+    ]) assert.equal(tamizar(t).riesgo, null, t);
+  });
+
   it("ninguna de las 20 legítimas trae riesgo", () => {
     const disparan = LEGITIMAS.map((t) => [t, tamizar(t).riesgo]).filter(([, r]) => r !== null);
     assert.deepEqual(disparan, []);   // medido, no argumentado: hoy 0 de 20
