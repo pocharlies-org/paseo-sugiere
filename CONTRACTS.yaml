@@ -111,3 +111,6 @@ contracts:
       activa|pensando|esperando|humano|degradada|entregada, motivo, desde, actualizado, pasos{total, seguidos},
       ultimo_envio}}}. Consumidor: el plugin lo lee para el estado de la ✦ (server/pares.ts): ausente = sin pareja;
       ilegible, no-JSON o v1 incompleto = estado desconocido, sin romper la píldora. El plugin nunca escribe este fichero.
+      Sin cambio de forma (16-11, SC-5805): el plugin lo lee una vez por consulta para muchos agentes (`lectorParejas`) y vigila
+      su directorio con inotify (la escritura atómica `.tmp` + rename de company-0 se ve desde paseo-0: mismo volumen) para
+      despertar la `suggest.watch` retenida de cada cliente.
