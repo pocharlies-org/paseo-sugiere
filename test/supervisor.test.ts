@@ -132,7 +132,6 @@ describe("apagar la pareja", () => {
 describe("sesión con goal", () => {
   const A = "3f2a8b1c-4d5e-4f70-8192-a3b4c5d6e7f8";
   let creadas: any[] = [];
-  let archivadas: string[] = [];
   let fallaCrear: Error | null = null;
   const conWorkspace = {
     agents: {
@@ -144,7 +143,7 @@ describe("sesión con goal", () => {
           create: async (opciones: object) => {
             if (fallaCrear) throw fallaCrear;
             creadas.push({ workspaceId, ...opciones });
-            return { id: A, archive: async () => { archivadas.push(A); return {}; } };
+            return { id: A };
           },
         },
       }),
@@ -155,7 +154,6 @@ describe("sesión con goal", () => {
     respuestas = [];
     falla = null;
     creadas = [];
-    archivadas = [];
     fallaCrear = null;
     process.env.SUPERVISOR_URL = "http://supervisor.example:19911";
     escribe(join(HOME, ".company", "jira-trigger", "secret"), "token-de-prueba");
@@ -169,23 +167,32 @@ describe("sesión con goal", () => {
     assert.deepEqual(llamas[0]!.cuerpo.objetivo, { modo: "prompt", texto: "deja verde el CI\ncon la PR fusionada" });
     assert.equal(llamas[0]!.cuerpo.a.id, A);
     assert.equal(llamas[0]!.cuerpo.modelo, "claude-fable-5-2");
-    assert.deepEqual(archivadas, []);
   });
 
-  it("si el supervisor rechaza la pareja, enseña su motivo y archiva la sesión vacía", async () => {
-    respuestas = [{ status: 503, body: { error: "no se pudo crear el auditor: la CLI de Paseo no arrancó" } }];
+  it("si el supervisor rechaza la pareja, enseña su motivo y la sesión queda para reintentar", async () => {
+    respuestas = [{ status: 409, body: { error: "el rutador coordina esta sesión" } }];
     const r = await sesionConGoal({ workspaceId: "w1", texto: "haz X", sesion: "claude/claude-opus-5-5" }, conWorkspace);
-    assert.deepEqual(r, { ok: false, error: "no se pudo crear el auditor: la CLI de Paseo no arrancó" });
-    assert.deepEqual(archivadas, [A]);
+    assert.equal(r.ok, false);
+    assert.equal(r.agentId, A);
+    assert.match(r.error!, /^el rutador coordina esta sesión\. La sesión queda creada/);
   });
 
-  it("si Paseo no crea la sesión, lo dice sin llamar al supervisor; sin token, la sesión creada se archiva", async () => {
+  it("si el supervisor tarda más que el plazo del RPC, responde ya con la sesión creada (su ✦ dirá cómo acaba)", async () => {
+    let suelta = () => {};
+    const antes = globalThis.fetch;
+    globalThis.fetch = (() => new Promise((ok) => { suelta = () => ok(new Response("{}", { status: 201 })); })) as typeof fetch;
+    try {
+      const r = await sesionConGoal({ workspaceId: "w1", texto: "haz X", sesion: "claude/x" }, conWorkspace, 20);
+      assert.deepEqual(r, { ok: true, agentId: A });
+    } finally {
+      suelta();
+      globalThis.fetch = antes;
+    }
+  });
+
+  it("si Paseo no crea la sesión, lo dice sin llamar al supervisor", async () => {
     fallaCrear = new Error("workspace not found");
     assert.equal((await sesionConGoal({ workspaceId: "w1", texto: "haz X", sesion: "claude/x" }, conWorkspace)).error, "no se pudo crear la sesión (workspace not found)");
     assert.equal(llamas.length, 0);
-    fallaCrear = null;
-    rmSync(join(HOME, ".company", "jira-trigger", "secret"));
-    assert.match((await sesionConGoal({ workspaceId: "w1", texto: "haz X", sesion: "claude/x" }, conWorkspace)).error!, /jira-trigger\/secret/);
-    assert.deepEqual(archivadas, [A]);
   });
 });

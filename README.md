@@ -59,8 +59,10 @@ no consume su contrato `file.claude-cuentas.v1`: la llamada va a LiteLLM con la 
 - **Goal** en la cabecera de cada workspace (15-11-2026): una sesión nueva que nace con su autopilot. Formulario:
   el goal, el modelo de la sesión y el del auditor (proveedor `claude`, `claude-opus-5-5` por defecto). «Empezar» crea la
   sesión en ese workspace sin primer mensaje y en `bypassPermissions`, y arranca su pareja con el goal como objetivo
-  «Prompt» (el mismo `POST /autopilot/par`): el primer mensaje de la sesión lo escribe el auditor. Si el supervisor rechaza
-  la pareja, el formulario da su motivo y la sesión vacía se archiva. Sale también en un workspace sin sesiones.
+  «Prompt» (el mismo `POST /autopilot/par`): el primer mensaje de la sesión lo escribe el auditor. El host corta el RPC a
+  los 30 s y crear la sesión más el auditor tarda más: pasados 25 s el formulario se cierra con la sesión ya creada y su ✦
+  dice cómo acaba la pareja. Si el supervisor la rechaza, el formulario da su motivo y la sesión queda (su ✦ reintenta);
+  nunca se archiva por una respuesta que no llegó. Sale también en un workspace sin sesiones.
 
 ## Qué lee y envía
 
