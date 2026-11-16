@@ -6,8 +6,8 @@ import type { PluginHandlerContext, PluginServerContext } from "@getpaseo/plugin
 import { autopilotGoal, autopilotStart, autopilotStop, suggestFeedback, suggestForce, suggestGet } from "./shared/contract.ts";
 import { suggestSettings, type SuggestValues } from "./shared/settings.ts";
 import { estadoPareja } from "./server/pares.ts";
-import { apagarPar, arrancarPar } from "./server/supervisor.ts";
-import { sesionConGoal } from "./server/goal.ts";
+import { apagarPar } from "./server/supervisor.ts";
+import { arrancarEnPlazo, sesionConGoal } from "./server/goal.ts";
 import * as suggest from "./server/suggest.ts";
 
 // What is merged to trunk is what runs: the plugin checks GitHub every 5 min and, on a new commit, deploys that tree and reloads
@@ -55,7 +55,7 @@ export default function contribute(server: PluginServerContext) {
     }
     return { text: suggest.get(input.agentId), ...suggest.state(input.agentId), ...suggest.anchor(input.agentId), autopilot, plan: suggest.planAnchor(input.agentId) };
   });
-  server.handle(autopilotStart, (input, context) => arrancarPar(input, context.paseo));
+  server.handle(autopilotStart, (input, context) => arrancarEnPlazo(input, context.paseo));
   server.handle(autopilotStop, (input) => apagarPar(input.agentId));
   server.handle(autopilotGoal, (input, context) => sesionConGoal(input, context.paseo));
   server.handle(suggestFeedback, (input) => suggest.feedback(input.agentId, input.verdict));
