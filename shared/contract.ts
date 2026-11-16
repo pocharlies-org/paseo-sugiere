@@ -86,9 +86,21 @@ export const suggestFeedback = defineRpc({
 });
 
 /** Start the suggestion now, without the quiet window: the pill's force click (Dani 19-10). Returns immediately — the answer
- * can outlive the host's RPC timeout (60 s in @getpaseo/client), so the client polls for it with suggestGet. */
+ * can outlive the host's RPC timeout (60 s in @getpaseo/client), so it reaches the client through `suggest.watch`. */
 export const suggestForce = defineRpc({
   name: "suggest.force",
   input: z.object({ agentId: z.string().min(1).max(64) }).strict(),
   output: z.object({ started: z.boolean() }),
 });
+
+/** SC-5805: one held call per client instead of a `suggest.get` per idle agent every 10 s (~88 % of the daemon's plugin RPCs on
+ * 16-11, enough to push the CLI's hello past 15 s). `agentes` brings the asked agents whose `suggest.get` answer changed after
+ * `since`; `completo` means every asked agent is there (a first call, `since: 0`, or a `since` from before the plugin was
+ * reloaded). When nothing of the caller's moved, the call is held until something does or 20 s pass (empty answer, newer
+ * version). The shape of paseo-agentes' `panel.watch` (SC-5601). */
+export const suggestWatch = defineRpc({
+  name: "suggest.watch",
+  input: z.object({ agentes: z.array(z.string().min(1).max(64)).max(2000), since: z.number().int() }).strict(),
+  output: z.object({ agentes: z.record(z.string(), suggestGet.output), version: z.number().int(), completo: z.boolean() }),
+});
+export type Respuesta = z.infer<typeof suggestGet.output>;

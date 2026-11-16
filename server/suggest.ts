@@ -14,9 +14,15 @@ import { SessionError, locateSession, nativeSuggestion, sugiereRequest } from ".
 let enabled = true;
 let auto = false;
 let quietMs = 60_000;
+// SC-5805: every change to what `suggest.get` answers wakes the clients' held `suggest.watch` (index.server.ts sets it).
+let avisa = () => {};
+export function alCambiar(fn: () => void): void {
+  avisa = fn;
+}
 export function setEnabled(value: boolean): void {
   if (enabled && !value) dispose();
   enabled = value;
+  avisa();
 }
 export function setAuto(value: boolean): void {
   auto = value;
@@ -30,7 +36,7 @@ export function setQuietSeconds(seconds: number): void {
 
 // The plan anchor paseo-plan writes per agent (paseo-plan's file contract). Read with every turn end and generation, so «Garantizar
 // plan» switched in the pill takes effect on the next turn without restarting the host.
-const ANCHOR_DIR = join(homedir(), ".local", "state", "paseo-plan");
+export const ANCHOR_DIR = join(homedir(), ".local", "state", "paseo-plan");
 
 function anchorOf(agentId: string): Record<string, unknown> | null {
   try {
@@ -93,6 +99,7 @@ export function arm(agentId: string, context: PluginHookContext): void {
   entry.timer = undefined;
   entry.seq += 1;
   clear(entry);
+  avisa();
   const seq = entry.seq;
   if (guarded) {
     void generate(agentId, seq, context);
@@ -112,6 +119,7 @@ export function cancel(agentId: string): void {
   entry.timer = undefined;
   entry.seq += 1;
   clear(entry);
+  avisa();
 }
 
 export function get(agentId: string): string | null {
@@ -140,6 +148,7 @@ export function feedback(agentId: string, verdict: "no-es-esto" | "usada"): { mu
     entry.muted = entry.noes >= MAX_NOES;
     entry.text = entry.en_plan = entry.criterio = null;
   }
+  avisa();
   return { muted: entry.muted };
 }
 
@@ -157,6 +166,7 @@ export function force(agentId: string, context: PluginHandlerContext): boolean {
   entry.noes = 0; // the user asked: a quiet ✦ speaks again
   entry.muted = false;
   agents.set(agentId, entry);
+  avisa();
   void generate(agentId, entry.seq, context, true);
   return true;
 }
@@ -219,5 +229,7 @@ async function generate(agentId: string, seq: number, context: PluginHandlerCont
     const message = error instanceof SessionError ? error.message : error instanceof Error ? error.message : "unknown";
     console.warn(`suggest: no generation for ${agentId}: ${message}`);
     settle(message);
+  } finally {
+    avisa(); // settled, failed or discarded: the pill learns it from its held call
   }
 }

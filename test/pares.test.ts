@@ -3,7 +3,7 @@ import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, it } from "node:test";
-import { estadoPareja } from "../server/pares.ts";
+import { estadoPareja, lectorParejas } from "../server/pares.ts";
 
 // The ✦'s autopilot state is the supervisor's registry (`file.autopilot.pares.v1`): the plugin only reads it. Everything here
 // goes through an explicit path — the machine's real ~/.company is never touched.
@@ -71,5 +71,15 @@ describe("el registro de parejas, leído", () => {
   it("un Par sin estado no se disfraza: desconocido", () => {
     escribe("sin-estado.json", registro({ a1: { a_id: "a1" } }));
     assert.equal(estadoPareja("a1", ruta("sin-estado.json")).estado, "desconocido");
+  });
+});
+
+describe("el registro leído una vez para muchos agentes (SC-5805)", () => {
+  it("lectorParejas responde por cada agente lo mismo que estadoPareja", () => {
+    escribe("varios.json", registro({ a1: par(), a2: par({ a_id: "a2", estado: "humano", motivo: "PARA DANI" }) }));
+    const pareja = lectorParejas(ruta("varios.json"));
+    for (const id of ["a1", "a2", "a3"]) assert.deepEqual(pareja(id), estadoPareja(id, ruta("varios.json")));
+    assert.equal(pareja("a2").estado, "humano");
+    assert.equal(pareja("a3").estado, "sin-par");
   });
 });

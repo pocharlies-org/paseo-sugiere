@@ -22,7 +22,7 @@ export type Estado = {
 };
 
 const SIN_PAR: Estado = { estado: "sin-par", motivo: "" };
-const rutaPorDefecto = () => join(homedir(), ".company", "jira-trigger", "autopilot-pares.json");
+export const rutaParejas = () => join(homedir(), ".company", "jira-trigger", "autopilot-pares.json");
 
 /** The Par's epoch seconds (1763100000.0) as ISO, so the popover's `hace()` can format them; anything else passes through. */
 const iso = (segundos: unknown): string | undefined =>
@@ -30,24 +30,35 @@ const iso = (segundos: unknown): string | undefined =>
 
 /** The pair of `agentId` in the registry, ready for the pill and the popover. The entry is matched by key or by `a_id`;
  * extra Par fields pass. `auditor` starts as B's id — the server upgrades it to B's title when it can find the session. */
-export function estadoPareja(agentId: string, ruta: string = rutaPorDefecto()): Estado {
+export function estadoPareja(agentId: string, ruta: string = rutaParejas()): Estado {
+  return lectorParejas(ruta)(agentId);
+}
+
+/** The registry read once, for asking many agents (SC-5805: `suggest.watch` answers every agent of a client in one call). */
+export function lectorParejas(ruta: string = rutaParejas()): (agentId: string) => Estado {
   let raw: string;
   try {
     raw = readFileSync(ruta, "utf8");
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "ENOENT") return SIN_PAR;
-    return { estado: "desconocido", motivo: `el registro de parejas no se pudo leer (${(error as Error).message})` };
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return () => SIN_PAR;
+    const motivo = `el registro de parejas no se pudo leer (${(error as Error).message})`;
+    return () => ({ estado: "desconocido", motivo });
   }
   let store: { version?: unknown; pares?: unknown };
   try {
     store = JSON.parse(raw);
   } catch {
-    return { estado: "desconocido", motivo: "el registro de parejas no es JSON" };
+    return () => ({ estado: "desconocido", motivo: "el registro de parejas no es JSON" });
   }
   if (store?.version !== 1 || typeof store.pares !== "object" || store.pares === null || Array.isArray(store.pares)) {
-    return { estado: "desconocido", motivo: "el registro de parejas no es un v1 {version, pares}" };
+    return () => ({ estado: "desconocido", motivo: "el registro de parejas no es un v1 {version, pares}" });
   }
-  for (const [aId, value] of Object.entries(store.pares as Record<string, unknown>)) {
+  const pares = Object.entries(store.pares as Record<string, unknown>);
+  return (agentId) => deLaPareja(agentId, pares);
+}
+
+function deLaPareja(agentId: string, pares: [string, unknown][]): Estado {
+  for (const [aId, value] of pares) {
     const par = (value ?? {}) as Record<string, unknown>;
     if (aId !== agentId && par.a_id !== agentId) continue;
     const seguidos = (par.pasos as { seguidos?: unknown } | undefined)?.seguidos;
