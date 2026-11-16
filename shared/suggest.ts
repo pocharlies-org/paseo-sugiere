@@ -10,8 +10,8 @@ null da 400/500 en Anthropic y ChatGPT (medido; null solo lo acepta vLLM), así 
 export const SUGGEST_MAX_TOKENS = 32_000;
 
 /** Lo que el servicio espera al residente por una sugerencia (Dani 06-11: con transcript largo tarda 60-240 s; medido 06-11 en una
-sesión Opus, 243 s con el residente en cola). El server del plugin y la píldora esperan algo más que esto: con plazos propios
-menores (150 y 130 s) tiraban sugerencias que el servicio sí entregaba.
+sesión Opus, 243 s con el residente en cola). El server del plugin espera algo más que esto: con un plazo propio
+menor tiraba sugerencias que el servicio sí entregaba.
 shortcut: el fetch de Node (undici) corta a los 300 s sin cabeceras pase lo que pase; subir esto por encima pide un dispatcher propio en el servicio y en el plugin. */
 export const SUGGEST_WAIT_MS = 300_000;
 

@@ -3,8 +3,7 @@ import { Icon, TextInput } from "@getpaseo/plugin/client/react-native";
 import { SettingsAction, SettingsSelect } from "@getpaseo/plugin/client/ui";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AccessibilityInfo, Animated, Easing, Pressable, Text, View } from "react-native";
-import { autopilotStart, autopilotStop, suggestFeedback, suggestForce, suggestGet } from "../shared/contract.ts";
-import { SUGGEST_WAIT_MS } from "../shared/suggest.ts";
+import { ESTADO_VACIO, autopilotStart, autopilotStop, suggestFeedback, suggestForce, suggestWatch, type EstadoAgente } from "../shared/contract.ts";
 import { insertSuggestion, registerPillAnchor } from "./composer-bridge.ts";
 import { gira } from "./estrella.ts";
 
@@ -14,10 +13,9 @@ import { gira } from "./estrella.ts";
 // desktop; Dani 18-10) and, where that cannot be done, opens the text already editable in place, and Enter sends it as the
 // next user message (Dani 16-10: «editar» must edit the suggestion in place; 17-10: the two buttons were dead weight — the field
 // is the whole card). The instruction the model gets is not edited here: it lives in the `sugiere` service. The text lives in
-// the plugin server — this only polls for idle agents, so a suggestion is never asked for while a turn is running.
+// the plugin server, which pushes every change through one held call per app: nothing here asks on a clock.
 type Agent = { id: string; workspaceId?: string | null; status: string; archivedAt?: string | null };
 
-const POLL_MS = 10_000;
 // «Garantizar plan»: what the anchored suggestion pursues — a step of the plan, new work for its own story and session, verifying,
 // or closing the session once the plan is delivered.
 const BADGE: Record<string, string> = { "en-plan": "▸", "trabajo-nuevo": "✚", verificar: "✓", cerrar: "■" };
@@ -102,7 +100,7 @@ function SuggestCard({
   plan,
   empezar,
   parar,
-  refresh,
+  escucha,
   models,
   layout: { compact },
 }: PluginButtonContentProps & {
@@ -114,7 +112,7 @@ function SuggestCard({
   plan: Plan | null;
   empezar: (input: { modo: "plan" | "prompt"; texto?: string; modelo?: string }) => Promise<{ ok: boolean; error?: string; par?: Par }>;
   parar: () => Promise<{ ok: boolean; error?: string; par?: Par }>;
-  refresh: () => Promise<{ par: Par; plan: Plan | null }>;
+  escucha: Escucha;
   models: () => Promise<{ id: string; label: string }[]>;
 }) {
   const [inserted, setInserted] = useState<boolean | null>(null); // null while the bridge decides
@@ -158,7 +156,7 @@ function SuggestCard({
           <Text style={styles.arrow}>{compact ? "Send ↑" : "↑"}</Text>
         </Pressable>
       </View>
-      <AutopilotPanel theme={theme} par={par} plan={plan} empezar={empezar} parar={parar} refresh={refresh} models={models} />
+      <AutopilotPanel theme={theme} par={par} plan={plan} empezar={empezar} parar={parar} escucha={escucha} models={models} />
     </View>
   );
 }
@@ -238,17 +236,19 @@ function SuggestIcon(props: PluginButtonIconProps) {
 // anchor's ticket and criterion count) or a prompt the user writes; the auditor's model comes from A's provider, Opus 5.5 by
 // default. While a pair is alive the popover is the status and the «Parar» button. Not «Sugerir automáticamente», which only proposes.
 const MODELO_AUDITOR = "claude-opus-5-5";
+/** The open popover hears its agent's pair as the server pushes it: the host does not repaint an open popover. Returns the unsubscribe. */
+type Escucha = (oye: (par: Par) => void) => () => void;
 type PanelProps = {
   theme: PluginButtonContentProps["theme"];
   par: Par;
   plan: Plan | null;
   empezar: (input: { modo: "plan" | "prompt"; texto?: string; modelo?: string }) => Promise<{ ok: boolean; error?: string; par?: Par }>;
   parar: () => Promise<{ ok: boolean; error?: string; par?: Par }>;
-  refresh: () => Promise<{ par: Par; plan: Plan | null }>;
+  escucha: Escucha;
   models: () => Promise<{ id: string; label: string }[]>;
   suggestNow?: () => void;
 };
-function AutopilotPanel({ theme, par: inicial, plan, empezar, parar, refresh, models, suggestNow }: PanelProps) {
+function AutopilotPanel({ theme, par: inicial, plan, empezar, parar, escucha, models, suggestNow }: PanelProps) {
   const [par, setPar] = useState(inicial);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -257,12 +257,8 @@ function AutopilotPanel({ theme, par: inicial, plan, empezar, parar, refresh, mo
   const [modelos, setModelos] = useState<{ id: string; label: string }[]>([]);
   const [modelo, setModelo] = useState<string | null>(null);
   const viva = esViva(par);
-  // Open and alive, it re-reads its own state every few seconds: the host does not repaint an open popover, and «what is it doing» is the point.
-  useEffect(() => {
-    if (!viva) return;
-    const timer = setInterval(() => void refresh().then(({ par: next }) => setPar(next), () => {}), 3_000);
-    return () => clearInterval(timer);
-  }, [viva]);
+  // Open, it follows its pair as the server pushes it: «what is it doing» is the point.
+  useEffect(() => escucha(setPar), []);
   // The form asks A's provider for its models once (the same call the rutador's cards make); Opus 5.5 when it is offered.
   useEffect(() => {
     if (viva) return;
@@ -362,7 +358,7 @@ export function addSuggestPill(client: PluginClientContext): () => void {
   const agents = new Map<string, Agent>();
   const pills = new Map<string, ReturnType<PluginClientContext["addComposerPill"]>>();
   const texts = new Map<string, string | null>();
-  const consumed = new Map<string, string>(); // the suggestion already put in the prompt: the poll must not bring it back until the next turn
+  const consumed = new Map<string, string>(); // the suggestion already put in the prompt: a push must not bring it back until the next turn
   const pendingFor = new Map<string, boolean>(); // a force in flight: the pill's star spins in a yellow frame, disabled until it settles
   const errors = new Map<string, string>(); // the last force's failure, shown once by the popover
   const nadas = new Set<string>(); // the last force answered empty on purpose: the pill says «nada que sugerir», not a failure (Dani 15-11)
@@ -371,30 +367,16 @@ export function addSuggestPill(client: PluginClientContext): () => void {
   const noPills = new Map<string, ReturnType<PluginClientContext["addComposerPill"]>>(); // «no es esto», next to an anchored suggestion
   const autopilots = new Map<string, Par>(); // the pair of each agent, as the server last read it from the supervisor's registry
   const planes = new Map<string, Plan | null>(); // the plan the popover can link (the anchor's ticket and criterion count)
-  const pedido = new Set<string>(); // agents whose autopilot state we already asked the server for
-  // Reading the pair repaints the pill only when what it paints changed: the open popover polls every 3 s and must not
-  // rebuild itself (that would reset the form and flicker the star).
-  const refrescar = (agentId: string) => async (): Promise<{ par: Par; plan: Plan | null }> => {
-    const r = await client.rpc(suggestGet, { agentId });
-    const par = r.autopilot ?? SIN_PAR;
-    const antes = autopilots.get(agentId);
-    const cambio = !antes || antes.estado !== par.estado || antes.motivo !== par.motivo || antes.ultimo_envio !== par.ultimo_envio;
-    autopilots.set(agentId, par);
-    planes.set(agentId, r.plan ?? null);
-    const current = agents.get(agentId);
-    if (current && cambio) show(current);
-    return { par, plan: r.plan ?? null };
+  const ultimoError = new Map<string, string | null>(); // the server keeps a failed force's error: it is shown once, when it arrives
+  const oyentes = new Map<string, Set<(par: Par) => void>>(); // the open autopilot popovers, by agent
+  const escucha = (agentId: string): Escucha => (oye) => {
+    const set = oyentes.get(agentId) ?? new Set();
+    oyentes.set(agentId, set.add(oye));
+    return () => void set.delete(oye);
   };
-  const refresh = (agentId: string) => refrescar(agentId);
-  // Start and stop answer with the pair as the registry now has it, so the pill repaints at once and not at the next poll.
-  const empezar = (agentId: string) => async (input: { modo: "plan" | "prompt"; texto?: string; modelo?: string }) => {
-    const r = await client.rpc(autopilotStart, { agentId, ...input });
-    return r.ok ? { ...r, ...(await refrescar(agentId)()) } : r;
-  };
-  const parar = (agentId: string) => async () => {
-    const r = await client.rpc(autopilotStop, { agentId });
-    return r.ok ? { ...r, ...(await refrescar(agentId)()) } : r;
-  };
+  // Start and stop only ask: the supervisor rewrites the pairs registry and the new pair arrives pushed, pill and popover alike.
+  const empezar = (agentId: string) => (input: { modo: "plan" | "prompt"; texto?: string; modelo?: string }) => client.rpc(autopilotStart, { agentId, ...input });
+  const parar = (agentId: string) => () => client.rpc(autopilotStop, { agentId });
   // The auditor's model list: A's provider, the same call the rutador's cards make (herramientas.ts).
   const modelos = (agentId: string) => async (): Promise<{ id: string; label: string }[]> => {
     try {
@@ -429,7 +411,8 @@ export function addSuggestPill(client: PluginClientContext): () => void {
     estadoFor.delete(id);
     autopilots.delete(id);
     planes.delete(id);
-    pedido.delete(id);
+    ultimoError.delete(id);
+    oyentes.delete(id);
   };
   const show = (agent: Agent) => {
     if (stopped) return;
@@ -447,18 +430,7 @@ export function addSuggestPill(client: PluginClientContext): () => void {
     const error = errors.get(agent.id) ?? null;
     const nada = nadas.has(agent.id);
     // The pair is the supervisor's, not this plugin's: whatever the last turn did, the registry says what the auditor is doing.
-    // A page opened mid-turn knows nothing yet (the poll only asks idle agents), and the ✦ of a live pair must be gold and
-    // turning (Dani 08-11): it is asked once, the first time the agent is seen.
     const par = autopilots.get(agent.id) ?? SIN_PAR;
-    if (!autopilots.has(agent.id) && !pedido.has(agent.id)) {
-      pedido.add(agent.id);
-      void client.rpc(suggestGet, { agentId: agent.id }).then((asked) => {
-        if (stopped) return;
-        autopilots.set(agent.id, asked.autopilot ?? SIN_PAR);
-        planes.set(agent.id, asked.plan ?? null);
-        show(agents.get(agent.id) ?? agent);
-      }, () => {});
-    }
     const piloted = par.estado === "sin-par" || par.estado === "desconocido" ? null : par;
     estadoFor.set(agent.id, piloted
       ? (["humano", "degradada", "pensando", "entregada"].includes(piloted.estado) ? piloted.estado : "autopilot")
@@ -486,7 +458,7 @@ export function addSuggestPill(client: PluginClientContext): () => void {
           plan={planes.get(agent.id) ?? null}
           empezar={empezar(agent.id)}
           parar={parar(agent.id)}
-          refresh={refresh(agent.id)}
+          escucha={escucha(agent.id)}
           models={modelos(agent.id)}
           suggestNow={suggestNow && (() => { props.close(); void suggestNow(); })}
         />
@@ -527,7 +499,7 @@ export function addSuggestPill(client: PluginClientContext): () => void {
                 plan={planes.get(agent.id) ?? null}
                 empezar={empezar(agent.id)}
                 parar={parar(agent.id)}
-                refresh={refresh(agent.id)}
+                escucha={escucha(agent.id)}
                 models={modelos(agent.id)}
                 onInserted={() => {
                   consumed.set(agent.id, text);
@@ -557,46 +529,12 @@ export function addSuggestPill(client: PluginClientContext): () => void {
                 });
                 if (stopped || !started) return; // off switch
                 muted.delete(agent.id); // the click speaks for the user: the server reset the streak too
-                // The click cannot wait for the answer: the generation outlives the host's 60 s RPC timeout (measured 19-10).
-                // Fast-poll until it settles: the text waits on the pill until its button is pressed, error shows once; the pill spins meanwhile (Dani 19-10, 02-11).
+                // The click cannot wait for the answer: the generation outlives the host's RPC timeout (measured 19-10). It arrives
+                // pushed when it settles: the text waits on the pill until its button is pressed, error shows once; the pill spins meanwhile (Dani 19-10, 02-11).
                 pendingFor.set(agent.id, true);
                 errors.delete(agent.id);
                 nadas.delete(agent.id);
                 show(agents.get(agent.id) ?? agent);
-                const deadline = Date.now() + SUGGEST_WAIT_MS + 30_000; // after the service's wait and the plugin server's margin over it
-                const id = setInterval(() => {
-                  const current = agents.get(agent.id);
-                  if (stopped || !current || current.status !== "idle") {
-                    clearInterval(id);
-                    pendingFor.delete(agent.id);
-                    if (current) show(current);
-                    return;
-                  }
-                  if (Date.now() > deadline) {
-                    clearInterval(id);
-                    pendingFor.delete(agent.id);
-                    errors.set(agent.id, "el modelo no respondió a tiempo");
-                    show(current);
-                    return;
-                  }
-                  void client.rpc(suggestGet, { agentId: agent.id }).then(
-                    ({ text: forced, error: failed, nada: vacia, en_plan, criterio }) => {
-                      if (!forced && !failed && !vacia) return; // still generating: keep spinning
-                      clearInterval(id);
-                      pendingFor.delete(agent.id);
-                      if (failed) {
-                        errors.set(agent.id, failed);
-                      } else if (vacia) {
-                        nadas.add(agent.id);
-                      } else {
-                        texts.set(agent.id, forced!); // it waits on this pill's button: injecting it here would write into whichever window is in front (Dani 02-11)
-                        anchors.set(agent.id, { en_plan, criterio });
-                      }
-                      show(agents.get(agent.id) ?? current);
-                    },
-                    () => {},
-                  );
-                }, 2000);
               }),
     };
     if (pill) pill.update(button);
@@ -623,6 +561,52 @@ export function addSuggestPill(client: PluginClientContext): () => void {
     else noPills.set(agent.id, client.addComposerPill({ id: "suggest-no", workspaceId: agent.workspaceId, agentId: agent.id, button: no }));
   };
 
+  // What the server pushed for one agent (it only comes when it changed): the pill repaints, an open autopilot popover too.
+  const aplica = (id: string, estado: EstadoAgente) => {
+    texts.set(id, estado.text === consumed.get(id) ? null : estado.text);
+    anchors.set(id, { en_plan: estado.en_plan, criterio: estado.criterio });
+    if (estado.muted) muted.add(id);
+    else muted.delete(id);
+    if (estado.pending) pendingFor.set(id, true);
+    else pendingFor.delete(id);
+    if (estado.error && estado.error !== ultimoError.get(id)) errors.set(id, estado.error);
+    ultimoError.set(id, estado.error);
+    if (estado.nada) nadas.add(id);
+    else nadas.delete(id);
+    autopilots.set(id, estado.autopilot);
+    planes.set(id, estado.plan);
+    for (const oye of oyentes.get(id) ?? []) oye(estado.autopilot);
+    const agent = agents.get(id);
+    if (agent) show(agent);
+  };
+  // One held call per app: the server answers when something changed, and the next call goes out when the last
+  // answers — never on a clock. A failure (daemon gone, plugin reloading) sends nothing until an agent starts or ends a turn,
+  // or the agent list comes again on reconnect; then it asks for everything. A new snapshot wipes the pills, so it asks for
+  // everything too and an answer to the older call is dropped.
+  let since = 0;
+  let ronda = 0;
+  let vigilando = false;
+  const vigila = () => {
+    if (stopped || vigilando) return;
+    vigilando = true;
+    const esta = ronda;
+    void client.rpc(suggestWatch, { since }).then(
+      ({ version, completo, agentes }) => {
+        if (stopped || esta !== ronda) return;
+        vigilando = false;
+        since = version;
+        if (completo) for (const id of [...autopilots.keys()]) if (!(id in agentes)) aplica(id, ESTADO_VACIO);
+        for (const [id, estado] of Object.entries(agentes)) aplica(id, estado);
+        vigila();
+      },
+      () => {
+        if (esta !== ronda) return;
+        vigilando = false;
+        since = 0;
+      },
+    );
+  };
+
   void client.paseo.agents
     .list({ subscribe: {}, signal: lifetime.signal })
     .then(({ subscription }) => {
@@ -630,45 +614,28 @@ export function addSuggestPill(client: PluginClientContext): () => void {
         snapshot: ({ entries }) => {
           for (const id of [...pills.keys()]) remove(id);
           for (const { agent } of entries) show(agent as Agent);
+          ronda += 1;
+          vigilando = false;
+          since = 0;
+          vigila();
         },
         update: (message) => {
           if (message.type !== "agent_update") return;
           const update = message.payload;
-          if (update.kind === "remove") remove(update.agentId);
-          else show(update.agent as Agent);
+          if (update.kind === "remove") return remove(update.agentId);
+          const turno = agents.get(update.agent.id)?.status !== update.agent.status;
+          show(update.agent as Agent);
+          if (turno) vigila(); // a no-op while the held call is alive
         },
       });
     })
     .catch((error) => {
       if (!stopped) console.error("suggest: agent observation failed", error);
     });
-  const poll = setInterval(() => {
-    for (const agent of agents.values()) {
-      if (agent.status !== "idle") continue;
-      void client.rpc(suggestGet, { agentId: agent.id }).then(
-        ({ text, en_plan, criterio, muted: quiet, autopilot = SIN_PAR, plan = null }) => {
-          if (stopped) return;
-          const shown = text === consumed.get(agent.id) ? null : text;
-          const before = autopilots.get(agent.id) ?? SIN_PAR;
-          const changed = texts.get(agent.id) !== shown || muted.has(agent.id) !== quiet
-            || before.estado !== autopilot.estado || before.motivo !== autopilot.motivo || before.ultimo_envio !== autopilot.ultimo_envio;
-          autopilots.set(agent.id, autopilot);
-          planes.set(agent.id, plan);
-          texts.set(agent.id, shown);
-          anchors.set(agent.id, { en_plan, criterio });
-          if (quiet) muted.add(agent.id);
-          else muted.delete(agent.id);
-          if (changed) show(agent);
-        },
-        () => {},
-      );
-    }
-  }, POLL_MS);
 
   return () => {
     stopped = true;
     lifetime.abort();
-    clearInterval(poll);
     for (const id of [...pills.keys()]) remove(id);
   };
 }
