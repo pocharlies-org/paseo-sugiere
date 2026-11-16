@@ -4,6 +4,25 @@ import { test } from "node:test";
 import ts from "typescript";
 import { gira } from "../client/estrella.ts";
 
+// SC-5805: the ✦ learns everything from one held `suggest.watch`; this fake host holds it until the test pushes an answer.
+function vigiaFalsa() {
+  let version = 0;
+  let suelta: (r: unknown) => void = () => {};
+  const pedidas: unknown[] = [];
+  return {
+    pedidas,
+    llamada: (input: unknown) => {
+      pedidas.push(input);
+      return new Promise((resolve) => { suelta = resolve; });
+    },
+    empuja: (agentes: Record<string, object>) => suelta({ agentes, version: ++version, completo: false }),
+  };
+}
+const respuesta = (extra: object = {}) => ({
+  text: null, pending: false, error: null, nada: false, en_plan: null, criterio: null, muted: false,
+  autopilot: { estado: "sin-par", motivo: "" }, plan: null, ...extra,
+});
+
 // Render the plugin with host primitives, without loading React Native's native runtime in Node.
 test("suggestion card uses the sheet-aware input, edits before sending and has a reachable mobile button", async () => {
   const source = readFileSync(new URL("../client/suggest-pill.tsx", import.meta.url), "utf8");
@@ -28,38 +47,41 @@ test("suggestion card uses the sheet-aware input, edits before sending and has a
     "react-native": { View: "View", Text: "Text", Pressable: "Pressable", TextInput: "UnsafeInput", AccessibilityInfo: {} },
     "@getpaseo/plugin/client/ui": { SettingsAction: "SettingsAction", SettingsSelect: "SettingsSelect" },
     "@getpaseo/plugin/client/react-native": { Icon: "Icon", TextInput: "SheetAwareInput" },
-    "../shared/contract.ts": { suggestGet: "get", suggestForce: "force", suggestFeedback: "feedback", autopilotStart: "start", autopilotStop: "stop" },
+    "../shared/contract.ts": { suggestGet: "get", suggestForce: "force", suggestFeedback: "feedback", autopilotStart: "start", autopilotStop: "stop", suggestWatch: "watch" },
     "../shared/suggest.ts": { SUGGEST_WAIT_MS: 300_000 },
     "./composer-bridge.ts": { insertSuggestion: () => false },
     "./estrella.ts": { gira },
   };
   const exports: any = {};
-  let poll: () => void = () => {};
-  new Function("require", "exports", "setInterval", "clearInterval", outputText)(
-    (name: string) => { assert.ok(name in modules, name); return modules[name]; },
-    exports,
-    (callback: () => void) => { poll = callback; return 1; },
-    () => {},
-  );
+  new Function("require", "exports", outputText)((name: string) => { assert.ok(name in modules, name); return modules[name]; }, exports);
   let button: any;
   const sent: string[] = [];
+  const vigia = vigiaFalsa();
+  const llamadas: string[] = [];
   const stop = exports.addSuggestPill({
     addComposerPill: ({ id, button: next }: any) => {
       if (id !== "suggest") return { update() {}, remove() {} }; // «no es esto» lives in its own pill
       button = next;
       return { update: (next: unknown) => { button = next; }, remove() {} };
     },
-    rpc: async () => ({ text: "Original suggestion" }),
+    rpc: (name: string, input: unknown) => {
+      llamadas.push(name);
+      return name === "watch" ? vigia.llamada(input) : Promise.resolve({ text: "Original suggestion" });
+    },
     paseo: { agents: {
       list: async () => ({ subscription: { subscribe: ({ snapshot }: any) => snapshot({
-        entries: [{ agent: { id: "a", workspaceId: "w", status: "idle" } }],
+        entries: [{ agent: { id: "a", workspaceId: "w", status: "idle" } }, { agent: { id: "b", workspaceId: "w", status: "idle" } }],
       }) } }),
       ref: () => ({ send: (text: string) => { sent.push(text); } }),
     } },
   });
   await new Promise<void>((resolve) => setImmediate(resolve));
-  poll();
+  assert.deepEqual(llamadas, ["watch"], "one held call for every agent, no `suggest.get` per agent");
+  assert.deepEqual(vigia.pedidas, [{ agentes: ["a", "b"], since: 0 }]);
+  vigia.empuja({ a: respuesta({ text: "Original suggestion" }) });
   await new Promise<void>((resolve) => setImmediate(resolve));
+  assert.deepEqual(llamadas, ["watch", "watch"], "the next held call goes out when the last one answers");
+  assert.deepEqual(vigia.pedidas.at(-1), { agentes: ["a", "b"], since: 1 });
   assert.equal(button.behavior.kind, "popover", JSON.stringify(button));
   const theme = { colors: { foreground: "white", accent: "green", accentForeground: "black" } };
   for (const compact of [true, false]) {
@@ -113,7 +135,7 @@ test("a forced suggestion stays on the pill until its button is pressed", async 
     "react-native": { View: "View", Text: "Text", Pressable: "Pressable", AccessibilityInfo: {} },
     "@getpaseo/plugin/client/ui": { SettingsAction: "SettingsAction", SettingsSelect: "SettingsSelect" },
     "@getpaseo/plugin/client/react-native": { Icon: "Icon", TextInput: "Input" },
-    "../shared/contract.ts": { suggestGet: "get", suggestForce: "force", suggestFeedback: "feedback", autopilotStart: "start", autopilotStop: "stop" },
+    "../shared/contract.ts": { suggestGet: "get", suggestForce: "force", suggestFeedback: "feedback", autopilotStart: "start", autopilotStop: "stop", suggestWatch: "watch" },
     "../shared/suggest.ts": { SUGGEST_WAIT_MS: 300_000 },
     "./composer-bridge.ts": {
       insertSuggestion: (agentId: string, text: string) => { inserted.push(`${agentId} ${text}`); return true; },
@@ -121,15 +143,10 @@ test("a forced suggestion stays on the pill until its button is pressed", async 
     },
     "./estrella.ts": { gira },
   };
-  let tick: () => void = () => {};
   const exports: any = {};
-  new Function("require", "exports", "setInterval", "clearInterval", outputText)(
-    (name: string) => { assert.ok(name in modules, name); return modules[name]; },
-    exports,
-    (callback: () => void) => { tick = callback; return 1; },
-    () => {},
-  );
+  new Function("require", "exports", outputText)((name: string) => { assert.ok(name in modules, name); return modules[name]; }, exports);
   let button: any;
+  const vigia = vigiaFalsa();
   const stop = exports.addSuggestPill({
     // The host's rule (validation.ts requireText): a label is undefined or non-blank, or the pill is never drawn.
     addComposerPill: ({ id, button: next }: any) => {
@@ -137,7 +154,7 @@ test("a forced suggestion stays on the pill until its button is pressed", async 
       accept(next);
       return { update: accept, remove() {} };
     },
-    rpc: async () => ({ started: true, text: "Forzada" }),
+    rpc: (name: string, input: unknown) => (name === "watch" ? vigia.llamada(input) : Promise.resolve({ started: true })),
     paseo: {
       agents: {
         list: async () => ({ subscription: { subscribe: ({ snapshot }: any) => snapshot({ entries: [{ agent: { id: "a", workspaceId: "w", status: "idle" } }] }) } }),
@@ -156,7 +173,9 @@ test("a forced suggestion stays on the pill until its button is pressed", async 
   await settled();
   await settled();
   assert.deepEqual(inserted, [], "the click only asks for a generation");
-  tick(); // the resident answers
+  vigia.empuja({ a: respuesta({ pending: true }) }); // the server confirms it is generating: still spinning
+  await settled();
+  vigia.empuja({ a: respuesta({ text: "Forzada" }) }); // the resident answers: the held call brings it, no polling
   await settled();
   assert.deepEqual(inserted, [], "the answer is not written into any prompt by itself");
   assert.equal(button.label, "Forzada", "it waits on the pill of its own window (the icon is already a Sparkles)");
@@ -178,20 +197,15 @@ test("a piloted ✦ is gold while it waits, red when it needs a person, and its 
     "react-native": { View: "View", Text: "Text", Pressable: "Pressable", AccessibilityInfo: {} },
     "@getpaseo/plugin/client/ui": { SettingsAction: "SettingsAction", SettingsSelect: "SettingsSelect" },
     "@getpaseo/plugin/client/react-native": { Icon: "Icon", TextInput: "Input" },
-    "../shared/contract.ts": { suggestGet: "get", suggestForce: "force", suggestFeedback: "feedback", autopilotStart: "start", autopilotStop: "stop" },
+    "../shared/contract.ts": { suggestGet: "get", suggestForce: "force", suggestFeedback: "feedback", autopilotStart: "start", autopilotStop: "stop", suggestWatch: "watch" },
     "../shared/suggest.ts": { SUGGEST_WAIT_MS: 300_000 },
     "./composer-bridge.ts": { insertSuggestion: () => false, registerPillAnchor: () => () => {} },
     "./estrella.ts": { gira },
   };
-  let poll: () => void = () => {};
   const exports: any = {};
-  new Function("require", "exports", "setInterval", "clearInterval", outputText)(
-    (name: string) => modules[name],
-    exports,
-    (callback: () => void) => { poll = callback; return 1; },
-    () => {},
-  );
-  let reply: any = { text: "una sugerencia vieja", en_plan: "en-plan", criterio: "c", muted: false, autopilot: { estado: "esperando", motivo: "ESPERA: ci" }, plan: null };
+  new Function("require", "exports", outputText)((name: string) => modules[name], exports);
+  const vigia = vigiaFalsa();
+  let reply: any = respuesta({ text: "una sugerencia vieja", en_plan: "en-plan", criterio: "c", autopilot: { estado: "esperando", motivo: "ESPERA: ci" } });
   const paros: unknown[] = [];
   const buttons: Record<string, any> = {};
   let update: (agent: object) => void = () => {};
@@ -201,6 +215,7 @@ test("a piloted ✦ is gold while it waits, red when it needs a person, and its 
       return { update: (next: unknown) => { buttons[id] = next; }, remove() {} };
     },
     rpc: async (name: string, input: any) => {
+      if (name === "watch") return vigia.llamada(input);
       if (name !== "stop") return reply;
       paros.push(input);
       reply = { ...reply, autopilot: { estado: "sin-par", motivo: "" } }; // the supervisor unregistered the pair
@@ -216,16 +231,20 @@ test("a piloted ✦ is gold while it waits, red when it needs a person, and its 
   });
   const settled = () => new Promise<void>((resolve) => setImmediate(resolve));
   await settled();
-  poll();
+  vigia.empuja({ a: reply });
   await settled();
   assert.equal(buttons.suggest.label, "esperando: ESPERA: ci", "gold, saying what it waits for — not the stale suggestion");
   assert.equal(buttons["suggest-no"].visible, false, "no «no es esto» next to a piloted ✦");
   const panel = buttons.suggest.behavior.Content({ theme: { colors: {} }, close() {} });
   assert.equal(panel.props.par.estado, "esperando");
   assert.equal(panel.props.suggestNow, undefined, "no «Sugerir ahora» while the auditor pilots: one generation per turn");
+  const vistos: string[] = [];
+  const deja = panel.props.sigue((par: { estado: string }) => vistos.push(par.estado)); // an open popover follows its pair
   reply = { ...reply, autopilot: { estado: "humano", motivo: "dinero" } };
-  poll();
+  vigia.empuja({ a: reply });
   await settled();
+  assert.deepEqual(vistos, ["humano"], "the open popover is told the change: the host does not repaint it");
+  deja();
   assert.equal(buttons.suggest.label, "necesita acción: dinero");
   update({ id: "a", workspaceId: "w", status: "running" });
   assert.equal(buttons.suggest.visible, true, "reachable mid-turn, to stop the pair");

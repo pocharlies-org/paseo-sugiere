@@ -34,8 +34,11 @@ al modelo de la sesión, sin compartir la caché de la sesión.
   `~/.company/jira-trigger/secret` y base `http://company.paseo.svc.cluster.local:19911` (env `SUPERVISOR_URL`). La respuesta se
   convierte en `{ok, error?}` y el error se enseña una vez en el popover. El plugin no pilota ni decide: eso es de la sesión
   auditora B, que crea el supervisor.
-- `client/suggest-pill.tsx` — píldora en el composer; sondea 10 s solo agentes
-  `idle`; el texto se tira al salir de idle, al enviar y al pasarlo al prompt. Su icono es el ancla del puente. Nada entra en el prompt
+- `client/suggest-pill.tsx` — píldora en el composer; se entera de todo por una sola llamada `suggest.watch` retenida por cliente
+  (SC-5805, `server/vigia.ts`: el servidor responde solo los agentes cuya respuesta cambió y, sin cambios, retiene hasta 20 s;
+  despierta con la sugerencia, el registro de parejas y las anclas de plan). Nada pregunta con un reloj: ni la píldora, ni el popover
+  abierto (sigue a su pareja), ni el «Sugerir ahora» (su fin llega por la misma llamada). El texto se tira al salir de idle, al enviar y
+  al pasarlo al prompt. Su icono es el ancla del puente. Nada entra en el prompt
   por su cuenta: una generación terminada se queda en la píldora de su ventana hasta que se pulsa su botón (Dani 02-11). El popover intenta
   primero el puente y solo pinta su tarjeta si no pudo: el propio campo más un botón pequeño de enviar a su derecha, sin caja ni
   bordes y con la altura del texto (el popover del host ya enmarca).
