@@ -152,7 +152,11 @@ Notas de aplicación:
 
 - `dinero` en D3/D5/D7/D8 no significa que el mensaje cueste dinero: significa **solo Dani lo decide**
   (perfil de cómputo, datos, secretos, publicación). La tabla de §6 es la que manda.
-- D10 solo mira rutas con raíz absoluta o `~`; una ruta relativa se juzga contra `contexto.cwd`.
+- D10 solo mira rutas con raíz absoluta o `~`; una ruta relativa se juzga contra `contexto.cwd`. `~` es la casa del `cwd`: con
+  `cwd` bajo `/home/<u>`, `~/…` se compara como `/home/<u>/…` (16-11: `~/src/company-roles/README.md` con `cwd`
+  `/home/dani/src/company-roles` se vetaba); con otro `cwd`, tal cual. El prefijo se compara hasta una frontera de ruta:
+  `~/k8s/<repo>-otro` no es de `~/k8s/<repo>`. Las herramientas de la casa (`jira_rest.py`, `company-aprobar`) se pueden invocar
+  desde cualquier `cwd`.
 - El texto se juzga entero, también dentro de bloques de código: un `rm -rf` propuesto "para comprobar"
   sigue siendo un `rm -rf`.
 
@@ -175,6 +179,10 @@ vocabulario de riesgo —dinero, credenciales, publicación fuera, lo irreversib
 **nunca es final**; el riesgo del tamiz se combina con el del modelo y manda el mayor. Los patrones de prosa
 solo dejan `marca=prosa-parN` en la traza y no cambian ningún veredicto. Los verbos de borrado en prosa no
 entran en el tamiz: ya los cazan D1/D2/D5 en su literal, y en prosa son la mitad de las legítimas medidas.
+Desde el 16-11 el tamiz también ve la **fusión sin la puerta** (`alto`): `--admin`, `gh.real … merge` y la API de merge (REST
+`…/pulls/<n>/merge` o la mutación `mergePullRequest`). `gh pr merge` a secas no entra: en el x86 `gh` es el envoltorio de
+`company-aprobar`, y las sesiones lo nombran para prohibirlo («company-aprobar fusionar … (nunca gh pr merge)»); eso lo juzga
+la rúbrica. El tamiz no lee negaciones: un «nunca `--admin`» también cierra (0 de 2715 sugerencias de la auditoría lo nombraban).
 
 | Paso | Condición | Qué pasa |
 |---|---|---|
@@ -189,7 +197,11 @@ para lo irreversible, el dinero y las credenciales: un ticket sin resumen o un c
 razón para detener (medido el 04-11: detenía la cola entera por eso). `alto` es **cambiar** otro repo, el
 clúster o el sistema; **mirar** cómo está (leer un recurso, `kubectl get/describe`, un Synced/Healthy) y
 escribir una nota o cerrar un ticket es `bajo` — la rúbrica vetaba las retomas de verificación como si
-tocaran el clúster (medido 06-11: 5 retomas bloqueadas).
+tocaran el clúster (medido 06-11: 5 retomas bloqueadas). Entregar el ticket fusionando **su** PR con
+`company-aprobar fusionar <owner/repo>#<n>` también es `bajo`, aunque el mensaje no diga que está en LISTA, aunque la PR sea de
+otro repo y aunque su despliegue llegue después al clúster por GitOps: esa puerta se niega a fusionar si `company-aprobar estado`
+no dice LISTA (16-11: la rúbrica vetó dos veces seguidas ese paso y la pareja autopilot de un ticket se degradó). Fusionar sin
+la puerta —`gh pr merge` directo, `gh.real`, la API de merge, `--admin`— o saltársela sigue siendo `alto`.
 
 El residente escribe `p: 0.0` cuando se le pide una (medido el 01-11), así que su campo `p` se registra pero
 no se compara: decide su `veredicto`.
