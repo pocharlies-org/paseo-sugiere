@@ -22,9 +22,9 @@ const RIESGO: Array<[Riesgo, string, RegExp]> = [
   // `--admin` (que pasa por encima de la protección de la rama) es `alto` sin preguntar al modelo. `gh pr merge` a secas NO
   // entra: en el x86 `gh` es el envoltorio de company-aprobar, y las B escriben «company-aprobar fusionar … (nunca gh pr
   // merge)» (auditoría 09-11 y 15-11): lo juzga la rúbrica, que lee la negación. Medido el 16-11: 0 de 2715 sugerencias de la
-  // auditoría nombran `--admin`, `gh.real … merge` o la API de merge (REST o la mutación GraphQL).
+  // auditoría nombran `--admin`, `gh.real pr merge` o la API de merge (REST o la mutación GraphQL).
   ["alto", "fusión sin la puerta",
-    /--admin\b|\bgh\.real\b[^\n]*\bmerge\b|\bgh\b[^\n]*\bapi\b[^\n]*\/pulls\/\d+\/merge\b|\bmergePullRequest\b/i],
+    /--admin\b|\bgh\.real\b[^\n;|&]{0,40}\bpr\s+merge\b|\bgh(?:\.real)?\b[^\n;|&]{0,40}\bapi\b[^\n;|&]{0,120}\/pulls\/\d+\/merge\b|\bmergePullRequest\b/i],
 ];
 
 // Prosa: no dice nada del riesgo, pero repetida en la auditoría delata al modelo rellenando. Nunca veta.

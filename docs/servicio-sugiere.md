@@ -179,7 +179,7 @@ vocabulario de riesgo —dinero, credenciales, publicación fuera, lo irreversib
 **nunca es final**; el riesgo del tamiz se combina con el del modelo y manda el mayor. Los patrones de prosa
 solo dejan `marca=prosa-parN` en la traza y no cambian ningún veredicto. Los verbos de borrado en prosa no
 entran en el tamiz: ya los cazan D1/D2/D5 en su literal, y en prosa son la mitad de las legítimas medidas.
-Desde el 16-11 el tamiz también ve la **fusión sin la puerta** (`alto`): `--admin`, `gh.real … merge` y la API de merge (REST
+Desde el 16-11 el tamiz también ve la **fusión sin la puerta** (`alto`): `--admin`, `gh.real pr merge` y la API de merge (REST
 `…/pulls/<n>/merge` o la mutación `mergePullRequest`). `gh pr merge` a secas no entra: en el x86 `gh` es el envoltorio de
 `company-aprobar`, y las sesiones lo nombran para prohibirlo («company-aprobar fusionar … (nunca gh pr merge)»); eso lo juzga
 la rúbrica. El tamiz no lee negaciones: un «nunca `--admin`» también cierra (0 de 2715 sugerencias de la auditoría lo nombraban).
