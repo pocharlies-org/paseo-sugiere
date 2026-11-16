@@ -24,7 +24,7 @@ globalThis.fetch = (async (url: string, init: any) => {
 
 const paseo = {
   agents: {
-    ref: (id: string) => ({ refresh: async () => ({ agent: { id, cwd: "/home/node/repos/paseo-sugiere", title: "montar el autopilot", provider: "claude" } }) }),
+    ref: (id: string) => ({ refresh: async () => ({ agent: { id, cwd: "/home/node/repos/paseo-sugiere", workspaceId: "wks_de_a", title: "montar el autopilot", provider: "claude" } }) }),
   },
 } as never;
 
@@ -53,7 +53,7 @@ describe("arrancar la pareja", () => {
     assert.equal(llamas[0]!.metodo, "POST");
     assert.equal(llamas[0]!.cabeceras["X-Company-Token"], "token-de-prueba", "el contenido del secret, sin el salto de línea");
     assert.deepEqual(llamas[0]!.cuerpo, {
-      a: { id: "a1", tipo: "paseo", cwd: "/home/node/repos/paseo-sugiere", titulo: "montar el autopilot" },
+      a: { id: "a1", tipo: "paseo", cwd: "/home/node/repos/paseo-sugiere", workspace: "wks_de_a", titulo: "montar el autopilot" },
       objetivo: { modo: "plan", key: "TAREA-1000001" },
       modelo: "claude-opus-5-5",
       origen: "paseo",
