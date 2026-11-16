@@ -50,7 +50,9 @@ no consume su contrato `file.claude-cuentas.v1`: la llamada va a LiteLLM con la 
   `claude-opus-5-5` si lo ofrece). «Empezar» llama al supervisor de la compañía (`POST /autopilot/par`, cabecera
   `X-Company-Token` de `~/.company/jira-trigger/secret`, base `http://company.paseo.svc.cluster.local:19911`, env
   `SUPERVISOR_URL`), que crea la sesión auditora B: B planifica, audita contra los criterios y escribe el siguiente mensaje
-  de A; el plugin solo arranca y para la pareja y enseña su estado («Parar» = `DELETE /autopilot/par/<a_id>`). Con la pareja
+  de A; el plugin solo arranca y para la pareja y enseña su estado («Parar» = `DELETE /autopilot/par/<a_id>`). El host corta
+  el RPC a los 30 s y el supervisor tarda más en crear B: pasados 25 s «Empezar» responde ok con la pareja ya reservada en el
+  registro (`activa`) y la ✦ cuenta cómo acaba, el mismo plazo que Goal (`arrancarEnPlazo`, `server/goal.ts`). Con la pareja
   viva la ✦ habla por ella: amarilla y girando (`activa`/`pensando`/`esperando`), roja brillante con pulso cuando hace falta
   una persona (`humano`) o roja fija cuando el auditor dejó de responder (`degradada`), verde al entregar (`entregada`); el
   popover da el motivo, los pasos, el último envío y el auditor. El estado viene del registro del supervisor

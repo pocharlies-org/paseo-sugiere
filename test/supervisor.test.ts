@@ -10,7 +10,7 @@ import { after, beforeEach, describe, it } from "node:test";
 const HOME = mkdtempSync(join(tmpdir(), "supervisor-"));
 process.env.HOME = HOME;
 const { arrancarPar, apagarPar } = await import("../server/supervisor.ts");
-const { sesionConGoal } = await import("../server/goal.ts");
+const { arrancarEnPlazo, sesionConGoal } = await import("../server/goal.ts");
 
 const llamas: { url: string; metodo: string; cabeceras: Record<string, string>; cuerpo: any }[] = [];
 let respuestas: { status: number; body?: object }[] = [];
@@ -100,6 +100,33 @@ describe("arrancar la pareja", () => {
     await arrancarPar({ agentId: "a1", modo: "prompt", texto: "haz X" }, paseo);
     assert.equal(llamas[0]!.url, "http://company.paseo.svc.cluster.local:19911/autopilot/par");
     process.env.SUPERVISOR_URL = "http://supervisor.example:19911";
+  });
+});
+
+describe("«Empezar» de la ✦ dentro del plazo del RPC", () => {
+  beforeEach(() => {
+    llamas.length = 0;
+    respuestas = [];
+    falla = null;
+    process.env.SUPERVISOR_URL = "http://supervisor.example:19911";
+    escribe(join(HOME, ".company", "jira-trigger", "secret"), "token-de-prueba");
+  });
+
+  it("si el supervisor tarda más que el plazo, responde ok ya: la ✦ lee la pareja reservada en su registro", async () => {
+    let suelta = () => {};
+    const antes = globalThis.fetch;
+    globalThis.fetch = (() => new Promise((ok) => { suelta = () => ok(new Response("{}", { status: 201 })); })) as typeof fetch;
+    try {
+      assert.deepEqual(await arrancarEnPlazo({ agentId: "a1", modo: "prompt", texto: "haz X" }, paseo, 20), { ok: true });
+    } finally {
+      suelta();
+      globalThis.fetch = antes;
+    }
+  });
+
+  it("si contesta a tiempo, su respuesta pasa tal cual (también el rechazo con su motivo)", async () => {
+    respuestas = [{ status: 409, body: { error: "a1 ya tiene autopilot (activa); apágalo antes" } }];
+    assert.deepEqual(await arrancarEnPlazo({ agentId: "a1", modo: "prompt", texto: "haz X" }, paseo, 1_000), { ok: false, error: "a1 ya tiene autopilot (activa); apágalo antes" });
   });
 });
 
