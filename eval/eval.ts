@@ -3,6 +3,7 @@
 // cada vez (eval/README.md).
 //
 //   scripts/eval --vivo   cada caso ×3 contra el servicio `sugiere` real; escribe eval/resultados/<fecha>.json
+//   scripts/eval --vivo --caso <id> [--caso <id>…]   solo esos casos ×3; la corrida se graba con `parcial: true`
 //   scripts/eval          el informe de la última corrida grabada frente a la anterior, sin red
 //
 // `npm test` (test/eval.test.ts) rehace la puntuación sobre las respuestas grabadas: determinista, sin modelo.
@@ -39,7 +40,8 @@ type Caso = {
 
 type Veredicto = { ok?: boolean; riesgo?: string; motivo?: string; via?: string; error?: string };
 type Corrida = { sugerencia?: string; modelo?: string; ms: number; veredicto?: Veredicto | null; error?: string; pasa?: boolean; motivo?: string };
-export type Resultado = { fecha: string; servicio: string; veces: number; casos: Record<string, Corrida[]>; reglas: Record<string, string> };
+export type Resultado = { fecha: string; servicio: string; veces: number; casos: Record<string, Corrida[]>; reglas: Record<string, string>;
+  parcial?: boolean };
 
 export const leerJson = (ruta: string) => JSON.parse(readFileSync(ruta, "utf8"));
 
@@ -218,14 +220,23 @@ export const grabadas = () =>
   existsSync(DIR_RESULTADOS) ? readdirSync(DIR_RESULTADOS).filter((f) => f.endsWith(".json")).sort().map((f) => join(DIR_RESULTADOS, f)) : [];
 
 if (process.argv[1] === new URL(import.meta.url).pathname) {
-  const lista = casos();
+  // `--caso <id>` (repetible) mide solo esos casos: un cambio que toca a unos pocos no repite la batería entera. La corrida se
+  // graba con `parcial: true` y solo esos casos; test/eval.test.ts reproduce cada caso con la última corrida que lo midió.
+  const solo = process.argv.flatMap((a, i, v) => (v[i - 1] === "--caso" ? [a] : []));
+  const todos = casos();
+  const faltan = solo.filter((id) => !todos.some((c) => c.id === id));
+  if (faltan.length) throw new Error(`--caso: no hay ningún caso ${faltan.join(", ")} en eval/casos/`);
+  const lista = solo.length ? todos.filter((c) => solo.includes(c.id)) : todos;
   const previas = grabadas().map(leerJson) as Resultado[];
   if (process.argv.includes("--vivo")) {
     const fecha = new Date().toISOString().slice(0, 16).replace(":", "-");
     const r = await vivo((process.env.SUGIERE_URL || "http://sugiere.llm.svc:8080").replace(/\/+$/, ""), fecha, lista);
+    if (solo.length) r.parcial = true;
     mkdirSync(DIR_RESULTADOS, { recursive: true });
     writeFileSync(join(DIR_RESULTADOS, `${fecha}.json`), `${JSON.stringify(r, null, 2)}\n`);
     console.log(informe(lista, r, previas.at(-1) ?? null));
-  } else if (previas.length) console.log(informe(lista, previas.at(-1)!, previas.at(-2) ?? null));
-  else console.log("No hay corridas grabadas en eval/resultados/: lanza scripts/eval --vivo.");
+  } else if (previas.length) {
+    const ultima = previas.at(-1)!;   // una corrida parcial se informa con sus casos, no con «sin corrida» en los demás
+    console.log(informe(ultima.parcial ? lista.filter((c) => ultima.casos[c.id]) : lista, ultima, previas.at(-2) ?? null));
+  } else console.log("No hay corridas grabadas en eval/resultados/: lanza scripts/eval --vivo.");
 }

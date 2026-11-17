@@ -20,8 +20,9 @@ const RIESGO: Array<[Riesgo, string, RegExp, ((t: string) => string)?]> = [
   // La entrega de un ticket es su PR fusionada POR LA PUERTA (`company-aprobar fusionar`, que solo fusiona en LISTA: CI verde y
   // revisión); eso es `bajo` y lo dice la rúbrica (16-11). Saltarse la puerta con el gh de verdad, la API de merge o
   // `--admin` (que pasa por encima de la protección de la rama) es `alto` sin preguntar al modelo. `gh pr merge` a secas NO
-  // entra: en el x86 `gh` es el envoltorio de company-aprobar, y las B escriben «company-aprobar fusionar … (nunca gh pr
-  // merge)» (auditoría 09-11 y 15-11): lo juzga la rúbrica, que lee la negación. Medido el 16-11: 0 de 2715 sugerencias de la
+  // entra: en los hosts de la compañía (x86, paseo-0, company-0) `gh` es el envoltorio de company-aprobar, así que es la misma
+  // puerta y la rúbrica lo deja en bajo (17-11); y las B escriben «company-aprobar fusionar … (nunca gh pr merge)» (auditoría
+  // 09-11 y 15-11). Medido el 16-11: 0 de 2715 sugerencias de la
   // auditoría nombran `--admin`, `gh.real pr merge` o la API de merge (REST o la mutación GraphQL). Lo que se nombra para
   // prohibirlo no es la orden: el tamiz no mira las cláusulas negadas (`sinNegadas`) y esas las juzga la rúbrica.
   ["alto", "fusión sin la puerta",

@@ -50,17 +50,20 @@ describe("eval: D0-D14 sin tocar", () => {
   });
 });
 
-describe("eval: la última corrida grabada", () => {
-  const rutas = grabadas();
-  const ultima = rutas.length ? (leerJson(rutas.at(-1)!) as Resultado) : null;
+describe("eval: la última corrida grabada de cada caso", () => {
+  const corridas = grabadas().map((r) => leerJson(r) as Resultado);
+  const ultima = corridas.at(-1) ?? null;
+  // `scripts/eval --vivo --caso <id>` mide solo algunos casos (`parcial: true`): cada caso se juzga con la última corrida que lo
+  // midió. Un caso que ninguna corrida midió sigue fallando aquí.
+  const deCaso = (id: string) => [...corridas].reverse().find((r) => r.casos[id]);
 
-  it("existe y cubre todos los casos con sus corridas", { skip: !ultima && "sin corridas grabadas" }, () => {
-    for (const caso of CASOS) assert.equal(ultima!.casos[caso.id]?.length, VECES, caso.id);
+  it("cada caso tiene sus corridas en la última corrida que lo midió", { skip: !ultima && "sin corridas grabadas" }, () => {
+    for (const caso of CASOS) assert.equal(deCaso(caso.id)?.casos[caso.id]?.length, VECES, caso.id);
   });
 
   it("se reproduce: la puntuación de hoy da lo mismo que se grabó", { skip: !ultima && "sin corridas grabadas" }, () => {
     for (const caso of CASOS)
-      ultima!.casos[caso.id].forEach((c, i) => assert.equal(puntua(caso, c).pasa, c.pasa, `${caso.id} #${i + 1}: ${c.motivo}`));
+      deCaso(caso.id)!.casos[caso.id].forEach((c, i) => assert.equal(puntua(caso, c).pasa, c.pasa, `${caso.id} #${i + 1}: ${c.motivo}`));
   });
 
   it("no autoenvía ningún PARA DANI y el servicio aplicó D0-D14", { skip: !ultima && "sin corridas grabadas" }, () => {

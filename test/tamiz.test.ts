@@ -47,6 +47,7 @@ describe("el tamiz léxico", () => {
       "Fusiona la PR #4 con company-aprobar fusionar o/r#4 (nunca gh pr merge) y verifica el despliegue",
       "mira los checks con gh.real pr checks 7 -R o/r y el estado con company-aprobar estado o/r#7",
       "gh pr view 7 --json mergeable,mergeStateStatus",
+      "company-aprobar estado o/r#12 dice LISTA: fusiona con gh pr merge 12 --squash",
       "mira los checks con gh.real pr checks 7 -R o/r y, cuando la puerta diga LISTA, confirma el merge con company-aprobar fusionar o/r#7",
     ]) assert.equal(tamizar(t).riesgo, null, t);
   });
