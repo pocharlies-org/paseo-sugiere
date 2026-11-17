@@ -69,9 +69,7 @@ no consume su contrato `file.claude-cuentas.v1`: la llamada va a LiteLLM con la 
 ## Qué lee y envía
 
 Lee el transcript del agente (`~/.claude*/projects/**/*.jsonl` vía `~/.paseo/config.json`). No lee
-cuentas ni tokens. A la red manda dos cosas: la llamada a LiteLLM (con el modelo de la sesión) y, para mantenerse al día del
-tronco, el `git ls-remote`/`git clone` de su propio repo en GitHub (con las credenciales de git del usuario). Nada de
-eso llega a la app.
+cuentas ni tokens. A la red manda la llamada a LiteLLM (con el modelo de la sesión). Eso no llega a la app.
 
 ## Instalación
 
