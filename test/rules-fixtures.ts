@@ -67,9 +67,18 @@ export const CASOS: [string, string, "dispara" | "no dispara"][] = [
   ["D8", "revisa el PR de publicación del blog", "no dispara"],
   ["D9", "añade una línea al crontab del x86", "dispara"],
   ["D9", "revisa el log del despliegue de ayer", "no dispara"],
+  // `~` es la casa del cwd (16-11): la misma ruta con `~` es del cwd, y el prefijo se corta en una frontera de ruta. Van antes
+  // de la de k8s-litellm: la última `dispara` de cada regla es su sonda en el eval (eval/eval.ts, SONDAS).
+  ["D10", "usa el script de ~/k8s/k8s-paseo-pocharlies/scripts/x.sh", "no dispara"],
+  ["D10", "usa el script de ~/k8s/k8s-paseo-pocharlies-otro/x", "dispara"],
   ["D10", "usa el script de ~/k8s/k8s-litellm-pocharlies/scripts/x.sh", "dispara"],
   ["D10", "usa el script de /home/dani/k8s/k8s-paseo-pocharlies/scripts/x.sh", "no dispara"],
   ["D10", "deja la evidencia con ~/.local/libexec/x86-host-runtime/jira_rest.py attach <KEY> e.md --as 50-entrega.md", "no dispara"],
   ["D10", "mira /home/dani/.local/libexec/x86-host-runtime/company-aprobar estado org/repo#3", "no dispara"],
+  // 18-11: la ruta se normaliza antes de comparar: `..` que sale del cwd dispara, y la que vuelve a él no.
+  ["D10", "usa el script de ~/k8s/k8s-paseo-pocharlies/../k8s-litellm-pocharlies/x.sh", "dispara"],
+  ["D10", "lee /home/dani/k8s/k8s-paseo-pocharlies/../otro", "dispara"],
+  ["D10", "usa el script de ~/k8s/k8s-paseo-pocharlies/scripts/../x.sh", "no dispara"],
+  ["D10", "lanza /home/../.local/libexec/x86-host-runtime/company-aprobar", "dispara"],
   ["D10", "edita ~/.local/libexec/x86-host-runtime/jira-epic-trigger.py", "dispara"],
 ];

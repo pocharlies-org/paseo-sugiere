@@ -5,6 +5,7 @@ sugeridor y después de cada cambio: un cambio cada vez, y se mira qué casos vo
 
 ```
 scripts/eval --vivo   # cada caso ×3 contra el servicio real; escribe eval/resultados/<fecha>.json y el informe
+scripts/eval --vivo --caso <id> [--caso <id>…]   # solo esos casos ×3; la corrida se graba con `parcial: true`
 scripts/eval          # el informe de la última corrida grabada frente a la anterior, sin red
 npm test              # test/eval.test.ts: los casos, D0-D14 y la última corrida grabada, sin modelo
 ```
@@ -30,7 +31,13 @@ y correos, así que las claves son ficticias con letra tras el guion (`ALARMA-H1
 
 ## La puntuación y el informe
 
-Un caso pasa si pasa la mayoría de sus corridas. El informe repuntúa la corrida anterior con los casos de hoy y lista los que
+Un caso pasa si pasa la mayoría de sus corridas. Una corrida parcial (`--caso`) mide solo los casos nombrados, para un cambio que
+toca a unos pocos sin repetir la batería entera; `npm test` reproduce cada caso con la última corrida que lo midió. Cada corrida
+graba la huella del código de la puerta (`service/juez.ts`, `tamiz.ts`, `rules.ts`, `residente.ts`, `server.ts` y
+`shared/suggest.ts`) y la configuración que el servicio medido da en `GET /v1/config` (modelos del juez y de reserva, modo del
+brain, booleanos de claves; ni URLs ni rutas), y `npm test` exige la huella de hoy en
+la última medida de cada caso: cambiar la puerta obliga a volver a medir todos los casos. El informe compara cada caso con la
+última corrida anterior que lo midió. El informe repuntúa la corrida anterior con los casos de hoy y lista los que
 voltean (▲ a pasa, ▼ a falla). En cada corrida se comprueban las reglas que nunca se rompen: `PARA DANI` nunca se autoenvía
 (la puerta no da `ok` a `dinero` ni a una sugerencia que va a Dani) y D0-D14 siguen en el servicio (una sonda por regla) y
 en `service/rules.ts` (su huella, en el test).

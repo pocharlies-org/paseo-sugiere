@@ -3,6 +3,7 @@
 // cada vez (eval/README.md).
 //
 //   scripts/eval --vivo   cada caso ×3 contra el servicio `sugiere` real; escribe eval/resultados/<fecha>.json
+//   scripts/eval --vivo --caso <id> [--caso <id>…]   solo esos casos ×3; la corrida se graba con `parcial: true`
 //   scripts/eval          el informe de la última corrida grabada frente a la anterior, sin red
 //
 // `npm test` (test/eval.test.ts) rehace la puntuación sobre las respuestas grabadas: determinista, sin modelo.
@@ -15,6 +16,11 @@ const DIR = new URL(".", import.meta.url).pathname;
 const DIR_CASOS = join(DIR, "casos");
 const DIR_RESULTADOS = join(DIR, "resultados");
 const RUTA_REGLAS = join(DIR, "..", "service", "rules.ts");
+/** El código de la puerta: la rúbrica y el prompt del juez (juez.ts), el tamiz, las reglas, la llamada al residente, el servidor
+ * que los une (server.ts) y el prompt del sugeridor (shared/suggest.ts). */
+export const FICHEROS_PUERTA = ["service/juez.ts", "service/tamiz.ts", "service/rules.ts", "service/residente.ts", "service/server.ts",
+  "shared/suggest.ts"];
+export const RUTAS_PUERTA = FICHEROS_PUERTA.map((f) => join(DIR, "..", f));
 export const VECES = 3;
 const PARALELO = 4;
 const SID = "eval-sugeridor"; // así se distinguen sus líneas en la auditoría del servicio
@@ -39,7 +45,8 @@ type Caso = {
 
 type Veredicto = { ok?: boolean; riesgo?: string; motivo?: string; via?: string; error?: string };
 type Corrida = { sugerencia?: string; modelo?: string; ms: number; veredicto?: Veredicto | null; error?: string; pasa?: boolean; motivo?: string };
-export type Resultado = { fecha: string; servicio: string; veces: number; casos: Record<string, Corrida[]>; reglas: Record<string, string> };
+export type Resultado = { fecha: string; servicio: string; veces: number; casos: Record<string, Corrida[]>; reglas: Record<string, string>;
+  parcial?: boolean; puerta?: string; config?: Record<string, unknown> };
 
 export const leerJson = (ruta: string) => JSON.parse(readFileSync(ruta, "utf8"));
 
@@ -106,6 +113,15 @@ export const huellaReglas = () => createHash("sha256").update(readFileSync(RUTA_
 
 export const reglaCae = (id: string, motivo: string | undefined) => Boolean(motivo?.startsWith(`${id}:`));
 
+/** La huella del código de la puerta con el que se mide (18-11). Cada corrida la graba; test/eval.test.ts exige la de hoy en la
+ * última medida de cada caso, así que cambiar la puerta obliga a volver a medir todos los casos (una corrida parcial solo
+ * vale para añadir casos). Es la de este checkout: el servicio medido tiene que correr este mismo código. */
+export function huellaPuerta(): string {
+  const h = createHash("sha256");
+  for (const ruta of RUTAS_PUERTA) h.update(readFileSync(ruta));
+  return h.digest("hex").slice(0, 16);
+}
+
 // ---- Contra el servicio real.
 
 async function post(base: string, ruta: string, cuerpo: unknown, ms: number): Promise<any> {
@@ -117,6 +133,22 @@ async function post(base: string, ruta: string, cuerpo: unknown, ms: number): Pr
   const texto = await r.text();
   if (!r.ok) throw new Error(`${ruta} respondió ${r.status}: ${texto.slice(0, 160)}`);
   return JSON.parse(texto);
+}
+
+async function get(base: string, ruta: string, ms: number): Promise<any> {
+  const token = process.env.SUGIERE_TOKEN;
+  const r = await fetch(`${base}${ruta}`, { signal: AbortSignal.timeout(ms), headers: token ? { authorization: `Bearer ${token}` } : {} });
+  const texto = await r.text();
+  if (!r.ok) throw new Error(`${ruta} respondió ${r.status}: ${texto.slice(0, 160)}`);
+  return JSON.parse(texto);
+}
+
+/** Lo que el servicio medido dice de su configuración (`GET /v1/config`), solo nombres y booleanos: el modelo del juez, el de
+ * reserva, el modo del brain, si tiene la clave del residente y el token (18-11). URLs y rutas no se graban (el repo es público);
+ * /v1/config no da la versión del código, así que la huella de la puerta es la del checkout que mide. */
+export function configDelServicio(c: any): Record<string, unknown> {
+  return { modo: c?.modo, modelo_juez: c?.modelo_juez, modelo_reserva: c?.modelo_reserva, clave_residente: c?.clave_residente,
+    brain: { modo: c?.brain?.modo, token: c?.brain?.token }, clasificador_pesos: c?.clasificador?.pesos, token: c?.token };
 }
 
 /** El error con su causa: «fetch failed» solo no dice si fue un reset, un timeout o un pod que se iba. */
@@ -144,6 +176,7 @@ async function corrida(base: string, caso: Caso, turno: string): Promise<Corrida
 }
 
 async function vivo(base: string, fecha: string, lista: Caso[]): Promise<Resultado> {
+  const config = await get(base, "/v1/config", 10_000).then(configDelServicio, (e) => ({ error: fallo(e) }));
   const tareas = lista.flatMap((caso) => Array.from({ length: VECES }, (_, i) => ({ caso, i })));
   const salida: Record<string, Corrida[]> = Object.fromEntries(lista.map((c) => [c.id, []]));
   let siguiente = 0;
@@ -159,7 +192,7 @@ async function vivo(base: string, fecha: string, lista: Caso[]): Promise<Resulta
   for (const [id, sugerencia] of Object.entries(SONDAS))
     reglas[id] = await post(base, "/v1/verdict", { sid: SID, turno: `${fecha}-sonda-${id}`, sugerencia, contexto: { cwd: CWD_SONDAS } }, 90_000)
       .then((v) => (v.via === "reglas" ? v.motivo : `${v.via}: ${v.motivo}`), (e) => `error: ${(e as Error).message}`.slice(0, 200));
-  return { fecha, servicio: base, veces: VECES, casos: salida, reglas };
+  return { fecha, servicio: base, veces: VECES, puerta: huellaPuerta(), config, casos: salida, reglas };
 }
 
 // ---- El informe: la puntuación, y sobre todo qué casos voltean respecto a la corrida anterior.
@@ -171,17 +204,22 @@ function pasan(lista: Caso[], r: Resultado): Map<string, number> {
 
 const sinRespuesta = (r: Resultado, id: string) => (r.casos[id] ?? []).filter((x) => x.error).length;
 
-export function informe(lista: Caso[], actual: Resultado, anterior: Resultado | null): string {
+/** `previas`: las corridas anteriores a `actual`, de la más vieja a la más nueva. Cada caso se compara con la última que lo midió
+ * (18-11): tras una corrida parcial, la inmediatamente anterior no trae a todos. */
+export function informe(lista: Caso[], actual: Resultado, previas: Resultado[]): string {
   const ahora = pasan(lista, actual);
-  const antes = anterior ? pasan(lista, anterior) : new Map<string, number>();
+  const previa = new Map(lista.map((c) => [c.id, [...previas].reverse().find((r) => r.casos[c.id]) ?? null]));
+  const antes = new Map(lista.flatMap((c) => { const r = previa.get(c.id); return r ? [[c.id, pasan([c], r).get(c.id)!] as const] : []; }));
+  const fechas = [...new Set([...previa.values()].flatMap((r) => (r ? [r.fecha] : [])))].sort();
   const mayoria = (n: number | undefined, veces: number) => n !== undefined && n * 2 > veces;
   const corridas = Object.values(actual.casos).flat();
   const filas = lista.map((c) => {
+    const anterior = previa.get(c.id) ?? null;
     const a = antes.get(c.id), h = ahora.get(c.id);
     const pa = mayoria(a, anterior?.veces ?? VECES), ph = mayoria(h, actual.veces);
     // Sin respuesta no es conducta: un caso cuyas corridas fallaron todas no voltea, y las que fallaron se cuentan aparte.
     const errores = sinRespuesta(actual, c.id), erroresAntes = anterior ? sinRespuesta(anterior, c.id) : 0;
-    const volteo = h === undefined ? "sin corrida" : errores === actual.veces ? "sin respuesta" : a === undefined ? (anterior ? "nuevo" : "")
+    const volteo = h === undefined ? "sin corrida" : errores === actual.veces ? "sin respuesta" : a === undefined ? (previas.length ? "nuevo" : "")
       : erroresAntes === anterior!.veces ? "antes sin respuesta" : pa === ph ? "" : ph ? "▲ voltea a pasa" : "▼ voltea a falla";
     const nota = errores + erroresAntes ? ` (sin respuesta: ${errores} ahora, ${erroresAntes} antes)` : "";
     const fmt = (n: number | undefined, v: number) => (n === undefined ? "—" : `${n}/${v}`);
@@ -194,13 +232,13 @@ export function informe(lista: Caso[], actual: Resultado, anterior: Resultado | 
     `Eval del sugeridor · ${actual.fecha} · ${actual.servicio} · ${actual.veces} corridas por caso`,
     `Puntuación: ${filas.filter((f) => mayoria(ahora.get(f.c.id), actual.veces)).length}/${lista.length} casos pasan (mayoría de corridas) · ` +
       `${[...ahora.values()].reduce((a, b) => a + b, 0)}/${corridas.length} corridas · ${corridas.filter((x) => x.error).length} errores`,
-    anterior ? `Frente a ${anterior.fecha}: ${filas.filter((f) => mayoria(antes.get(f.c.id), anterior.veces)).length}/${lista.length} casos pasaban`
+    fechas.length ? `Frente a la medida anterior de cada caso (${fechas.join(", ")}): ${filas.filter((f) => mayoria(antes.get(f.c.id), previa.get(f.c.id)?.veces ?? VECES)).length}/${lista.length} casos pasaban`
       : "Sin corrida anterior: esta es la línea base.",
     "",
     `${"caso".padEnd(34)} ${"conducta".padEnd(14)} ${"antes".padEnd(6)} ${"ahora".padEnd(6)} volteo`,
     ...filas.map((f) => f.linea),
     "",
-    `Voltean: ${volteados.length ? volteados.map((f) => `${f.c.id} (${f.volteo})`).join(", ") : anterior ? "ninguno" : "— (línea base)"}`,
+    `Voltean: ${volteados.length ? volteados.map((f) => `${f.c.id} (${f.volteo})`).join(", ") : fechas.length ? "ninguno" : "— (línea base)"}`,
     `Invariantes: PARA DANI autoenviado ${paraDani.length ? `en ${paraDani.join(", ")}` : "0 veces"} · ` +
       `reglas D0-D14 en el servicio ${Object.keys(SONDAS).length - reglasMal.length}/${Object.keys(SONDAS).length}${reglasMal.length ? ` (fallan ${reglasMal.join(", ")})` : ""}`,
     "",
@@ -218,14 +256,23 @@ export const grabadas = () =>
   existsSync(DIR_RESULTADOS) ? readdirSync(DIR_RESULTADOS).filter((f) => f.endsWith(".json")).sort().map((f) => join(DIR_RESULTADOS, f)) : [];
 
 if (process.argv[1] === new URL(import.meta.url).pathname) {
-  const lista = casos();
+  // `--caso <id>` (repetible) mide solo esos casos: un cambio que toca a unos pocos no repite la batería entera. La corrida se
+  // graba con `parcial: true` y solo esos casos; test/eval.test.ts reproduce cada caso con la última corrida que lo midió.
+  const solo = process.argv.flatMap((a, i, v) => (v[i - 1] === "--caso" ? [a] : []));
+  const todos = casos();
+  const faltan = solo.filter((id) => !todos.some((c) => c.id === id));
+  if (faltan.length) throw new Error(`--caso: no hay ningún caso ${faltan.join(", ")} en eval/casos/`);
+  const lista = solo.length ? todos.filter((c) => solo.includes(c.id)) : todos;
   const previas = grabadas().map(leerJson) as Resultado[];
   if (process.argv.includes("--vivo")) {
     const fecha = new Date().toISOString().slice(0, 16).replace(":", "-");
     const r = await vivo((process.env.SUGIERE_URL || "http://sugiere.llm.svc:8080").replace(/\/+$/, ""), fecha, lista);
+    if (solo.length) r.parcial = true;
     mkdirSync(DIR_RESULTADOS, { recursive: true });
     writeFileSync(join(DIR_RESULTADOS, `${fecha}.json`), `${JSON.stringify(r, null, 2)}\n`);
-    console.log(informe(lista, r, previas.at(-1) ?? null));
-  } else if (previas.length) console.log(informe(lista, previas.at(-1)!, previas.at(-2) ?? null));
-  else console.log("No hay corridas grabadas en eval/resultados/: lanza scripts/eval --vivo.");
+    console.log(informe(lista, r, previas));
+  } else if (previas.length) {
+    const ultima = previas.at(-1)!;   // una corrida parcial se informa con sus casos, no con «sin corrida» en los demás
+    console.log(informe(ultima.parcial ? lista.filter((c) => ultima.casos[c.id]) : lista, ultima, previas.slice(0, -1)));
+  } else console.log("No hay corridas grabadas en eval/resultados/: lanza scripts/eval --vivo.");
 }

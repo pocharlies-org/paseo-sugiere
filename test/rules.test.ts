@@ -97,3 +97,32 @@ describe("D11 y D12: las leyes que el modelo perdonaba", () => {
     ]) assert.equal(evaluarReglas(texto, CWD)?.id, "D3", texto);
   });
 });
+
+// 16-11: D10 comparaba `~/…` con el cwd sin expandir, y vetaba el propio repo de la sesión dicho con `~`.
+describe("D10 expande `~` a la casa del cwd", () => {
+  it("el caso real: el README del repo de la sesión, dicho con `~`, es del cwd", () => {
+    assert.equal(evaluarReglas("revisa ~/src/company-roles/README.md y resume", "/home/dani/src/company-roles"), null);
+    assert.equal(evaluarReglas("trabaja en ~/src/company-roles", "/home/dani/src/company-roles/"), null);
+  });
+
+  it("otro repo de la misma casa sigue fuera, también con `~`", () => {
+    const r = evaluarReglas("revisa ~/src/x86-host-runtime/README.md", "/home/dani/src/company-roles");
+    assert.equal(r?.id, "D10");
+    assert.match(r!.motivo, /~\/src\/x86-host-runtime\/README\.md$/);   // el motivo enseña la ruta como la escribió
+  });
+
+  it("con un cwd fuera de /home, `~` no se expande: la ruta se compara como antes", () => {
+    assert.equal(evaluarReglas("revisa ~/src/x/README.md", "/srv/x")?.id, "D10");
+  });
+
+  it("con el cwd en la casa misma, `~/…` es suyo y `~/../otro` sale (18-11: la ruta se normaliza)", () => {
+    assert.equal(evaluarReglas("lee ~/k8s/x/README.md", "/home/dani"), null);
+    assert.equal(evaluarReglas("lee ~/../otro/x", "/home/dani")?.id, "D10");
+    assert.equal(evaluarReglas("lee /home/dani/../otro", "/home/dani")?.id, "D10");
+  });
+
+  it("las herramientas de la casa siguen libres desde cualquier cwd", () => {
+    assert.equal(evaluarReglas("~/.local/libexec/x86-host-runtime/company-aprobar fusionar o/r#3", "/home/dani/src/company-roles"), null);
+    assert.equal(evaluarReglas("edita ~/.local/libexec/x86-host-runtime/jira-epic-trigger.py", "/home/dani/src/company-roles")?.id, "D10");
+  });
+});
