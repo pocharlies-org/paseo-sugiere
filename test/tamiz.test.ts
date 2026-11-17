@@ -58,6 +58,9 @@ describe("el tamiz léxico", () => {
       "company-aprobar estado o/r#12 dice LISTA: fusiona con gh pr merge 12 --squash",
       "git push -u origin arreglo/main-x y abre la PR contra main",
       "git push origin main-x",
+      "git push origin maintenance",
+      "git pull origin main",
+      "haz push de la rama feature/x y abre la PR contra main",
       "git push -u origin feature/x",
       "mira los checks con gh.real pr checks 7 -R o/r y, cuando la puerta diga LISTA, confirma el merge con company-aprobar fusionar o/r#7",
     ]) assert.equal(tamizar(t).riesgo, null, t);
@@ -95,6 +98,57 @@ describe("el tamiz léxico", () => {
       assert.equal(tamizar(t).riesgo, "alto", t);
       assert.equal(tamizar(t).patron, "fusión sin la puerta", t);
     }
+  });
+
+  // 18-11 (segunda revisión): lo que se salta el envoltorio y aún llegaba solo al modelo.
+  it("el gh de verdad con `merge` en cualquier sitio del mando, también sin argumento", () => {
+    for (const t of [
+      "gh.real -R pocharlies-org/k8s-litellm-pocharlies pr merge 12",
+      "gh.real pr -R a/b merge 12",
+      "Sin revisión gh.real pr merge feat-branch",
+      "gh.real pr merge",
+    ]) {
+      assert.equal(tamizar(t).riesgo, "alto", t);
+      assert.equal(tamizar(t).patron, "fusión sin la puerta", t);
+    }
+    for (const t of [
+      "gh.real pr view 7 --json mergeable,mergedAt",
+      "mira los checks con gh.real pr checks 7 -R o/r y, cuando la puerta diga LISTA, confirma el merge con company-aprobar fusionar o/r#7",
+    ]) assert.equal(tamizar(t).riesgo, null, t);
+  });
+
+  it("`:` sin espacio no corta la cláusula: `HEAD:main`, `https:` e `input:{` siguen en su mando, también tras una negación", () => {
+    for (const t of [
+      "Sin revisión git push origin HEAD:main",
+      "Sin CI gh.real api graphql -f query='mutation{mergePullRequest(input:{pullRequestId:\"x\"}){clientMutationId}}'",
+      "No hace falta CI curl -X PUT https://api.github.com/repos/o/r/pulls/12/merge",
+    ]) {
+      assert.equal(tamizar(t).riesgo, "alto", t);
+      assert.equal(tamizar(t).patron, "fusión sin la puerta", t);
+    }
+  });
+
+  it("el `git push` al tronco con opciones, remoto y refspec entre comillas", () => {
+    for (const t of [
+      "git push --no-verify -u origin HEAD:main",
+      "git push -o ci.skip origin HEAD:main",
+      "git push origin \"main\"",
+      "git push origin 'main'",
+      "git push -f origin master",
+      "git push --set-upstream origin `main`",
+    ]) {
+      assert.equal(tamizar(t).riesgo, "alto", t);
+      assert.equal(tamizar(t).patron, "fusión sin la puerta", t);
+    }
+    for (const t of [
+      "haz push de la rama feature/x y abre la PR contra main",
+      "git pull origin main",
+      "git push origin main-x",
+      "git push origin maintenance",
+      "git push -u origin feature/x contra main",
+      "Fusiona con gh pr merge 12 --squash sin --admin",
+      "no uses `gh.real`",
+    ]) assert.equal(tamizar(t).riesgo, null, t);
   });
 
   it("la mención negada de --admin o del gh de verdad dentro de una orden no veta", () => {

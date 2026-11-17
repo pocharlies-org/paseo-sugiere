@@ -4,7 +4,7 @@ import { evaluarReglas } from "../service/rules.ts";
 import { cuerpoSugerencia } from "../service/residente.ts";
 import { CWD } from "./rules-fixtures.ts";
 import {
-  MODELO, RUTAS_PUERTA, SONDAS, VECES, autoenviaParaDani, casos, grabadas, huellaPuerta, huellaReglas, informe, jsonl, leerJson, plano,
+  FICHEROS_PUERTA, MODELO, SONDAS, configDelServicio, VECES, autoenviaParaDani, casos, grabadas, huellaPuerta, huellaReglas, informe, jsonl, leerJson, plano,
   puntua, reglaCae,
   type Resultado,
 } from "../eval/eval.ts";
@@ -81,9 +81,27 @@ describe("eval: la última corrida grabada de cada caso", () => {
       assert.equal(deCaso(caso.id)?.puerta, hoy, `${caso.id}: medido con otra puerta; lanza scripts/eval --vivo con todos los casos`);
   });
 
-  it("la huella de la puerta cubre la rúbrica, el tamiz, las reglas y la llamada al residente", () => {
-    assert.deepEqual(RUTAS_PUERTA.map((r) => r.split("/").at(-1)), ["juez.ts", "tamiz.ts", "rules.ts", "residente.ts"]);
+  it("la huella de la puerta cubre la rúbrica, el tamiz, las reglas, la llamada al residente, el servidor y el prompt del sugeridor", () => {
+    assert.deepEqual(FICHEROS_PUERTA, ["service/juez.ts", "service/tamiz.ts", "service/rules.ts", "service/residente.ts",
+      "service/server.ts", "shared/suggest.ts"]);
     assert.match(huellaPuerta(), /^[0-9a-f]{16}$/);
+  });
+
+  // 18-11 (segunda revisión): la corrida dice con qué configuración corría el servicio medido.
+  it("la última medida de cada caso graba la configuración del servicio medido", { skip: !ultima && "sin corridas grabadas" }, () => {
+    for (const caso of CASOS) {
+      const c = deCaso(caso.id)?.config as any;
+      assert.ok(c && typeof c.modelo_juez === "string" && typeof c.modelo_reserva === "string" && typeof c.brain?.modo === "string", caso.id);
+    }
+  });
+
+  it("de /v1/config solo se graban nombres y booleanos, ni URLs ni rutas", () => {
+    const c = configDelServicio({ modo: "sombra", modelo_juez: "j", modelo_reserva: "r", residente_url: "http://x.svc:4000",
+      clave_residente: true, brain: { modo: "off", url: "http://b.svc:8888", banco: "b", token: false },
+      clasificador: { pesos: false }, auditoria: { ruta: "/var/lib/x" }, token: false });
+    assert.deepEqual(c, { modo: "sombra", modelo_juez: "j", modelo_reserva: "r", clave_residente: true, brain: { modo: "off", token: false },
+      clasificador_pesos: false, token: false });
+    assert.doesNotMatch(JSON.stringify(c), /http|\/var\//);
   });
 });
 

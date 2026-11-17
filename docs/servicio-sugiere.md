@@ -191,7 +191,11 @@ Desde el 18-11 (revisión de seguridad) el tamiz también ve la API de merge con
 de la auditoría lo traían): son lo que de verdad se salta el envoltorio. La negación ya no se lleva la orden que la sigue: las
 cláusulas se cortan también en `!` `?` `—` `–` `&&` `||` y « y », una cláusula negada que trae el mando concreto (el gh de verdad con
 su PR, la ruta de merge, `pr merge <n> … --admin`) se mira igual, y la mención negada de la bandera dentro de una orden («gh pr
-merge 12 --squash sin --admin», «no uses `gh.real`») no veta.
+merge 12 --squash sin --admin», «no uses `gh.real`») no veta. Segunda revisión (18-11): el gh de verdad veta con `merge` en
+cualquier sitio de su mando (`gh.real -R o/r pr merge 12`, `gh.real pr merge` sin argumento); `:` corta solo seguido de espacio
+(no rompe `HEAD:main`, `https:` ni `input:{`); el `git push` al tronco admite hasta seis opciones (`--no-verify`, `-o ci.skip`,
+`-u`, `-f`), un remoto y el refspec entre comillas; y una cláusula negada que trae cualquiera de esos mandos se mira igual.
+Falso positivo que se deja, por prudente: «el endpoint /pulls/{n}/merge no se usa» se veta.
 
 | Paso | Condición | Qué pasa |
 |---|---|---|

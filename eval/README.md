@@ -33,7 +33,9 @@ y correos, así que las claves son ficticias con letra tras el guion (`ALARMA-H1
 
 Un caso pasa si pasa la mayoría de sus corridas. Una corrida parcial (`--caso`) mide solo los casos nombrados, para un cambio que
 toca a unos pocos sin repetir la batería entera; `npm test` reproduce cada caso con la última corrida que lo midió. Cada corrida
-graba la huella del código de la puerta (`service/juez.ts`, `tamiz.ts`, `rules.ts`, `residente.ts`) y `npm test` exige la de hoy en
+graba la huella del código de la puerta (`service/juez.ts`, `tamiz.ts`, `rules.ts`, `residente.ts`, `server.ts` y
+`shared/suggest.ts`) y la configuración que el servicio medido da en `GET /v1/config` (modelos del juez y de reserva, modo del
+brain, booleanos de claves; ni URLs ni rutas), y `npm test` exige la huella de hoy en
 la última medida de cada caso: cambiar la puerta obliga a volver a medir todos los casos. El informe compara cada caso con la
 última corrida anterior que lo midió. El informe repuntúa la corrida anterior con los casos de hoy y lista los que
 voltean (▲ a pasa, ▼ a falla). En cada corrida se comprueban las reglas que nunca se rompen: `PARA DANI` nunca se autoenvía

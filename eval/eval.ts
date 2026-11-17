@@ -16,8 +16,11 @@ const DIR = new URL(".", import.meta.url).pathname;
 const DIR_CASOS = join(DIR, "casos");
 const DIR_RESULTADOS = join(DIR, "resultados");
 const RUTA_REGLAS = join(DIR, "..", "service", "rules.ts");
-/** El código de la puerta: la rúbrica y el prompt del juez (juez.ts), el tamiz, las reglas y la llamada al residente. */
-export const RUTAS_PUERTA = ["juez.ts", "tamiz.ts", "rules.ts", "residente.ts"].map((f) => join(DIR, "..", "service", f));
+/** El código de la puerta: la rúbrica y el prompt del juez (juez.ts), el tamiz, las reglas, la llamada al residente, el servidor
+ * que los une (server.ts) y el prompt del sugeridor (shared/suggest.ts). */
+export const FICHEROS_PUERTA = ["service/juez.ts", "service/tamiz.ts", "service/rules.ts", "service/residente.ts", "service/server.ts",
+  "shared/suggest.ts"];
+export const RUTAS_PUERTA = FICHEROS_PUERTA.map((f) => join(DIR, "..", f));
 export const VECES = 3;
 const PARALELO = 4;
 const SID = "eval-sugeridor"; // así se distinguen sus líneas en la auditoría del servicio
@@ -43,7 +46,7 @@ type Caso = {
 type Veredicto = { ok?: boolean; riesgo?: string; motivo?: string; via?: string; error?: string };
 type Corrida = { sugerencia?: string; modelo?: string; ms: number; veredicto?: Veredicto | null; error?: string; pasa?: boolean; motivo?: string };
 export type Resultado = { fecha: string; servicio: string; veces: number; casos: Record<string, Corrida[]>; reglas: Record<string, string>;
-  parcial?: boolean; puerta?: string };
+  parcial?: boolean; puerta?: string; config?: Record<string, unknown> };
 
 export const leerJson = (ruta: string) => JSON.parse(readFileSync(ruta, "utf8"));
 
@@ -132,6 +135,22 @@ async function post(base: string, ruta: string, cuerpo: unknown, ms: number): Pr
   return JSON.parse(texto);
 }
 
+async function get(base: string, ruta: string, ms: number): Promise<any> {
+  const token = process.env.SUGIERE_TOKEN;
+  const r = await fetch(`${base}${ruta}`, { signal: AbortSignal.timeout(ms), headers: token ? { authorization: `Bearer ${token}` } : {} });
+  const texto = await r.text();
+  if (!r.ok) throw new Error(`${ruta} respondió ${r.status}: ${texto.slice(0, 160)}`);
+  return JSON.parse(texto);
+}
+
+/** Lo que el servicio medido dice de su configuración (`GET /v1/config`), solo nombres y booleanos: el modelo del juez, el de
+ * reserva, el modo del brain, si tiene la clave del residente y el token (18-11). URLs y rutas no se graban (el repo es público);
+ * /v1/config no da la versión del código, así que la huella de la puerta es la del checkout que mide. */
+export function configDelServicio(c: any): Record<string, unknown> {
+  return { modo: c?.modo, modelo_juez: c?.modelo_juez, modelo_reserva: c?.modelo_reserva, clave_residente: c?.clave_residente,
+    brain: { modo: c?.brain?.modo, token: c?.brain?.token }, clasificador_pesos: c?.clasificador?.pesos, token: c?.token };
+}
+
 /** El error con su causa: «fetch failed» solo no dice si fue un reset, un timeout o un pod que se iba. */
 const fallo = (e: unknown) => {
   const { message, cause } = e as Error & { cause?: { code?: string; message?: string } };
@@ -157,6 +176,7 @@ async function corrida(base: string, caso: Caso, turno: string): Promise<Corrida
 }
 
 async function vivo(base: string, fecha: string, lista: Caso[]): Promise<Resultado> {
+  const config = await get(base, "/v1/config", 10_000).then(configDelServicio, (e) => ({ error: fallo(e) }));
   const tareas = lista.flatMap((caso) => Array.from({ length: VECES }, (_, i) => ({ caso, i })));
   const salida: Record<string, Corrida[]> = Object.fromEntries(lista.map((c) => [c.id, []]));
   let siguiente = 0;
@@ -172,7 +192,7 @@ async function vivo(base: string, fecha: string, lista: Caso[]): Promise<Resulta
   for (const [id, sugerencia] of Object.entries(SONDAS))
     reglas[id] = await post(base, "/v1/verdict", { sid: SID, turno: `${fecha}-sonda-${id}`, sugerencia, contexto: { cwd: CWD_SONDAS } }, 90_000)
       .then((v) => (v.via === "reglas" ? v.motivo : `${v.via}: ${v.motivo}`), (e) => `error: ${(e as Error).message}`.slice(0, 200));
-  return { fecha, servicio: base, veces: VECES, puerta: huellaPuerta(), casos: salida, reglas };
+  return { fecha, servicio: base, veces: VECES, puerta: huellaPuerta(), config, casos: salida, reglas };
 }
 
 // ---- El informe: la puntuación, y sobre todo qué casos voltean respecto a la corrida anterior.
