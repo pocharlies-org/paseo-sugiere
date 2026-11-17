@@ -13,7 +13,6 @@
     "client/",
     "server/",
     "shared/",
-    "scripts/autodeploy.sh",
     "docs/media/"
   ],
   "scripts": {

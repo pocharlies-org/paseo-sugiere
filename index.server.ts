@@ -1,20 +1,13 @@
-import { spawn } from "node:child_process";
-import { existsSync } from "node:fs";
-import { homedir } from "node:os";
-import { join } from "node:path";
+import { readdirSync } from "node:fs";
+import { basename, dirname } from "node:path";
 import type { PluginHandlerContext, PluginServerContext } from "@getpaseo/plugin/server";
-import { autopilotGoal, autopilotStart, autopilotStop, suggestFeedback, suggestForce, suggestGet } from "./shared/contract.ts";
+import { autopilotGoal, autopilotStart, autopilotStop, suggestFeedback, suggestForce, suggestWatch, type EstadoAgente } from "./shared/contract.ts";
 import { suggestSettings, type SuggestValues } from "./shared/settings.ts";
-import { estadoPareja } from "./server/pares.ts";
+import { registro, rutaPorDefecto } from "./server/pares.ts";
 import { apagarPar } from "./server/supervisor.ts";
 import { arrancarEnPlazo, sesionConGoal } from "./server/goal.ts";
 import * as suggest from "./server/suggest.ts";
-
-// What is merged to trunk is what runs: the plugin checks GitHub every 5 min and, on a new commit, deploys that tree and reloads
-// itself (scripts/autodeploy.sh — no clone, no credentials, nothing to remember after a merge). The path is the install layout that
-// scripts/deploy.sh creates, not `import.meta.url`: the host loads the server without a usable module URL (medido 17-10: «Invalid
-// URL» at load, the plugin came down).
-const AUTODEPLOY = join(homedir(), ".local", "share", "paseo-sugiere", "paseo-plugin", "current", "scripts", "autodeploy.sh");
+import { observa, vigilia } from "./server/vigilia.ts";
 
 // The quiet window opens when a turn ends completed and closes with anything new; the answer comes from a separate call with the session's model, never from the session itself.
 export default function contribute(server: PluginServerContext) {
@@ -35,39 +28,73 @@ export default function contribute(server: PluginServerContext) {
     suggest.arm(agent.id, context);
   });
   server.on("agent.turn_started", ({ agent }) => suggest.cancel(agent.id));
-  // The ✦'s autopilot state is the supervisor's pair for this agent, read from the registry on every poll. `auditor` starts
-  // as B's id; the title comes from the agent list, refreshed at most once a minute and never while answering.
-  let titulos: { at: number; map: Map<string, string> } = { at: 0, map: new Map() };
-  const titulosDe = (paseo: PluginHandlerContext["paseo"]) => {
-    if (Date.now() - titulos.at < 60_000) return;
-    titulos.at = Date.now();
-    void paseo.agents.list({ page: { limit: 200 } }).then(
-      ({ entries }) => { titulos = { at: Date.now(), map: new Map(entries.map(({ agent }) => [agent.id, agent.title ?? ""])) }; },
-      () => {},
-    );
+  // What each pill shows is pushed to the apps: the server marks an agent when its suggestion state changes
+  // (suggest.ts), when the supervisor rewrites the pairs registry or paseo-plan an anchor (one inotify watch per directory), and
+  // each app's held `suggest.watch` gets only what moved. `auditor` is B's title when its session was found, else its id.
+  const rutaPares = rutaPorDefecto();
+  let pares = registro(rutaPares);
+  const titulos = new Map<string, string>();
+  const preguntados = new Set<string>(); // B's title is set when it is created: each id is looked up once
+  let paseo: PluginHandlerContext["paseo"] | null = null;
+  const lee = (agentId: string): EstadoAgente => {
+    const autopilot = pares.de(agentId);
+    const titulo = autopilot.auditor ? titulos.get(autopilot.auditor) : undefined;
+    return {
+      text: suggest.get(agentId),
+      ...suggest.state(agentId),
+      ...suggest.anchor(agentId),
+      autopilot: titulo ? { ...autopilot, auditor: titulo } : autopilot,
+      plan: suggest.planAnchor(agentId),
+    };
   };
-  server.handle(suggestGet, (input, context) => {
-    const autopilot = estadoPareja(input.agentId);
-    if (autopilot.auditor) {
-      titulosDe(context.paseo);
-      const titulo = titulos.map.get(autopilot.auditor);
-      if (titulo) autopilot.auditor = titulo;
+  const vigia = vigilia(lee);
+  suggest.alCambiar(vigia.marca);
+  const nombraAuditores = () => {
+    const nuevos = pares.ids.map((id) => pares.de(id).auditor).filter((b): b is string => !!b && !preguntados.has(b));
+    if (!paseo || nuevos.length === 0) return;
+    for (const b of nuevos) preguntados.add(b);
+    void paseo.agents.list({ page: { limit: 200 } }).then(({ entries }) => {
+      for (const { agent } of entries) if (nuevos.includes(agent.id) && agent.title) titulos.set(agent.id, agent.title);
+      for (const id of pares.ids) vigia.marca(id);
+    }, () => {});
+  };
+  const releePares = () => {
+    const antes = pares.ids;
+    pares = registro(rutaPares);
+    for (const id of new Set([...antes, ...pares.ids])) vigia.marca(id); // a pair that left the registry goes back to sin-par
+    nombraAuditores();
+  };
+  const anclaDe = (nombre: string | null) => nombre?.match(/^anchor-(.+)\.json$/)?.[1];
+  const anclas = (): string[] => {
+    try {
+      return readdirSync(suggest.ANCHOR_DIR);
+    } catch {
+      return [];
     }
-    return { text: suggest.get(input.agentId), ...suggest.state(input.agentId), ...suggest.anchor(input.agentId), autopilot, plan: suggest.planAnchor(input.agentId) };
+  };
+  for (const id of [...pares.ids, ...anclas().map(anclaDe)]) if (id) vigia.marca(id);
+  const vigilantes = [
+    observa(dirname(rutaPares), (nombre) => {
+      if (nombre === null || nombre === basename(rutaPares)) releePares();
+    }),
+    observa(suggest.ANCHOR_DIR, (nombre) => {
+      const id = anclaDe(nombre);
+      if (id) vigia.marca(id);
+    }),
+  ];
+  server.handle(suggestWatch, (input, context) => {
+    paseo = context.paseo;
+    nombraAuditores();
+    return vigia.espera(input.since);
   });
   server.handle(autopilotStart, (input, context) => arrancarEnPlazo(input, context.paseo));
   server.handle(autopilotStop, (input) => apagarPar(input.agentId));
   server.handle(autopilotGoal, (input, context) => sesionConGoal(input, context.paseo));
   server.handle(suggestFeedback, (input) => suggest.feedback(input.agentId, input.verdict));
   server.handle(suggestForce, (input, context) => ({ started: suggest.force(input.agentId, context) }));
-  const check = () => spawn("bash", [AUTODEPLOY], { detached: true, stdio: "ignore" }).unref();
-  let autodeploy: ReturnType<typeof setInterval> | undefined;
-  if (existsSync(AUTODEPLOY)) {
-    check(); // a merge that landed while the host was down is picked up on start
-    autodeploy = setInterval(check, 5 * 60_000);
-  } else console.warn(`suggest: no autodeploy script at ${AUTODEPLOY}`);
   return () => {
-    if (autodeploy) clearInterval(autodeploy);
     suggest.dispose();
+    for (const vigilante of vigilantes) vigilante?.close();
+    vigia.cierra();
   };
 }

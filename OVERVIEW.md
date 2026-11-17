@@ -63,14 +63,6 @@ This plugin was built for one setup and is published as it runs there. Read this
   `insertText`, with an `input` event as the fallback), so Paseo's own handlers store the draft as if you had typed it. It
   looks for the box of the pane the pill sits in and does nothing if that pane holds more than one, if its own box is not displayed
   (the window is behind), or if the pill itself is off screen.
-- **Self-update, on the author's machine only.** `index.server.ts` spawns `scripts/autodeploy.sh` at start and every five
-  minutes, but only if `~/.local/share/paseo-sugiere/paseo-plugin/current/scripts/autodeploy.sh` exists. `scripts/deploy.sh`
-  creates that folder, and neither the registry nor Paseo's installer ever runs it, so on an installed copy the check fails
-  (one warning line in the plugin log) and nothing else happens. Where it does exist, the script runs `git ls-remote` against
-  `https://github.com/pocharlies-org/paseo-sugiere` and, when `main` has a commit that is not deployed yet, shallow-clones it
-  and runs that clone's `scripts/deploy.sh`: it copies the files listed in `package.json` into
-  `~/.local/share/paseo-sugiere/paseo-plugin/<version>-<sha>/`, points `current` at that folder and has the Paseo CLI reload the
-  plugin from there. It logs to `~/.local/state/paseo-sugiere/autodeploy.log` and sends no data, only the git request.
 
 ## Known limits
 

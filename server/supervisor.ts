@@ -45,7 +45,7 @@ async function llamar(metodo: "POST" | "DELETE", ruta: string, cabecera: string,
 const motivo = ({ status, out }: { status: number; out: Record<string, unknown> }) =>
   typeof out.error === "string" && out.error ? out.error.slice(0, 200) : `el supervisor respondió ${status}`;
 
-/** «Empezar» in the popover. The body is the contract's: A with its cwd and title, the objective (the anchored plan's key,
+/** «Empezar» in the popover. The body is the contract's: A with its cwd, workspace and title, the objective (the anchored plan's key,
  * or the prompt the user typed), the auditor's model and `origen: "paseo"`. A 409 (A already paired, A is a B, or the rutador
  * holds A) and a 503 (B could not be created) come back as the supervisor's own reason. */
 export async function arrancarPar(
@@ -59,7 +59,8 @@ export async function arrancarPar(
   if (input.modo === "prompt" && !input.texto?.trim()) return { ok: false, error: "escribe el objetivo en Prompt" };
   const objetivo = input.modo === "plan" ? { modo: "plan", key: plan!.key } : { modo: "prompt", texto: input.texto!.trim() };
   const cuerpo = {
-    a: { id: input.agentId, tipo: "paseo", cwd: agent.cwd, ...(agent.title ? { titulo: agent.title } : {}) },
+    // The workspace of A: the supervisor creates the auditor B there, right after A and named after it (Dani, 16-11).
+    a: { id: input.agentId, tipo: "paseo", cwd: agent.cwd, workspace: agent.workspaceId, ...(agent.title ? { titulo: agent.title } : {}) },
     objetivo,
     ...(input.modelo ? { modelo: input.modelo } : {}),
     origen: "paseo",

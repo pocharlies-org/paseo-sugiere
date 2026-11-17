@@ -29,13 +29,14 @@ al modelo de la sesión, sin compartir la caché de la sesión.
   `file.autopilot.pares.v1`, productor el supervisor de la compañía): `{version:1, pares:{[a_id]: Par}}`. Solo lectura: ausente =
   sin pareja; ilegible / no-JSON / v1 incompleto = estado desconocido sin romper la píldora. El plugin nunca escribe este fichero.
 - `server/supervisor.ts` — la mitad del plugin de la API de autopilot del supervisor (contrato `http.supervisor.autopilot.v1`):
-  `POST /autopilot/par` (cuerpo del contrato: id/cwd/título de A, objetivo — la `key` del ancla de paseo-plan o un prompt —,
+  `POST /autopilot/par` (cuerpo del contrato: id/cwd/workspace/título de A, objetivo — la `key` del ancla de paseo-plan o un prompt —,
   modelo del auditor, `origen: "paseo"`) y `DELETE /autopilot/par/<a_id>`, con `X-Company-Token` de
   `~/.company/jira-trigger/secret` y base `http://company.paseo.svc.cluster.local:19911` (env `SUPERVISOR_URL`). La respuesta se
   convierte en `{ok, error?}` y el error se enseña una vez en el popover. El plugin no pilota ni decide: eso es de la sesión
   auditora B, que crea el supervisor.
-- `client/suggest-pill.tsx` — píldora en el composer; sondea 10 s solo agentes
-  `idle`; el texto se tira al salir de idle, al enviar y al pasarlo al prompt. Su icono es el ancla del puente. Nada entra en el prompt
+- `client/suggest-pill.tsx` — píldora en el composer; no pregunta nunca con reloj: una sola llamada `suggest.watch`
+  retenida por app, que el servidor contesta cuando cambia algún agente y que se reabre al responder (tras un fallo, al siguiente
+  cambio de turno o snapshot de agentes); el popover abierto del autopilot oye su pareja por suscripción. El texto se tira al salir de idle, al enviar y al pasarlo al prompt. Su icono es el ancla del puente. Nada entra en el prompt
   por su cuenta: una generación terminada se queda en la píldora de su ventana hasta que se pulsa su botón (Dani 02-11). El popover intenta
   primero el puente y solo pinta su tarjeta si no pudo: el propio campo más un botón pequeño de enviar a su derecha, sin caja ni
   bordes y con la altura del texto (el popover del host ya enmarca).
@@ -51,18 +52,18 @@ al modelo de la sesión, sin compartir la caché de la sesión.
   `data-composer-input` produce el mismo respaldo, nunca una escritura en otro agente. **Retirada**: se borra cuando la SDK exponga el
   borrador (discusión getpaseo/paseo#4688), o si dos updates seguidos de Paseo lo rompen sin esa API.
 - `index.server.ts` / `index.client.tsx` — enganche a los hooks `agent.turn_ended` /
-  `agent.turn_started`, al RPC `suggest.get` y al ajuste `enabled`
+  `agent.turn_started`, al RPC `suggest.watch` y al ajuste `enabled`
   (`registerSettings`, host): al desactivar, `setEnabled(false)` tira pendientes y mostradas y
   `arm` deja de programar generaciones; `quietSeconds` es la ventana de silencio. La instrucción del modelo no
   pasa por aquí: vive solo en el servicio (decisión 5). Con «Garantizar plan» (`anchor-<agentId>.json` de paseo-plan con
   `guard` y criterios) `arm` genera al acabar el turno, sin ventana, y manda el ancla en `contexto.plan`; `suggest.feedback` cuenta
   los «no es esto» (tres seguidos callan la ✦ hasta un clic). El autopilot ya no cuelga de aquí (14-11-2026): con pareja viva la
   píldora pinta el estado del registro y la única generación por turno la decide el supervisor; `agent.turn_ended` va a `arm` y
-  `agent.turn_started` a `cancel`, como sin autopilot. El RPC `suggest.get` añade la pareja leída por `pares.ts` (con el auditor
-  mejorado al título de B vía `paseo.agents.list`) y el plan del ancla para el formulario; `autopilot.start` y `autopilot.stop`
+  `agent.turn_started` a `cancel`, como sin autopilot. `server/vigilia.ts` guarda el estado de cada píldora (sugerencia, último
+  forzado, pareja leída por `pares.ts` con el auditor mejorado al título de B vía `paseo.agents.list` una vez por id, y plan del ancla)
+  y retiene `suggest.watch` hasta 20 s (bajo los 30 s del host): `suggest.ts` avisa de cada cambio, y el registro de parejas y las
+  anclas de paseo-plan llegan por un inotify no recursivo de su directorio; solo despierta si cambia lo que pinta una píldora. `autopilot.start` y `autopilot.stop`
   atienden el formulario y llaman a `supervisor.ts`.
-  Arranca además `scripts/autodeploy.sh` cada 5 min: el plugin se redespliega solo cuando el tronco de GitHub
-  trae un commit nuevo (`deploy.sh` acepta un árbol sin git por `DEPLOY_SHA`).
 - `client/suggest-settings.tsx` — pantalla de ajustes propia (`addSettingsScreen` + `useSettings`):
   interruptor y ventana de silencio (los topes del autopilot murieron con su bucle: los pasos los decide el supervisor); el documento compartido está en `shared/settings.ts`.
 
@@ -78,7 +79,7 @@ deprecada desde el 14-11-2026 (el plugin dejó de llamarla: el autopilot es la s
 
 ## Riesgos conocidos
 
-- `requirements.paseo` pide `>=0.15.4`, sin tope: `deploy.sh` no despliega en un host más viejo, pero un Paseo
+- `requirements.paseo` pide `>=0.15.4`, sin tope: el host lo comprueba al instalar o actualizar, pero un Paseo
   nuevo que rompa el SDK solo se ve al cargar el plugin; el tipado y los tests van contra 0.15.4.
 - El ahorro por KV-cache (APC) es la hipótesis de diseño, no una medición en vivo.
 
@@ -86,5 +87,6 @@ deprecada desde el 14-11-2026 (el plugin dejó de llamarla: el autopilot es la s
 
 El repo es público y está listado en el registro de Paseo (paseo.sh/plugins): su ficha es `plugins/pocharlies-org/paseo-sugiere.json` en
 getpaseo/plugins y **fija un commit**. Fusionar aquí no cambia la ficha: las actualizaciones de un plugin por Git son manuales (PR nuevo al
-registro con el commit nuevo). El autodeploy de arriba es de esta casa y no forma parte de lo que instala el registro. `OVERVIEW.md` y las
+registro con el commit nuevo). En esta casa un merge a `main` se despliega solo en el daemon de paseo-0: el supervisor de la compañía recibe el PR fusionado por Synapse y
+ejecuta `paseo plugin update paseo-sugiere --ref <sha>` (x86-host-runtime); el plugin no sondea nada. `OVERVIEW.md` y las
 capturas de `docs/media/` son lo que muestra la ficha; si cambia la interfaz de la píldora, se rehacen.

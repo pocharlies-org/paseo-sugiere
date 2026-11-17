@@ -17,25 +17,43 @@ const par = z.object({
   modelo: z.string().optional(),
 });
 
-/** The next-message suggestion of an agent, plus the state of the last force: the pill spins on `pending`, shows `error` once,
- * and says «nada que sugerir» on `nada` (the service answered empty on purpose: not a failure, Dani 15-11).
- * With «Garantizar plan» also what it pursues (`en_plan`, the badge) and the criterion, and `muted` after three «no es esto».
- * And the agent's autopilot pair, which paints the ✦ (yellow and turning while the auditor pilots it, red when a person is
- * needed, green when delivered), and the plan the popover can link (`plan`: the anchor's ticket and criterion count). */
-export const suggestGet = defineRpc({
-  name: "suggest.get",
-  input: z.object({ agentId: z.string().min(1).max(64) }).strict(),
-  output: z.object({
-    text: z.string().nullable(),
-    pending: z.boolean(),
-    error: z.string().nullable(),
-    nada: z.boolean(),
-    en_plan: z.string().nullable(),
-    criterio: z.string().nullable(),
-    muted: z.boolean(),
-    autopilot: par,
-    plan: z.object({ key: z.string(), criterios: z.number().int() }).nullable(),
-  }),
+/** What the pill of one agent shows: the next-message suggestion, plus the state of the last force — the pill spins on
+ * `pending`, shows `error` once, and says «nada que sugerir» on `nada` (the service answered empty on purpose: not a failure,
+ * Dani 15-11). With «Garantizar plan» also what it pursues (`en_plan`, the badge) and the criterion, and `muted` after three
+ * «no es esto». And the agent's autopilot pair, which paints the ✦ (yellow and turning while the auditor pilots it, red when a
+ * person is needed, green when delivered), and the plan the popover can link (`plan`: the anchor's ticket and criterion count). */
+const estadoAgente = z.object({
+  text: z.string().nullable(),
+  pending: z.boolean(),
+  error: z.string().nullable(),
+  nada: z.boolean(),
+  en_plan: z.string().nullable(),
+  criterio: z.string().nullable(),
+  muted: z.boolean(),
+  autopilot: par,
+  plan: z.object({ key: z.string(), criterios: z.number().int() }).nullable(),
+});
+export type EstadoAgente = z.infer<typeof estadoAgente>;
+/** An agent the server has nothing for: no suggestion, no pair, no plan. Same key order as the server builds, so it compares as JSON. */
+export const ESTADO_VACIO: EstadoAgente = {
+  text: null,
+  pending: false,
+  error: null,
+  nada: false,
+  en_plan: null,
+  criterio: null,
+  muted: false,
+  autopilot: { estado: "sin-par", motivo: "" },
+  plan: null,
+};
+
+/** The pills' state, pushed and never polled: the server holds the call until some agent's state changes, or the hold
+ * expires (empty answer at the same version), and answers only the agents that changed after `since`. `completo` — first call,
+ * or a `since` from before the plugin (re)started — brings every agent with something to show; the rest are `ESTADO_VACIO`. */
+export const suggestWatch = defineRpc({
+  name: "suggest.watch",
+  input: z.object({ since: z.number().int() }).strict(),
+  output: z.object({ version: z.number().int(), completo: z.boolean(), agentes: z.record(z.string(), estadoAgente) }),
 });
 
 /** «Empezar» in the ✦'s popover: the server POSTs `/autopilot/par` to the supervisor (`http.supervisor.autopilot.v1`), which
@@ -86,7 +104,7 @@ export const suggestFeedback = defineRpc({
 });
 
 /** Start the suggestion now, without the quiet window: the pill's force click (Dani 19-10). Returns immediately — the answer
- * can outlive the host's RPC timeout (60 s in @getpaseo/client), so the client polls for it with suggestGet. */
+ * can outlive the host's RPC timeout — and arrives through `suggest.watch` when the generation settles. */
 export const suggestForce = defineRpc({
   name: "suggest.force",
   input: z.object({ agentId: z.string().min(1).max(64) }).strict(),
