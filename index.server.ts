@@ -1,7 +1,5 @@
-import { spawn } from "node:child_process";
-import { existsSync, readdirSync } from "node:fs";
-import { homedir } from "node:os";
-import { basename, dirname, join } from "node:path";
+import { readdirSync } from "node:fs";
+import { basename, dirname } from "node:path";
 import type { PluginHandlerContext, PluginServerContext } from "@getpaseo/plugin/server";
 import { autopilotGoal, autopilotStart, autopilotStop, suggestFeedback, suggestForce, suggestWatch, type EstadoAgente } from "./shared/contract.ts";
 import { suggestSettings, type SuggestValues } from "./shared/settings.ts";
@@ -10,12 +8,6 @@ import { apagarPar } from "./server/supervisor.ts";
 import { arrancarEnPlazo, sesionConGoal } from "./server/goal.ts";
 import * as suggest from "./server/suggest.ts";
 import { observa, vigilia } from "./server/vigilia.ts";
-
-// What is merged to trunk is what runs: the plugin checks GitHub every 5 min and, on a new commit, deploys that tree and reloads
-// itself (scripts/autodeploy.sh — no clone, no credentials, nothing to remember after a merge). The path is the install layout that
-// scripts/deploy.sh creates, not `import.meta.url`: the host loads the server without a usable module URL (medido 17-10: «Invalid
-// URL» at load, the plugin came down).
-const AUTODEPLOY = join(homedir(), ".local", "share", "paseo-sugiere", "paseo-plugin", "current", "scripts", "autodeploy.sh");
 
 // The quiet window opens when a turn ends completed and closes with anything new; the answer comes from a separate call with the session's model, never from the session itself.
 export default function contribute(server: PluginServerContext) {
@@ -100,14 +92,7 @@ export default function contribute(server: PluginServerContext) {
   server.handle(autopilotGoal, (input, context) => sesionConGoal(input, context.paseo));
   server.handle(suggestFeedback, (input) => suggest.feedback(input.agentId, input.verdict));
   server.handle(suggestForce, (input, context) => ({ started: suggest.force(input.agentId, context) }));
-  const check = () => spawn("bash", [AUTODEPLOY], { detached: true, stdio: "ignore" }).unref();
-  let autodeploy: ReturnType<typeof setInterval> | undefined;
-  if (existsSync(AUTODEPLOY)) {
-    check(); // a merge that landed while the host was down is picked up on start
-    autodeploy = setInterval(check, 5 * 60_000);
-  } else console.warn(`suggest: no autodeploy script at ${AUTODEPLOY}`);
   return () => {
-    if (autodeploy) clearInterval(autodeploy);
     suggest.dispose();
     for (const vigilante of vigilantes) vigilante?.close();
     vigia.cierra();
