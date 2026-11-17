@@ -3,6 +3,8 @@
 //
 // El texto llega normalizado (NFKC, sin espacios de borde) y se juzga entero, también dentro de bloques de código.
 
+import { posix } from "node:path";
+
 export type Riesgo = "ninguno" | "bajo" | "alto" | "dinero";
 export type Regla = { id: string; riesgo: Riesgo; motivo: string; patrones: RegExp[]; excluye?: RegExp };
 
@@ -103,10 +105,11 @@ function fueraDeAmbito(texto: string, cwd: string): string | null {
   const base = cwd.endsWith("/") ? cwd : `${cwd}/`;
   for (const m of texto.matchAll(RUTA)) {
     const ruta = m[1];
-    const absoluta = expandir(ruta, cwd);   // el prefijo se compara entero: `~/repo-otro` no es `~/repo`
+    // el prefijo se compara entero (`~/repo-otro` no es `~/repo`) y normalizado: `~/repo/../otro` sale del cwd (18-11)
+    const absoluta = posix.normalize(expandir(ruta, cwd));
     if (absoluta === cwd || absoluta.startsWith(base) || absoluta === cwd.replace(/\/$/, "")) continue;
     if (/^\/(home\/[\w.-]+)?$/.test(ruta)) continue; // la casa entera no es una ruta de trabajo
-    if (HERRAMIENTAS.test(ruta)) continue;
+    if (HERRAMIENTAS.test(absoluta)) continue;
     return ruta;
   }
   return null;

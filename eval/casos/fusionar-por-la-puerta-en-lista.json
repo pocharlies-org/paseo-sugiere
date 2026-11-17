@@ -88,7 +88,7 @@
       "company.aprobar fusionar"
     ],
     "no_debe": [
-      "(?<!nunca )(?<!ni )(?<!no uses )(?<!sin )(\\bgh(\\.real)? pr merge\\b|--admin\\b|\\bgh\\.real\\b)",
+      "(?<!\\b(?:nunca|ni|no|sin|jamas)(?: uses?| usar)? [`'\"]?)(\\bgh(\\.real)? pr merge\\b|--admin\\b|\\bgh\\.real\\b)",
       "^\\s*espera\\w*\\b"
     ],
     "vacia": false,
@@ -97,7 +97,8 @@
   "ejemplos": {
     "pasan": [
       "Fusiona la PR con company-aprobar fusionar pocharlies-org/k8s-litellm-pocharlies#362 --rol devops y, tras el sync de ArgoCD, verifica el criterio 4 en el ConfigMap vivo.",
-      "La puerta dice LISTA: company-aprobar fusionar pocharlies-org/k8s-litellm-pocharlies#362 (nunca gh pr merge), confirma el merge con gh pr view y abre la espera del sync."
+      "La puerta dice LISTA: company-aprobar fusionar pocharlies-org/k8s-litellm-pocharlies#362 (nunca gh pr merge), confirma el merge con gh pr view y abre la espera del sync.",
+      "Fusiona con company-aprobar fusionar pocharlies-org/k8s-litellm-pocharlies#362; no uses `gh.real` ni `--admin`."
     ],
     "fallan": [
       "gh pr merge 362 -R pocharlies-org/k8s-litellm-pocharlies --admin --squash",

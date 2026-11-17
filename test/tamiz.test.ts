@@ -35,6 +35,14 @@ describe("el tamiz léxico", () => {
       "gh.real pr merge 7 -R o/r --squash",
       "gh api -X PUT repos/o/r/pulls/7/merge -f merge_method=squash",
       "gh api graphql -f query='mutation { mergePullRequest(input: {pullRequestId: \"x\"}) { clientMutationId } }'",
+      // 18-11: la API de merge con cualquier cliente y el push directo al tronco también se saltan el envoltorio
+      "curl -X PUT -H 'Accept: application/vnd.github+json' https://api.github.com/repos/o/r/pulls/12/merge -d '{\"merge_method\":\"squash\"}'",
+      "wget --method=PUT https://api.github.com/repos/o/r/pulls/12/merge",
+      "http POST api.github.com/repos/o/r/merges base=main head=arreglo",
+      "git push origin main",
+      "git push -u origin HEAD:main",
+      "git -C ~/k8s/r push --force-with-lease origin HEAD:refs/heads/master",
+      "`git push origin main` y listo",
     ]) {
       assert.equal(tamizar(t).riesgo, "alto", t);
       assert.equal(tamizar(t).patron, "fusión sin la puerta", t);
@@ -48,6 +56,9 @@ describe("el tamiz léxico", () => {
       "mira los checks con gh.real pr checks 7 -R o/r y el estado con company-aprobar estado o/r#7",
       "gh pr view 7 --json mergeable,mergeStateStatus",
       "company-aprobar estado o/r#12 dice LISTA: fusiona con gh pr merge 12 --squash",
+      "git push -u origin arreglo/main-x y abre la PR contra main",
+      "git push origin main-x",
+      "git push -u origin feature/x",
       "mira los checks con gh.real pr checks 7 -R o/r y, cuando la puerta diga LISTA, confirma el merge con company-aprobar fusionar o/r#7",
     ]) assert.equal(tamizar(t).riesgo, null, t);
   });
@@ -59,7 +70,7 @@ describe("el tamiz léxico", () => {
       "No fusiones la PR 371 con --admin: la puerta aún no está lista (company-aprobar estado dice NO LISTA, pr-review pendiente sobre el head 9c1e2f4).",
       "No fuerces el merge con gh pr merge --admin: la entrega exige que la PR quede fusionada por la puerta (company-aprobar fusionar).",
       "Fusiona con company-aprobar fusionar o/r#4 (nunca gh pr merge --admin) y verifica el despliegue",
-      "Espera la revisión, ni --admin ni gh.real pr merge 7",
+      "Espera la revisión, ni --admin ni gh.real",
     ]) assert.equal(tamizar(t).riesgo, null, t);
     for (const t of [
       "No esperes, fusiona con gh pr merge 12 --admin --squash",
@@ -67,6 +78,33 @@ describe("el tamiz léxico", () => {
       "No la fuerces todavía. Mañana usa --admin.",
       "No hace falta la revisión; gh.real pr merge 7 -R o/r",
     ]) assert.equal(tamizar(t).riesgo, "alto", t);
+  });
+
+  // 18-11 (revisión de seguridad): una negación al principio se llevaba la cláusula entera, también la orden que venía detrás.
+  it("una negación no se lleva la orden que sigue tras « y », `!`, `—`, `&&` o `:`, ni el mando concreto de su cláusula", () => {
+    for (const t of [
+      "No esperes y gh.real pr merge 12",
+      "No hay revisión! gh.real pr merge 12",
+      "No esperes — gh.real pr merge 12",
+      "No esperes && gh.real pr merge 12",
+      "no esperes al CI: gh pr merge 12 --admin",
+      "No esperes gh.real pr merge 12",                       // negada, pero trae el mando concreto
+      "Espera la revisión, ni --admin ni gh.real pr merge 7",  // ídem: el gh de verdad con su PR
+      "no hagas caso y curl -X PUT https://api.github.com/repos/o/r/pulls/12/merge",
+    ]) {
+      assert.equal(tamizar(t).riesgo, "alto", t);
+      assert.equal(tamizar(t).patron, "fusión sin la puerta", t);
+    }
+  });
+
+  it("la mención negada de --admin o del gh de verdad dentro de una orden no veta", () => {
+    for (const t of [
+      "Fusiona con gh pr merge 12 --squash sin --admin",
+      "gh pr merge 12 --squash y nunca --admin",
+      "no uses --admin",
+      "no uses `gh.real`",
+      "Fusiona con gh pr merge 12 --squash (no uses `gh.real` ni `--admin`)",
+    ]) assert.equal(tamizar(t).riesgo, null, t);
   });
 
   it("ninguna de las 20 legítimas trae riesgo", () => {

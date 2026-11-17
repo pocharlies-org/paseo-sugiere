@@ -115,6 +115,12 @@ describe("D10 expande `~` a la casa del cwd", () => {
     assert.equal(evaluarReglas("revisa ~/src/x/README.md", "/srv/x")?.id, "D10");
   });
 
+  it("con el cwd en la casa misma, `~/…` es suyo y `~/../otro` sale (18-11: la ruta se normaliza)", () => {
+    assert.equal(evaluarReglas("lee ~/k8s/x/README.md", "/home/dani"), null);
+    assert.equal(evaluarReglas("lee ~/../otro/x", "/home/dani")?.id, "D10");
+    assert.equal(evaluarReglas("lee /home/dani/../otro", "/home/dani")?.id, "D10");
+  });
+
   it("las herramientas de la casa siguen libres desde cualquier cwd", () => {
     assert.equal(evaluarReglas("~/.local/libexec/x86-host-runtime/company-aprobar fusionar o/r#3", "/home/dani/src/company-roles"), null);
     assert.equal(evaluarReglas("edita ~/.local/libexec/x86-host-runtime/jira-epic-trigger.py", "/home/dani/src/company-roles")?.id, "D10");

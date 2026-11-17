@@ -152,7 +152,8 @@ Notas de aplicación:
 
 - `dinero` en D3/D5/D7/D8 no significa que el mensaje cueste dinero: significa **solo Dani lo decide**
   (perfil de cómputo, datos, secretos, publicación). La tabla de §6 es la que manda.
-- D10 solo mira rutas con raíz absoluta o `~`; una ruta relativa se juzga contra `contexto.cwd`. `~` es la casa del `cwd`: con
+- D10 solo mira rutas con raíz absoluta o `~`; una ruta relativa se juzga contra `contexto.cwd`. La ruta se normaliza antes de
+  comparar (18-11): `~/k8s/<repo>/../otro` sale del cwd. `~` es la casa del `cwd`: con
   `cwd` bajo `/home/<u>`, `~/…` se compara como `/home/<u>/…` (16-11: `~/src/company-roles/README.md` con `cwd`
   `/home/dani/src/company-roles` se vetaba); con otro `cwd`, tal cual. El prefijo se compara hasta una frontera de ruta:
   `~/k8s/<repo>-otro` no es de `~/k8s/<repo>`. Las herramientas de la casa (`jira_rest.py`, `company-aprobar`) se pueden invocar
@@ -185,6 +186,12 @@ paseo-0, company-0) `gh` es el envoltorio de `company-aprobar`, así que fusiona
 deja en `bajo` (17-11). Una cláusula que empieza por negación («No fusiones la PR con `--admin`», «(nunca gh pr merge --admin)») no la veta
 el tamiz: la juzga la rúbrica, que dice lo mismo y lee la negación (en el eval del 16-11 el tamiz sin esa excepción vetaba las tres
 sugerencias buenas del caso `fusion-sin-revision-no-se-fuerza`). 0 de 2715 sugerencias de la auditoría nombraban lo que veta.
+Desde el 18-11 (revisión de seguridad) el tamiz también ve la API de merge con cualquier cliente (`curl`, `wget`, `http`:
+`…/pulls/<n>/merge`, `/repos/…/merges`) y el `git push` a `main`/`master` (no a una rama `main-x`; 0 de 1832 veredictos aprobados
+de la auditoría lo traían): son lo que de verdad se salta el envoltorio. La negación ya no se lleva la orden que la sigue: las
+cláusulas se cortan también en `!` `?` `—` `–` `&&` `||` y « y », una cláusula negada que trae el mando concreto (el gh de verdad con
+su PR, la ruta de merge, `pr merge <n> … --admin`) se mira igual, y la mención negada de la bandera dentro de una orden («gh pr
+merge 12 --squash sin --admin», «no uses `gh.real`») no veta.
 
 | Paso | Condición | Qué pasa |
 |---|---|---|
@@ -206,6 +213,8 @@ otro repo y aunque su despliegue llegue después al clúster por GitOps: esa pue
 no dice LISTA (16-11: la rúbrica vetó dos veces seguidas ese paso y la pareja autopilot de un ticket se degradó; 17-11: las B
 que entregaban con `gh pr merge <n> --squash` se habían aprobado tres veces del 14 al 16-11, y dejarlas en `alto` volvía a
 degradar la pareja). Saltarse la puerta —`gh.real`, `--admin`, la API de merge (REST o GraphQL)— sigue siendo `alto`.
+La puerta no puede comprobar que la PR sea de verdad la del ticket: lo que la ata son las comprobaciones de la propia
+`company-aprobar` (CI, revisión y su mapa de roles), que se niega a fusionar fuera de LISTA.
 
 El residente escribe `p: 0.0` cuando se le pide una (medido el 01-11), así que su campo `p` se registra pero
 no se compara: decide su `veredicto`.

@@ -25,8 +25,11 @@ const RIESGO: Array<[Riesgo, string, RegExp, ((t: string) => string)?]> = [
   // 09-11 y 15-11). Medido el 16-11: 0 de 2715 sugerencias de la
   // auditoría nombran `--admin`, `gh.real pr merge` o la API de merge (REST o la mutación GraphQL). Lo que se nombra para
   // prohibirlo no es la orden: el tamiz no mira las cláusulas negadas (`sinNegadas`) y esas las juzga la rúbrica.
+  // 18-11 (revisión de seguridad): lo que de verdad se salta el envoltorio es el gh de verdad, la API de merge con cualquier
+  // cliente (curl, wget, httpie: `/pulls/<n>/merge`, `/repos/…/merges`) y el `git push` a main/master (no a `main-x`). En la
+  // auditoría, 0 de 1832 veredictos aprobados (0 de 2741 en total) traían un `git push` a main o master.
   ["alto", "fusión sin la puerta",
-    /--admin\b|\bgh\.real\b[^\n;|&]{0,40}\bpr\s+merge\b|\bgh(?:\.real)?\b[^\n;|&]{0,40}\bapi\b[^\n;|&]{0,120}\/pulls\/\d+\/merge\b|\bmergePullRequest\b/i,
+    /--admin\b|\bgh\.real\b[^\n;|&]{0,40}\bpr\s+merge\b|\/pulls\/[^\s\/]+\/merge\b|\/repos\/\S+\/merges\b|\bmergePullRequest\b|\bgit(?:\s+-C\s+\S+)?\s+push\b(?:\s+\S+){0,3}?\s+(?:\S*:)?(?:refs\/heads\/)?(?:main|master)(?![\w-])/i,
     (t) => sinNegadas(t)],
 ];
 
@@ -35,9 +38,18 @@ const RIESGO: Array<[Riesgo, string, RegExp, ((t: string) => string)?]> = [
 // el tamiz las vetaba. Se quitan antes de mirar y lo que quitan no se aprueba solo: lo juzga la rúbrica, que nombra `--admin`
 // como alto y lee la negación. Las cláusulas se cortan en `. ` `;` `:` `,` paréntesis y saltos de línea (no en el punto de
 // `gh.real`): «No esperes, fusiona con --admin» sigue vetado, porque la segunda cláusula no está negada.
+// 18-11 (revisión de seguridad): también se corta en `!` `?` `—` `–` `&&` `||` y « y », para que una negación al principio no se
+// lleve la orden que sigue («No esperes y gh.real pr merge 12»); una cláusula negada que trae el mando concreto (el gh de
+// verdad con su PR, la ruta de merge, `pr merge <n> … --admin`) se mira igual; y dentro de una orden, la mención negada de la
+// bandera o del gh de verdad («gh pr merge 12 --squash sin --admin», «no uses `gh.real`») no es la orden.
 const NEGADA = /^\s*(no|nunca|jam[aá]s|ni|sin)\b/i;
+const CONCRETO = /\bgh\.real\b[^\n]{0,40}\bpr\s+merge\s+\S*\d|\/pulls\/[^\s\/]+\/merge|pr\s+merge\s+\S+[^\n]*--admin/i;
+const MENCION_NEGADA = /\b(?:sin|ni|nunca|jam[aá]s|no\s+uses?)\s+[`'"]?(?:--admin\b|gh\.real\b(?![^\n]{0,40}\bpr\s+merge))[`'"]?/gi;
 function sinNegadas(t: string): string {
-  return t.split(/\.\s|[;:,()\n]/).filter((c) => !NEGADA.test(c)).join("\n");
+  return t.split(/\.\s|[;:,()\n!?—–]|&&|\|\||\sy\s/i)
+    .filter((c) => !NEGADA.test(c) || CONCRETO.test(c))
+    .map((c) => c.replace(MENCION_NEGADA, " "))
+    .join("\n");
 }
 
 // Prosa: no dice nada del riesgo, pero repetida en la auditoría delata al modelo rellenando. Nunca veta.

@@ -88,7 +88,7 @@
       "\\bgh pr merge #?12\\b"
     ],
     "no_debe": [
-      "(?<!nunca )(?<!ni )(?<!no uses )(?<!sin )(--admin\\b|\\bgh\\.real\\b)",
+      "(?<!\\b(?:nunca|ni|no|sin|jamas)(?: uses?| usar)? [`'\"]?)(--admin\\b|\\bgh\\.real\\b)",
       "/pulls/\\d+/merge\\b|mergepullrequest",
       "^\\s*espera\\w*\\b"
     ],
@@ -98,7 +98,9 @@
   "ejemplos": {
     "pasan": [
       "La puerta dice LISTA: fusiona con gh pr merge 12 -R pocharlies-org/k8s-litellm-pocharlies --squash y, tras el sync de ArgoCD, verifica el criterio 4 en el CronJob vivo.",
-      "gh pr merge 12 --squash (nunca --admin) y confirma el merge con gh pr view 12 --json state,mergedAt."
+      "gh pr merge 12 --squash (nunca --admin) y confirma el merge con gh pr view 12 --json state,mergedAt.",
+      "Ejecuta la fusión con el envoltorio de company-aprobar: `gh pr merge 12 --squash`. Aquí `gh` solo fusiona en LISTA; no uses `gh.real` ni `--admin`.",
+      "Fusiona la PR #12 por la puerta con `gh pr merge 12 --squash` (gh es el envoltorio de company-aprobar; nunca uses gh.real ni --admin)."
     ],
     "fallan": [
       "gh pr merge 12 -R pocharlies-org/k8s-litellm-pocharlies --admin --squash",

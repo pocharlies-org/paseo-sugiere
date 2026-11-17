@@ -4,7 +4,8 @@ import { evaluarReglas } from "../service/rules.ts";
 import { cuerpoSugerencia } from "../service/residente.ts";
 import { CWD } from "./rules-fixtures.ts";
 import {
-  MODELO, SONDAS, VECES, autoenviaParaDani, casos, grabadas, huellaReglas, informe, jsonl, leerJson, plano, puntua, reglaCae,
+  MODELO, RUTAS_PUERTA, SONDAS, VECES, autoenviaParaDani, casos, grabadas, huellaPuerta, huellaReglas, informe, jsonl, leerJson, plano,
+  puntua, reglaCae,
   type Resultado,
 } from "../eval/eval.ts";
 
@@ -41,7 +42,7 @@ describe("eval: los casos", () => {
 
 describe("eval: D0-D14 sin tocar", () => {
   it("service/rules.ts es el de la línea base (cambiar una regla es cambiar la especificación, y se repinea aquí a la vista)", () => {
-    assert.equal(huellaReglas(), "9987d00d12df9450"); // 16-11: D10 expande `~` a la casa del cwd
+    assert.equal(huellaReglas(), "d65bef3c29a2af3a"); // 18-11: D10 normaliza la ruta (16-11: expande `~` a la casa del cwd)
   });
 
   it("cada sonda cae en su regla, de D0 a D14", () => {
@@ -66,9 +67,23 @@ describe("eval: la última corrida grabada de cada caso", () => {
       deCaso(caso.id)!.casos[caso.id].forEach((c, i) => assert.equal(puntua(caso, c).pasa, c.pasa, `${caso.id} #${i + 1}: ${c.motivo}`));
   });
 
-  it("no autoenvía ningún PARA DANI y el servicio aplicó D0-D14", { skip: !ultima && "sin corridas grabadas" }, () => {
-    assert.deepEqual(Object.values(ultima!.casos).flat().filter(autoenviaParaDani), []);
-    for (const id of Object.keys(SONDAS)) assert.ok(reglaCae(id, ultima!.reglas[id]), `${id}: ${ultima!.reglas[id]}`);
+  // 18-11 (revisión de seguridad): sobre la última medida de CADA caso, no solo sobre la última corrida (que puede ser parcial).
+  it("no autoenvía ningún PARA DANI y el servicio aplicó D0-D14, en la última medida de cada caso", { skip: !ultima && "sin corridas grabadas" }, () => {
+    assert.deepEqual(CASOS.flatMap((c) => deCaso(c.id)?.casos[c.id] ?? []).filter(autoenviaParaDani), []);
+    for (const r of new Set(CASOS.flatMap((c) => deCaso(c.id) ?? [])))
+      for (const id of Object.keys(SONDAS)) assert.ok(reglaCae(id, r.reglas[id]), `${r.fecha} ${id}: ${r.reglas[id]}`);
+  });
+
+  // 18-11 (revisión de seguridad): una corrida parcial no puede dejar a los demás casos medidos con otra puerta.
+  it("la última medida de cada caso se hizo con la puerta de hoy (cambiarla obliga a medir todos los casos)", { skip: !ultima && "sin corridas grabadas" }, () => {
+    const hoy = huellaPuerta();
+    for (const caso of CASOS)
+      assert.equal(deCaso(caso.id)?.puerta, hoy, `${caso.id}: medido con otra puerta; lanza scripts/eval --vivo con todos los casos`);
+  });
+
+  it("la huella de la puerta cubre la rúbrica, el tamiz, las reglas y la llamada al residente", () => {
+    assert.deepEqual(RUTAS_PUERTA.map((r) => r.split("/").at(-1)), ["juez.ts", "tamiz.ts", "rules.ts", "residente.ts"]);
+    assert.match(huellaPuerta(), /^[0-9a-f]{16}$/);
   });
 });
 
@@ -78,22 +93,30 @@ describe("eval: el informe dice qué casos voltean, no solo la puntuación", () 
   const r = (fecha: string, pasa: boolean): Resultado => ({ fecha, servicio: "x", veces: VECES, casos: { [caso.id]: corridas(pasa) }, reglas: {} });
 
   it("marca el volteo en los dos sentidos y lo nombra en la línea de volteos", () => {
-    assert.match(informe([caso], r("b", true), r("a", false)), new RegExp(`Voltean: ${caso.id} \\(▲ voltea a pasa\\)`));
-    assert.match(informe([caso], r("b", false), r("a", true)), new RegExp(`Voltean: ${caso.id} \\(▼ voltea a falla\\)`));
-    assert.match(informe([caso], r("b", true), r("a", true)), /Voltean: ninguno/);
-    assert.match(informe([caso], r("a", true), null), /línea base/);
+    assert.match(informe([caso], r("b", true), [r("a", false)]), new RegExp(`Voltean: ${caso.id} \\(▲ voltea a pasa\\)`));
+    assert.match(informe([caso], r("b", false), [r("a", true)]), new RegExp(`Voltean: ${caso.id} \\(▼ voltea a falla\\)`));
+    assert.match(informe([caso], r("b", true), [r("a", true)]), /Voltean: ninguno/);
+    assert.match(informe([caso], r("a", true), []), /línea base/);
+  });
+
+  // 18-11: tras una corrida parcial que no midió el caso, se compara con la última que sí lo midió (antes salía «nuevo»).
+  it("compara cada caso con la última corrida anterior que lo midió, no con la inmediatamente anterior", () => {
+    const parcial: Resultado = { fecha: "b", servicio: "x", veces: VECES, casos: {}, reglas: {}, parcial: true };
+    const salida = informe([caso], r("c", true), [r("a", false), parcial]);
+    assert.match(salida, new RegExp(`Voltean: ${caso.id} \\(▲ voltea a pasa\\)`));
+    assert.match(salida, /Frente a la medida anterior de cada caso \(a\): 0\/1 casos pasaban/);
   });
 
   it("una corrida sin respuesta no es un volteo: se dice aparte", () => {
     const caidas = { ...r("b", false), casos: { [caso.id]: Array.from({ length: VECES }, () => ({ ms: 0, error: "fetch failed: ECONNRESET" })) } };
-    assert.match(informe([caso], caidas, r("a", true)), /Voltean: ninguno/);
-    assert.match(informe([caso], caidas, r("a", true)), /sin respuesta/);
-    assert.match(informe([caso], r("c", true), caidas), /antes sin respuesta/); // ni al volver: el ▲ sería del servicio, no del sugeridor
-    assert.match(informe([caso], r("c", true), caidas), /Voltean: ninguno/);
+    assert.match(informe([caso], caidas, [r("a", true)]), /Voltean: ninguno/);
+    assert.match(informe([caso], caidas, [r("a", true)]), /sin respuesta/);
+    assert.match(informe([caso], r("c", true), [caidas]), /antes sin respuesta/); // ni al volver: el ▲ sería del servicio, no del sugeridor
+    assert.match(informe([caso], r("c", true), [caidas]), /Voltean: ninguno/);
   });
 
   it("es determinista: el mismo par de corridas da el mismo informe", () => {
-    assert.equal(informe(CASOS, r("b", true), r("a", false)), informe(CASOS, r("b", true), r("a", false)));
+    assert.equal(informe(CASOS, r("b", true), [r("a", false)]), informe(CASOS, r("b", true), [r("a", false)]));
   });
 
   it("compara sin acentos ni mayúsculas", () => {
