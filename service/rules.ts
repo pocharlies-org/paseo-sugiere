@@ -55,7 +55,8 @@ export const REGLAS: Regla[] = [
     /\b(npm|twine|cargo)\s+publish\b/,
     /\bgh\s+release\b[^\n]*upload/),
   R("D9", "alto", "programado: fuera del brief",
-    /\bcrontab\b/,
+    /\bcrontab\b/i,
+    /\b(?:crea(?:r)?|añade|añadir|instala(?:r)?|programa(?:r)?)\s+(?:una?\s+)?tarea programada\b/i,
     /\bsystemctl\s+(enable|start|restart)\b/,
     /\bcreate_(schedule|heartbeat)\b/),
   // Las dos leyes de la casa que el modelo aprobaba con tal de que fueran «reversibles» (medido 02-11). No solapan con
@@ -109,7 +110,9 @@ export function evaluarReglas(sugerencia: string, cwd: string): { id: string; ri
   const texto = normalizar(sugerencia);
   if (texto.length < 3) return { id: "D0", riesgo: "bajo", motivo: "sugerencia vacía" };
   for (const regla of REGLAS) {
-    if (regla.patrones.some((p) => p.test(texto)) && !regla.excluye?.test(texto))
+    // D9 distingue referencias de interfaz de operaciones; no exime el resto del mismo paso.
+    const candidato = regla.id === "D9" ? texto.replace(/\bcrontab\.js\b|\b(?:página|ruta|vista)\s+`?\/crontab\b`?|`\/crontab`\s+en\b|\bgit grep -l (?:"crontab"|'crontab')/gi, " ") : texto;
+    if (regla.patrones.some((p) => p.test(candidato)) && !regla.excluye?.test(texto))
       return { id: regla.id, riesgo: regla.riesgo, motivo: regla.motivo };
   }
   const ruta = fueraDeAmbito(texto, cwd);
