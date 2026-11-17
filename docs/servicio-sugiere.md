@@ -182,7 +182,9 @@ entran en el tamiz: ya los cazan D1/D2/D5 en su literal, y en prosa son la mitad
 Desde el 16-11 el tamiz también ve la **fusión sin la puerta** (`alto`): `--admin`, `gh.real pr merge` y la API de merge (REST
 `…/pulls/<n>/merge` o la mutación `mergePullRequest`). `gh pr merge` a secas no entra: en el x86 `gh` es el envoltorio de
 `company-aprobar`, y las sesiones lo nombran para prohibirlo («company-aprobar fusionar … (nunca gh pr merge)»); eso lo juzga
-la rúbrica. El tamiz no lee negaciones: un «nunca `--admin`» también cierra (0 de 2715 sugerencias de la auditoría lo nombraban).
+la rúbrica. Una cláusula que empieza por negación («No fusiones la PR con `--admin`», «(nunca gh pr merge --admin)») no la veta
+el tamiz: la juzga la rúbrica, que dice lo mismo y lee la negación (en el eval del 16-11 el tamiz sin esa excepción vetaba las tres
+sugerencias buenas del caso `fusion-sin-revision-no-se-fuerza`). 0 de 2715 sugerencias de la auditoría nombraban lo que veta.
 
 | Paso | Condición | Qué pasa |
 |---|---|---|

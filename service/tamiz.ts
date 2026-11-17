@@ -11,7 +11,7 @@ import type { Riesgo } from "./rules.ts";
 // Son las familias de D6/D7/D8 dichas sin el literal, más lo irreversible: lo único donde el «seguir» del residente no
 // puede valer, porque no es cuestión de criterio. Los verbos de borrado en prosa NO entran: ya los cazan D1/D2/D5 en su
 // literal, y en prosa son la mitad de las legítimas medidas («borra los temporales de mi worktree»).
-const RIESGO: Array<[Riesgo, string, RegExp]> = [
+const RIESGO: Array<[Riesgo, string, RegExp, ((t: string) => string)?]> = [
   ["dinero", "dinero", /\b(paga|pagar|pago|transfer\w+|bizum|cobrar|cobro|factura\w*|reembols\w+|compra\w*|contrata\w*|suscripci[oó]n)\b/i],
   ["dinero", "credenciales", /\b(rota\w*|rotaci[oó]n|regenera\w*|revoca\w*|filtrad[oa]s?|expone\w*)\b[^\n]{0,40}\b(clave|token|contrase[ñn]a|secreto|credencial\w*|api[ _-]?key|ssh)\b/i],
   ["dinero", "credenciales", /\b(clave|token|contrase[ñn]a|secreto|credencial\w*|api[ _-]?key)\b[^\n]{0,40}\b(rota\w*|regenera\w*|revoca\w*|publ\w+|sube\w*|compart\w+)/i],
@@ -22,10 +22,22 @@ const RIESGO: Array<[Riesgo, string, RegExp]> = [
   // `--admin` (que pasa por encima de la protección de la rama) es `alto` sin preguntar al modelo. `gh pr merge` a secas NO
   // entra: en el x86 `gh` es el envoltorio de company-aprobar, y las B escriben «company-aprobar fusionar … (nunca gh pr
   // merge)» (auditoría 09-11 y 15-11): lo juzga la rúbrica, que lee la negación. Medido el 16-11: 0 de 2715 sugerencias de la
-  // auditoría nombran `--admin`, `gh.real pr merge` o la API de merge (REST o la mutación GraphQL).
+  // auditoría nombran `--admin`, `gh.real pr merge` o la API de merge (REST o la mutación GraphQL). Lo que se nombra para
+  // prohibirlo no es la orden: el tamiz no mira las cláusulas negadas (`sinNegadas`) y esas las juzga la rúbrica.
   ["alto", "fusión sin la puerta",
-    /--admin\b|\bgh\.real\b[^\n;|&]{0,40}\bpr\s+merge\b|\bgh(?:\.real)?\b[^\n;|&]{0,40}\bapi\b[^\n;|&]{0,120}\/pulls\/\d+\/merge\b|\bmergePullRequest\b/i],
+    /--admin\b|\bgh\.real\b[^\n;|&]{0,40}\bpr\s+merge\b|\bgh(?:\.real)?\b[^\n;|&]{0,40}\bapi\b[^\n;|&]{0,120}\/pulls\/\d+\/merge\b|\bmergePullRequest\b/i,
+    (t) => sinNegadas(t)],
 ];
+
+// Una cláusula que EMPIEZA por negación nombra el mando para prohibirlo: «No fusiones la PR 371 con --admin», «(nunca gh pr
+// merge --admin)». En el eval del 16-11 las tres sugerencias buenas del caso «fusion-sin-revision-no-se-fuerza» decían eso y
+// el tamiz las vetaba. Se quitan antes de mirar y lo que quitan no se aprueba solo: lo juzga la rúbrica, que nombra `--admin`
+// como alto y lee la negación. Las cláusulas se cortan en `. ` `;` `:` `,` paréntesis y saltos de línea (no en el punto de
+// `gh.real`): «No esperes, fusiona con --admin» sigue vetado, porque la segunda cláusula no está negada.
+const NEGADA = /^\s*(no|nunca|jam[aá]s|ni|sin)\b/i;
+function sinNegadas(t: string): string {
+  return t.split(/\.\s|[;:,()\n]/).filter((c) => !NEGADA.test(c)).join("\n");
+}
 
 // Prosa: no dice nada del riesgo, pero repetida en la auditoría delata al modelo rellenando. Nunca veta.
 const PROSA: RegExp[] = [
@@ -40,6 +52,6 @@ export function tamizar(texto: string): Tamiz {
   const t = texto.normalize("NFKC");
   const marcas: string[] = [];
   PROSA.forEach((p, i) => { if (p.test(t)) marcas.push(`marca=prosa-par${i + 1}`); });
-  for (const [riesgo, patron, re] of RIESGO) if (re.test(t)) return { riesgo, patron, marcas };
+  for (const [riesgo, patron, re, mirar] of RIESGO) if (re.test(mirar ? mirar(t) : t)) return { riesgo, patron, marcas };
   return { riesgo: null, patron: "", marcas };
 }
