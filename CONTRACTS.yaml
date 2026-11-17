@@ -38,7 +38,8 @@ contracts:
     note: >-
       Registro retroactivo (07-11-2026). Entrada {sid, turno, sugerencia, contexto{cwd, key?, resumen?, criterio?}}; salida
       siempre 200 {ok, riesgo ninguno|bajo|alto|dinero, motivo, via, traza?}; 422 cuerpo inválido o sin contexto.cwd;
-      fail-closed. Consumidor: x86-host-runtime libexec/sugiere_puerta.py. Spec: docs/servicio-sugiere.md §3-§6.
+      fail-closed. D9 comprueba el paso aun si cita ficheros de la interfaz: la referencia no autoriza programar tareas.
+      Consumidor: x86-host-runtime libexec/sugiere_puerta.py. Spec: docs/servicio-sugiere.md §3-§6.
   - id: http.sugiere.autopilot.v1
     kind: http-route
     value: "POST /v1/autopilot"
