@@ -75,21 +75,15 @@ eso llega a la app.
 
 ## Instalación
 
-Desde el clon, en el trunk:
-
 ```sh
-scripts/deploy.sh
+paseo plugin add git:pocharlies-org/paseo-sugiere --ref main
 ```
 
-Empaqueta como el plugin de cuentas: carpeta versionada `~/.local/share/paseo-sugiere/paseo-plugin/<versión>-<git sha>`
-y enlace `current`; instala (`paseo plugin install <current>`) la primera vez y recarga (`paseo plugin reload
-paseo-sugiere`) en adelante. El daemon apunta al `current`, no al clon. Comprueba antes `paseo --version` contra
-`requirements.paseo` del manifiesto: fuera de rango no despliega y lo dice. Sin reiniciar el daemon.
-
-Después de esa primera vez no se vuelve a tocar: `scripts/autodeploy.sh` mira el tronco de GitHub y, si hay un commit que no está
-desplegado, lo baja y llama a `deploy.sh`. Lo lanza el propio server del plugin cada 5 min (y al arrancar, por si el merge cayó
-con Paseo cerrado), así que **lo que está fusionado es lo que corre**. Necesita `git` con credenciales para el repo y escribe su
-bitácora en `~/.local/state/paseo-sugiere/autodeploy.log`.
+El daemon lo instala desde el checkout git y comprueba `requirements.paseo` del manifiesto. Después no se vuelve a tocar: en
+esta casa un merge a `main` lo despliega el supervisor de la compañía, que recibe el PR fusionado por Synapse
+(`webhook.github.received`) y ejecuta `paseo plugin update paseo-sugiere --ref <sha>` contra el daemon de paseo-0 (opt-in
+`PLUGINS_GIT` en x86-host-runtime). Al arrancar, el supervisor compara una vez el tronco con el commit vivo, por si el
+merge cayó con él parado. El plugin no sondea nada.
 
 ## Pruebas
 

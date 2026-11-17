@@ -64,8 +64,6 @@ al modelo de la sesión, sin compartir la caché de la sesión.
   y retiene `suggest.watch` hasta 20 s (bajo los 30 s del host): `suggest.ts` avisa de cada cambio, y el registro de parejas y las
   anclas de paseo-plan llegan por un inotify no recursivo de su directorio; solo despierta si cambia lo que pinta una píldora. `autopilot.start` y `autopilot.stop`
   atienden el formulario y llaman a `supervisor.ts`.
-  Arranca además `scripts/autodeploy.sh` cada 5 min: el plugin se redespliega solo cuando el tronco de GitHub
-  trae un commit nuevo (`deploy.sh` acepta un árbol sin git por `DEPLOY_SHA`).
 - `client/suggest-settings.tsx` — pantalla de ajustes propia (`addSettingsScreen` + `useSettings`):
   interruptor y ventana de silencio (los topes del autopilot murieron con su bucle: los pasos los decide el supervisor); el documento compartido está en `shared/settings.ts`.
 
@@ -81,7 +79,7 @@ deprecada desde el 14-11-2026 (el plugin dejó de llamarla: el autopilot es la s
 
 ## Riesgos conocidos
 
-- `requirements.paseo` pide `>=0.15.4`, sin tope: `deploy.sh` no despliega en un host más viejo, pero un Paseo
+- `requirements.paseo` pide `>=0.15.4`, sin tope: el host lo comprueba al instalar o actualizar, pero un Paseo
   nuevo que rompa el SDK solo se ve al cargar el plugin; el tipado y los tests van contra 0.15.4.
 - El ahorro por KV-cache (APC) es la hipótesis de diseño, no una medición en vivo.
 
@@ -89,5 +87,6 @@ deprecada desde el 14-11-2026 (el plugin dejó de llamarla: el autopilot es la s
 
 El repo es público y está listado en el registro de Paseo (paseo.sh/plugins): su ficha es `plugins/pocharlies-org/paseo-sugiere.json` en
 getpaseo/plugins y **fija un commit**. Fusionar aquí no cambia la ficha: las actualizaciones de un plugin por Git son manuales (PR nuevo al
-registro con el commit nuevo). El autodeploy de arriba es de esta casa y no forma parte de lo que instala el registro. `OVERVIEW.md` y las
+registro con el commit nuevo). En esta casa un merge a `main` se despliega solo en el daemon de paseo-0: el supervisor de la compañía recibe el PR fusionado por Synapse y
+ejecuta `paseo plugin update paseo-sugiere --ref <sha>` (x86-host-runtime); el plugin no sondea nada. `OVERVIEW.md` y las
 capturas de `docs/media/` son lo que muestra la ficha; si cambia la interfaz de la píldora, se rehacen.
