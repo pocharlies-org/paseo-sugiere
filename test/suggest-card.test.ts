@@ -187,15 +187,15 @@ test("a forced suggestion stays on the pill until its button is pressed", async 
 // 18-11: a legacy autopilot pair (auditor B, 14-11) can only be stopped from the plugin: the ✦ paints from its registry state,
 // its popover is the status with «Parar», it stays reachable while a turn runs, and the old start route (Empezar, model select,
 // Jira) never reappears.
-test("a piloted ✦ is gold while it waits, red when it needs a person, and its popover is the status with «Parar» — stop only", async () => {
+function loadStatusPill() {
   const source = readFileSync(new URL("../client/suggest-pill.tsx", import.meta.url), "utf8");
   const { outputText } = ts.transpileModule(source, {
     compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX },
   });
   const jsx = (type: unknown, props: unknown) => ({ type, props });
   const modules: Record<string, unknown> = {
-    "react/jsx-runtime": { jsx, jsxs: jsx },
-    react: { useState: (i: unknown) => [i, () => {}], useEffect: () => {}, useMemo: (f: () => unknown) => f(), useRef: () => ({ current: null }) },
+    "react/jsx-runtime": { jsx, jsxs: jsx, Fragment: "Fragment" },
+    react: { useState: (i: unknown) => [typeof i === "function" ? (i as () => unknown)() : i, () => {}], useEffect: () => {}, useMemo: (f: () => unknown) => f(), useRef: () => ({ current: null }) },
     "react-native": { View: "View", Text: "Text", Pressable: "Pressable", AccessibilityInfo: {} },
     "@getpaseo/plugin/client/ui": { SettingsAction: "SettingsAction", SettingsSelect: "SettingsSelect" },
     "@getpaseo/plugin/client/react-native": { Icon: "Icon", TextInput: "Input" },
@@ -210,6 +210,21 @@ test("a piloted ✦ is gold while it waits, red when it needs a person, and its 
     sinSondeo,
     sinSondeo,
   );
+  return exports;
+}
+
+function idlePaseo(onUpdate: (send: (agent: object) => void) => void) {
+  return { agents: {
+      list: async () => ({ subscription: { subscribe: ({ snapshot, update: u }: any) => {
+        onUpdate((agent) => u({ type: "agent_update", payload: { kind: "upsert", agent } }));
+        snapshot({ entries: [{ agent: { id: "a", workspaceId: "w", status: "idle" } }] });
+      } } }),
+      ref: () => ({ send: () => {} }),
+    } };
+}
+
+test("a piloted ✦ is gold while it waits, red when it needs a person, and its popover is the status with «Parar» — stop only", async () => {
+  const exports = loadStatusPill();
   const watch = canal();
   watch.empuja({ version: 1, completo: true, agentes: { a: estado({ text: "una sugerencia vieja", en_plan: "en-plan", criterio: "c", autopilot: { estado: "esperando", motivo: "ESPERA: ci" } }) } });
   const paros: unknown[] = [];
@@ -225,13 +240,7 @@ test("a piloted ✦ is gold while it waits, red when it needs a person, and its 
       paros.push(input);
       return Promise.resolve({ ok: true });
     },
-    paseo: { agents: {
-      list: async () => ({ subscription: { subscribe: ({ snapshot, update: u }: any) => {
-        update = (agent) => u({ type: "agent_update", payload: { kind: "upsert", agent } });
-        snapshot({ entries: [{ agent: { id: "a", workspaceId: "w", status: "idle" } }] });
-      } } }),
-      ref: () => ({ send: () => {} }),
-    } },
+    paseo: idlePaseo(fn => { update = fn; }),
   });
   const settled = () => new Promise<void>((resolve) => setImmediate(resolve));
   await settled();
@@ -373,28 +382,7 @@ test("the follow form prefills the conversation's objective, never runs by openi
 // 18-11: siguiendo, la ✦ es la amarilla que gira y visible también a mitad de turno (el «Parar» tiene que estar al alcance);
 // el popover es el estado —objetivo y qué está haciendo— con «Parar» en el mismo sitio del «Seguir», y parar manda objetivo null.
 test("while following, the ✦ turns, stays reachable mid-turn, and the popover is the status with «Parar» in the same place", async () => {
-  const source = readFileSync(new URL("../client/suggest-pill.tsx", import.meta.url), "utf8");
-  const { outputText } = ts.transpileModule(source, {
-    compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX },
-  });
-  const jsx = (type: unknown, props: unknown) => ({ type, props });
-  const modules: Record<string, unknown> = {
-    "react/jsx-runtime": { jsx, jsxs: jsx, Fragment: "Fragment" },
-    react: { useState: (i: unknown) => [typeof i === "function" ? (i as () => unknown)() : i, () => {}], useEffect: () => {}, useMemo: (f: () => unknown) => f(), useRef: () => ({ current: null }) },
-    "react-native": { View: "View", Text: "Text", Pressable: "Pressable", AccessibilityInfo: {} },
-    "@getpaseo/plugin/client/ui": { SettingsAction: "SettingsAction", SettingsSelect: "SettingsSelect" },
-    "@getpaseo/plugin/client/react-native": { Icon: "Icon", TextInput: "Input" },
-    "../shared/contract.ts": contrato,
-    "./composer-bridge.ts": { insertSuggestion: () => false, registerPillAnchor: () => () => {} },
-    "./estrella.ts": { gira },
-  };
-  const exports: any = {};
-  new Function("require", "exports", "setInterval", "setTimeout", outputText)(
-    (name: string) => modules[name],
-    exports,
-    sinSondeo,
-    sinSondeo,
-  );
+  const exports = loadStatusPill();
   const OBJETIVO = "Dejar verde el CI y fusionar el PR";
   const seguirs: any[] = [];
   const watch = canal();
@@ -411,13 +399,7 @@ test("while following, the ✦ turns, stays reachable mid-turn, and the popover 
       if (name === "seguir") { seguirs.push(input); return Promise.resolve({ ok: true }); }
       return Promise.resolve({ ok: true });
     },
-    paseo: { agents: {
-      list: async () => ({ subscription: { subscribe: ({ snapshot, update: u }: any) => {
-        update = (agent) => u({ type: "agent_update", payload: { kind: "upsert", agent } });
-        snapshot({ entries: [{ agent: { id: "a", workspaceId: "w", status: "idle" } }] });
-      } } }),
-      ref: () => ({ send: () => {} }),
-    } },
+    paseo: idlePaseo(fn => { update = fn; }),
   });
   const settled = () => new Promise<void>((resolve) => setImmediate(resolve));
   await settled();
