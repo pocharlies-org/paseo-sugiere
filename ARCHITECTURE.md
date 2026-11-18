@@ -35,8 +35,8 @@ al modelo de la sesión, sin compartir la caché de la sesión.
   por su cuenta: una generación terminada se queda en la píldora de su ventana hasta que se pulsa su botón (Dani 02-11). El popover intenta
   primero el puente y solo pinta su tarjeta si no pudo: el propio campo más un botón pequeño de enviar a su derecha, sin caja ni
   bordes y con la altura del texto (el popover del host ya enmarca).
-- `client/composer-bridge.ts` — **atajo declarado** (`shortcut:`): la SDK de Paseo (hasta 0.15.4; 0.16 trae `useComposer`) no tiene API del borrador
-  del composer, así que desde el icono de la píldora sube por el DOM hasta el primer ancestro que tenga un `textarea[data-composer-input]`
+- `client/composer-bridge.ts` — **atajo declarado** (`shortcut:`): la SDK de Paseo trae `useComposer` desde 0.16, pero este puente aún no migra a ella,
+  así que desde el icono de la píldora sube por el DOM hasta el primer ancestro que tenga un `textarea[data-composer-input]`
   y lo toma solo si es el único y está a la vista; le añade el texto como si se tecleara (`execCommand("insertText")`, y de respaldo el
   setter del prototipo más un evento
   `input`), de modo que el `onChangeText` del host sigue siendo el único que escribe el borrador. Con dos composers en ese ancestro, con
@@ -44,10 +44,15 @@ al modelo de la sesión, sin compartir la caché de la sesión.
   delante, que es lo que pasaba el 02-11), con la píldora fuera de pantalla, sin DOM (iOS/Android), o en layout compacto (el panel puede
   ir en un sheet sin composer propio),
   devuelve `false` y la píldora abre su popover. Un update de Paseo que mueva `data-testid="message-input-root"` o
-  `data-composer-input` produce el mismo respaldo, nunca una escritura en otro agente. **Retirada**: se borra cuando la SDK exponga el
-  borrador (discusión getpaseo/paseo#4688), o si dos updates seguidos de Paseo lo rompen sin esa API.
+  `data-composer-input` produce el mismo respaldo, nunca una escritura en otro agente. **Retirada**: se borra al migrar a `useComposer`
+  (discusión getpaseo/paseo#4688), o si dos updates seguidos de Paseo lo rompen.
 - `index.server.ts` une los turnos de Paseo con `server/suggest.ts`. Sugerir entrega el texto a la píldora; en «Seguir en automático» el mismo generador toma el objetivo revisado y somete cada envío a `/v1/verdict`. Parar invalida cualquier respuesta pendiente. El seguimiento es por sesión y no se reanuda tras reiniciar el plugin.
 - `server/vigilia.ts` notifica a la píldora por `suggest.watch` cuando cambia el estado.
+- `client/estado-agentes.ts` + `client/workspace-badge.tsx` — la insignia de la fila de cada workspace en la barra lateral
+  (`addWorkspaceRowBadgeItem`, SDK 0.16.2): cuántos de sus agentes están en autopilot o siguiendo ahora, en rojo si alguno
+  pide a una persona (`humano` · `degradada`). Se pinta del mismo estado que ya empuja `suggest.watch`: la píldora lo escribe
+  en ese almacén al aplicarlo y la insignia lo lee, así que no hay un segundo reloj ni una segunda llamada retenida. Sin
+  nadie en marcha no pinta nada. El mapa agente → workspace sale de la lista de agentes del host, no del servidor.
 - `client/suggest-settings.tsx` — pantalla de ajustes propia (`addSettingsScreen` + `useSettings`):
   interruptor y ventana de silencio (los topes del autopilot murieron con su bucle: los pasos los decide el supervisor); el documento compartido está en `shared/settings.ts`.
 
@@ -63,8 +68,8 @@ deprecada desde el 14-11-2026 (el plugin dejó de llamarla: el autopilot es la s
 
 ## Riesgos conocidos
 
-- `requirements.paseo` pide `>=0.15.4`, sin tope: el host lo comprueba al instalar o actualizar, pero un Paseo
-  nuevo que rompa el SDK solo se ve al cargar el plugin; el tipado y los tests van contra 0.15.4.
+- `requirements.paseo` pide `>=0.16.2`, sin tope: el host lo comprueba al instalar o actualizar, pero un Paseo
+  nuevo que rompa el SDK solo se ve al cargar el plugin; el tipado y los tests van contra 0.16.2.
 - El ahorro por KV-cache (APC) es la hipótesis de diseño, no una medición en vivo.
 
 ## Publicación

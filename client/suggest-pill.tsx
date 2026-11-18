@@ -5,6 +5,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { AccessibilityInfo, Animated, Easing, Pressable, Text, View } from "react-native";
 import { ESTADO_VACIO, autopilotStop, planLeer, seguir, suggestFeedback, suggestForce, suggestWatch, type EstadoAgente } from "../shared/contract.ts";
 import { insertSuggestion, registerPillAnchor } from "./composer-bridge.ts";
+import { agenteEn, agenteFuera, estadoAplicado, sinAgentes } from "./estado-agentes.ts";
 import { gira } from "./estrella.ts";
 
 // One composer pill per idle agent (following its objective, or with a legacy autopilot pair alive, also mid-turn): with a suggestion ready it opens the card, without one it is a small ✦ whose popover forces a
@@ -376,6 +377,7 @@ export function addSuggestPill(client: PluginClientContext): () => void {
   const lifetime = new AbortController();
 
   const remove = (id: string) => {
+    agenteFuera(id); // the sidebar badge stops counting it in its workspace
     pills.get(id)?.remove();
     pills.delete(id);
     noPills.get(id)?.remove();
@@ -400,6 +402,7 @@ export function addSuggestPill(client: PluginClientContext): () => void {
     if (stopped) return;
     if (!agent.workspaceId || agent.archivedAt) return remove(agent.id);
     agents.set(agent.id, agent);
+    agenteEn(agent.id, agent.workspaceId); // the row badge of its workspace counts it
     if (agent.status !== "idle") {
       texts.delete(agent.id); // a returning idle must not resurrect the previous suggestion
       consumed.delete(agent.id);
@@ -556,6 +559,7 @@ export function addSuggestPill(client: PluginClientContext): () => void {
 
   // What the server pushed for one agent (it only comes when it changed): the pill repaints, an open popover too.
   const aplica = (id: string, estado: EstadoAgente) => {
+    estadoAplicado(id, estado); // the same push paints the ✦ and the sidebar's row badge
     texts.set(id, estado.text === consumed.get(id) ? null : estado.text);
     anchors.set(id, { en_plan: estado.en_plan, criterio: estado.criterio });
     if (estado.muted) muted.add(id);
@@ -605,6 +609,7 @@ export function addSuggestPill(client: PluginClientContext): () => void {
     .then(({ subscription }) => {
       subscription.subscribe({
         snapshot: ({ entries }) => {
+          sinAgentes(); // a new list replaces the old one whole
           for (const id of [...pills.keys()]) remove(id);
           for (const { agent } of entries) show(agent as Agent);
           ronda += 1;

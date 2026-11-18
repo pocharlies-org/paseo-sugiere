@@ -38,7 +38,7 @@ This plugin was built for one setup and is published as it runs there. Read this
 - **Cost.** Each suggestion sends the conversation (up to ~100k tokens) to the session's model, without sharing the session's cache.
 - **Spanish by default.** The instruction asks for the suggestion in Spanish and the settings screen is in Spanish. The
   instruction lives in the `sugiere` service only; the plugin sends none.
-- Paseo `>=0.15.4`.
+- Paseo `>=0.16.2`.
 
 ## What it reads, sends and writes
 
@@ -56,6 +56,6 @@ This plugin was built for one setup and is published as it runs there. Read this
 
 ## Known limits
 
-The text reaches the prompt by writing into Paseo's own page, because the plugin SDK has no API for the composer's draft. If a
+The text reaches the prompt by writing into Paseo's own page, because it does not use the SDK's `useComposer` (0.16+) yet. If a
 Paseo update changes that page, the plugin falls back to the small card. The code that does it is one module
-(`client/composer-bridge.ts`), marked as a shortcut, and it is deleted the day the SDK exposes the draft.
+(`client/composer-bridge.ts`), marked as a shortcut, and it is deleted the day the plugin moves to `useComposer`.
