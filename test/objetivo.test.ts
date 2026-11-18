@@ -44,7 +44,7 @@ after(() => {
 
 describe("el objetivo del formulario", () => {
   it("no importa el objetivo de un ticket encontrado en el historial", async () => {
-    escribeAncla({ticketKey: "EJEMPLO-10", objetivo: "portar app", criterios: [{texto: "portar"}]});
+    escribeAncla({ticketKey: "unrelated-ticket", objetivo: "portar app", criterios: [{texto: "portar"}]});
     escribeSesion([u("contar tickets sin cambiar Jira"), a("ok")]);
     assert.deepEqual(await objetivoDeAgente("a1", paseo), {objetivo: "contar tickets sin cambiar Jira"});
   });
