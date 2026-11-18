@@ -43,28 +43,7 @@ no consume su contrato `file.claude-cuentas.v1`: la llamada va a LiteLLM con la 
   `guard: true` y criterios, al acabar cada turno de ese agente se pide la sugerencia con el plan, sin ventana de silencio y aunque
   `auto` esté apagado. La ✦ enseña la insignia (▸ paso del plan, ✚ trabajo nuevo, ✓ verificar) y el criterio; al lado sale
   «no es esto», y tres seguidos callan la ✦ hasta que la pulses. Enviar sigue siendo tu toque.
-- La ✦ sin sugerencia abre un popover: «Sugerir ahora» (el force de siempre) y el **Autopilot** de ese agente (también
-  en la tarjeta del móvil), que ya no es un interruptor del plugin sino un formulario de arranque (14-11-2026): objetivo —
-  «Plan vinculado» (elegible solo si el ancla de paseo-plan tiene ticket y al menos un criterio; se muestra como
-  `CLAVE · n criterios`) o «Prompt» (texto) — y modelo del auditor (los modelos del proveedor de la sesión,
-  `claude-opus-5-5` si lo ofrece). «Empezar» llama al supervisor de la compañía (`POST /autopilot/par`, cabecera
-  `X-Company-Token` de `~/.company/jira-trigger/secret`, base `http://company.paseo.svc.cluster.local:19911`, env
-  `SUPERVISOR_URL`), que crea la sesión auditora B: B planifica, audita contra los criterios y escribe el siguiente mensaje
-  de A; el plugin solo arranca y para la pareja y enseña su estado («Parar» = `DELETE /autopilot/par/<a_id>`). El host corta
-  el RPC a los 30 s y el supervisor tarda más en crear B: pasados 25 s «Empezar» responde ok con la pareja ya reservada en el
-  registro (`activa`) y la ✦ cuenta cómo acaba, el mismo plazo que Goal (`arrancarEnPlazo`, `server/goal.ts`). Con la pareja
-  viva la ✦ habla por ella: amarilla y girando (`activa`/`pensando`/`esperando`), roja brillante con pulso cuando hace falta
-  una persona (`humano`) o roja fija cuando el auditor dejó de responder (`degradada`), verde al entregar (`entregada`); el
-  popover da el motivo, los pasos, el último envío y el auditor. El estado viene del registro del supervisor
-  (`~/.company/jira-trigger/autopilot-pares.json`): fichero ausente = sin pareja; ilegible = estado desconocido sin romper la
-  píldora. Un error del supervisor se enseña una vez en el popover. Es distinto de «Sugerir automáticamente», que solo propone.
-- **Goal** en la cabecera de cada workspace (15-11-2026): una sesión nueva que nace con su autopilot. Formulario:
-  el goal, el modelo de la sesión y el del auditor (proveedor `claude`, `claude-opus-5-5` por defecto). «Empezar» crea la
-  sesión en ese workspace sin primer mensaje y en `bypassPermissions`, y arranca su pareja con el goal como objetivo
-  «Prompt» (el mismo `POST /autopilot/par`): el primer mensaje de la sesión lo escribe el auditor. El host corta el RPC a
-  los 30 s y crear la sesión más el auditor tarda más: pasados 25 s el formulario se cierra con la sesión ya creada y su ✦
-  dice cómo acaba la pareja. Si el supervisor la rechaza, el formulario da su motivo y la sesión queda (su ✦ reintenta);
-  nunca se archiva por una respuesta que no llegó. Sale también en un workspace sin sesiones.
+- **Seguir en automático** usa Sugerir al terminar cada turno. Revisa una vez el objetivo de la conversación; no elige un ticket, un modelo ni crea otra sesión. Cada mensaje automático pasa por la puerta de permisos y se envía a esa misma conversación. «Parar» desactiva los siguientes envíos. Las parejas anteriores se pueden parar sin migrarlas ni reactivarlas.
 
 ## Qué lee y envía
 
