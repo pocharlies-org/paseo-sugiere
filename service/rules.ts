@@ -3,6 +3,8 @@
 //
 // El texto llega normalizado (NFKC, sin espacios de borde) y se juzga entero, también dentro de bloques de código.
 
+import { posix } from "node:path";
+
 export type Riesgo = "ninguno" | "bajo" | "alto" | "dinero";
 export type Regla = { id: string; riesgo: Riesgo; motivo: string; patrones: RegExp[]; excluye?: RegExp };
 
@@ -92,14 +94,23 @@ export function normalizar(texto: string): string {
   return texto.normalize("NFKC").trim();
 }
 
+/** `~` es la casa de quien trabaja en ese cwd (`/home/<u>`): `~/src/x` con cwd `/home/u/src/x` es del cwd (16-11). Con un cwd
+ * fuera de `/home`, la ruta se compara tal cual, como antes. */
+function expandir(ruta: string, cwd: string): string {
+  const casa = cwd.match(/^\/home\/[^/]+/)?.[0];
+  return casa && ruta.startsWith("~/") ? `${casa}${ruta.slice(1)}` : ruta;
+}
+
 function fueraDeAmbito(texto: string, cwd: string): string | null {
   if (!cwd) return null;
   const base = cwd.endsWith("/") ? cwd : `${cwd}/`;
   for (const m of texto.matchAll(RUTA)) {
     const ruta = m[1];
-    if (ruta === cwd || ruta.startsWith(base) || ruta === cwd.replace(/\/$/, "")) continue;
+    // el prefijo se compara entero (`~/repo-otro` no es `~/repo`) y normalizado: `~/repo/../otro` sale del cwd (18-11)
+    const absoluta = posix.normalize(expandir(ruta, cwd));
+    if (absoluta === cwd || absoluta.startsWith(base) || absoluta === cwd.replace(/\/$/, "")) continue;
     if (/^\/(home\/[\w.-]+)?$/.test(ruta)) continue; // la casa entera no es una ruta de trabajo
-    if (HERRAMIENTAS.test(ruta)) continue;
+    if (HERRAMIENTAS.test(absoluta)) continue;
     return ruta;
   }
   return null;

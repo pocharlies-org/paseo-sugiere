@@ -85,6 +85,43 @@ describe("la puerta", () => {
     assert.match(v.traza!.join(" "), /tamiz=credenciales/);
   });
 
+  // 16-11: la rúbrica vetó dos veces seguidas el paso de entrega de un maker (fusionar su PR con company-aprobar en LISTA) y
+  // la pareja autopilot se degradó. La rúbrica lo nombra como bajo; saltarse la puerta sigue siendo alto, y en el literal
+  // (`--admin`, gh.real, la API de merge) lo decide el tamiz sin depender del modelo.
+  it("la rúbrica que ve el modelo deja en bajo fusionar por company-aprobar y en alto saltarse la puerta", async () => {
+    const f = mock.method(globalThis, "fetch", async () => residente({ veredicto: "seguir", riesgo: "bajo", p: 0, motivo: "entrega por la puerta" }));
+    const v = await dictaminar("Con company-aprobar estado o/r#362 en LISTA, fusiona con company-aprobar fusionar o/r#362 --rol devops", ctx);
+    assert.equal(v.ok, true);
+    const prompt = JSON.parse(String((f.mock.calls[0].arguments[1] as RequestInit).body)).messages[0].content as string;
+    const linea = (nivel: string) => prompt.split("\n").find((l) => l.startsWith(`${nivel}:`)) ?? "";
+    assert.match(linea("bajo"), /`company-aprobar fusionar <owner\/repo>#<n>` o `gh pr merge <n>` sin `--admin`, porque aquí `gh` es el envoltorio de esa puerta— es bajo/);
+    assert.match(linea("alto"), /saltándose esa puerta —`gh\.real`, `--admin`, la API de merge \(REST o GraphQL\)— es alto/);
+    assert.doesNotMatch(linea("alto"), /`gh pr merge` directo/);
+  });
+
+  // 17-11: en los hosts de la compañía `gh` es el envoltorio de company-aprobar, así que `gh pr merge <n>` sin `--admin` es la
+  // puerta de la casa: las B que entregaban así se aprobaron tres veces del 14 al 16-11. El tamiz no lo toca y la rúbrica lo
+  // deja en bajo; el veredicto es el del modelo.
+  it("`gh pr merge 12 --squash` con la puerta en LISTA pasa: el tamiz no lo toca y la rúbrica lo deja en bajo", async () => {
+    const f = mock.method(globalThis, "fetch", async () => residente({ veredicto: "seguir", riesgo: "bajo", p: 0, motivo: "entrega por la puerta" }));
+    const v = await dictaminar("company-aprobar estado o/r#12 dice LISTA: fusiona con gh pr merge 12 --squash y verifica el sync", ctx);
+    assert.equal(v.ok, true);
+    assert.equal(v.riesgo, "bajo");
+    assert.equal(v.via, "residente");
+    assert.equal(v.traza, undefined);
+    const prompt = JSON.parse(String((f.mock.calls[0].arguments[1] as RequestInit).body)).messages[0].content as string;
+    assert.match(prompt.split("\n").find((l) => l.startsWith("bajo:")) ?? "", /`gh pr merge <n>` sin `--admin`/);
+  });
+
+  it("`gh pr merge --admin` no se aprueba aunque el modelo diga seguir: lo veta el tamiz", async () => {
+    mock.method(globalThis, "fetch", async () => residente({ veredicto: "seguir", riesgo: "bajo", p: 0.9, motivo: "es reversible" }));
+    const v = await dictaminar("gh pr merge 12 --admin --squash", ctx);
+    assert.equal(v.ok, false);
+    assert.equal(v.riesgo, "alto");
+    assert.match(v.motivo, /^tamiz fusión sin la puerta/);
+    assert.deepEqual(v.traza, ["tamiz=fusión sin la puerta"]);
+  });
+
   it("una marca de prosa queda en la traza y no cambia el veredicto", async () => {
     mock.method(globalThis, "fetch", async () => residente({ veredicto: "seguir", riesgo: "bajo", p: 0 }));
     const v = await dictaminar("Por supuesto, abre el PR contra deploy/prod", ctx);
