@@ -43,6 +43,9 @@ no consume su contrato `file.claude-cuentas.v1`: la llamada va a LiteLLM con la 
   `guard: true` y criterios, al acabar cada turno de ese agente se pide la sugerencia con el plan, sin ventana de silencio y aunque
   `auto` esté apagado. La ✦ enseña la insignia (▸ paso del plan, ✚ trabajo nuevo, ✓ verificar) y el criterio; al lado sale
   «no es esto», y tres seguidos callan la ✦ hasta que la pulses. Enviar sigue siendo tu toque.
+- **Insignia en la barra lateral**: la fila de cada workspace enseña cuántos de sus agentes están en autopilot o siguiendo
+  en ese momento, en rojo cuando alguno pide a una persona; sin nadie en marcha no enseña nada. Sale del mismo estado que
+  la ✦, sin sondeo. ![insignia](docs/media/badge-fila.png)
 - **Seguir en automático** usa Sugerir al terminar cada turno. Revisa una vez el objetivo de la conversación; no elige un ticket, un modelo ni crea otra sesión. Cada mensaje automático pasa por la puerta de permisos y se envía a esa misma conversación. «Parar» desactiva los siguientes envíos. Las parejas anteriores se pueden parar sin migrarlas ni reactivarlas.
 
 ## Qué lee y envía

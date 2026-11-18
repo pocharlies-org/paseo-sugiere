@@ -24,6 +24,8 @@ const sinSondeo = () => { throw new Error("the client never asks on a clock"); }
 // `autopilot.stop` (a legacy pair can only be stopped). The old start route — autopilotStart, autopilotGoal, the auditor model —
 // is gone from the contract and must not reappear in the client.
 const contrato = { suggestWatch: "watch", suggestForce: "force", suggestFeedback: "feedback", autopilotStop: "stop", planLeer: "objetivo", seguir: "seguir", ESTADO_VACIO: estado() };
+// The sidebar badge's store: the pill writes into it, never reads (18-11). Its own logic lives in estado-agentes.test.ts.
+const estadoAgentes = { agenteEn() {}, agenteFuera() {}, estadoAplicado() {}, sinAgentes() {} };
 
 // Render the plugin with host primitives, without loading React Native's native runtime in Node.
 test("suggestion card uses the sheet-aware input, edits before sending and has a reachable mobile button", async () => {
@@ -52,6 +54,7 @@ test("suggestion card uses the sheet-aware input, edits before sending and has a
     "../shared/contract.ts": contrato,
     "./composer-bridge.ts": { insertSuggestion: () => false },
     "./estrella.ts": { gira },
+    "./estado-agentes.ts": estadoAgentes,
   };
   const exports: any = {};
   new Function("require", "exports", "setInterval", "setTimeout", outputText)(
@@ -140,6 +143,7 @@ test("a forced suggestion stays on the pill until its button is pressed", async 
       registerPillAnchor: () => () => {},
     },
     "./estrella.ts": { gira },
+    "./estado-agentes.ts": estadoAgentes,
   };
   const exports: any = {};
   new Function("require", "exports", "setInterval", "setTimeout", outputText)(
@@ -202,6 +206,7 @@ function loadStatusPill() {
     "../shared/contract.ts": contrato,
     "./composer-bridge.ts": { insertSuggestion: () => false, registerPillAnchor: () => () => {} },
     "./estrella.ts": { gira },
+    "./estado-agentes.ts": estadoAgentes,
   };
   const exports: any = {};
   new Function("require", "exports", "setInterval", "setTimeout", outputText)(
@@ -314,6 +319,7 @@ test("the follow form prefills the conversation's objective, never runs by openi
     "../shared/contract.ts": contrato,
     "./composer-bridge.ts": { insertSuggestion: () => false, registerPillAnchor: () => () => {} },
     "./estrella.ts": { gira },
+    "./estado-agentes.ts": estadoAgentes,
   };
   const exports: any = {};
   new Function("require", "exports", "setInterval", "setTimeout", outputText)(

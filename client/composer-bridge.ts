@@ -1,5 +1,5 @@
-// shortcut: puente por el DOM de Paseo web/escritorio. La SDK no tiene API del borrador del composer (getpaseo/paseo, discusión
-// #4688), así que el texto se escribe en el textarea del prompt. Se borra cuando esa API exista. Si un update de Paseo mueve los
+// shortcut: puente por el DOM de Paseo web/escritorio. La SDK trae `useComposer` desde 0.16 (getpaseo/paseo, discusión
+// #4688) y este puente aún no migra a ella, así que el texto se escribe en el textarea del prompt. Se borra al migrar. Si un update de Paseo mueve los
 // selectores, `insertSuggestion` devuelve false y la píldora abre su popover. El texto entra como si se tecleara, así que el
 // `onChangeText` del host sigue siendo el único que escribe el borrador.
 const COMPOSER = '[data-testid="message-input-root"] textarea[data-composer-input]';
