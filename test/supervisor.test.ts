@@ -9,8 +9,7 @@ import { after, beforeEach, describe, it } from "node:test";
 // HOME is a scratch dir set before the modules read their paths (the plan anchor folder is fixed at import).
 const HOME = mkdtempSync(join(tmpdir(), "supervisor-"));
 process.env.HOME = HOME;
-const { arrancarPar, apagarPar } = await import("../server/supervisor.ts");
-const { arrancarEnPlazo, sesionConGoal } = await import("../server/goal.ts");
+const { apagarPar } = await import("../server/supervisor.ts");
 
 const llamas: { url: string; metodo: string; cabeceras: Record<string, string>; cuerpo: any }[] = [];
 let respuestas: { status: number; body?: object }[] = [];
@@ -22,113 +21,10 @@ globalThis.fetch = (async (url: string, init: any) => {
   return new Response(JSON.stringify(next.body ?? {}), { status: next.status });
 }) as typeof fetch;
 
-const paseo = {
-  agents: {
-    ref: (id: string) => ({ refresh: async () => ({ agent: { id, cwd: "/home/node/repos/paseo-sugiere", workspaceId: "wks_de_a", title: "montar el autopilot", provider: "claude" } }) }),
-  },
-} as never;
-
 const escribe = (ruta: string, cuerpo: string) => {
   mkdirSync(join(ruta, ".."), { recursive: true });
   writeFileSync(ruta, cuerpo);
 };
-
-describe("arrancar la pareja", () => {
-  beforeEach(() => {
-    llamas.length = 0;
-    respuestas = [];
-    falla = null;
-    process.env.SUPERVISOR_URL = "http://supervisor.example:19911";
-    escribe(join(HOME, ".company", "jira-trigger", "secret"), "  token-de-prueba\n");
-    rmSync(join(HOME, ".local", "state", "paseo-plan"), { recursive: true, force: true });
-  });
-  after(() => rmSync(HOME, { recursive: true, force: true }));
-
-  it("con plan vinculado: el cuerpo del contrato, con la clave del ancla y el token en la cabecera", async () => {
-    escribe(join(HOME, ".local", "state", "paseo-plan", "anchor-a1.json"), JSON.stringify({ ticketKey: "TAREA-1000001", criterios: [{ texto: "A" }, { texto: "B" }] }));
-    const r = await arrancarPar({ agentId: "a1", modo: "plan", modelo: "claude-opus-5-5" }, paseo);
-    assert.deepEqual(r, { ok: true });
-    assert.equal(llamas.length, 1);
-    assert.equal(llamas[0]!.url, "http://supervisor.example:19911/autopilot/par");
-    assert.equal(llamas[0]!.metodo, "POST");
-    assert.equal(llamas[0]!.cabeceras["X-Company-Token"], "token-de-prueba", "el contenido del secret, sin el salto de línea");
-    assert.deepEqual(llamas[0]!.cuerpo, {
-      a: { id: "a1", tipo: "paseo", cwd: "/home/node/repos/paseo-sugiere", workspace: "wks_de_a", titulo: "montar el autopilot" },
-      objetivo: { modo: "plan", key: "TAREA-1000001" },
-      modelo: "claude-opus-5-5",
-      origen: "paseo",
-    });
-  });
-
-  it("con prompt: el texto va en objetivo y el modelo se omite si no se eligió", async () => {
-    const r = await arrancarPar({ agentId: "a1", modo: "prompt", texto: "  deja la píldora verde al entregar  " }, paseo);
-    assert.deepEqual(r, { ok: true });
-    assert.deepEqual(llamas[0]!.cuerpo.objetivo, { modo: "prompt", texto: "deja la píldora verde al entregar" });
-    assert.equal("modelo" in llamas[0]!.cuerpo, false, "sin modelo elegido, decide el supervisor (claude-opus-5-5)");
-  });
-
-  it("plan sin ancla o prompt sin texto: error claro, sin llamar a nadie", async () => {
-    assert.match((await arrancarPar({ agentId: "a1", modo: "plan" }, paseo)).error!, /plan vinculado/);
-    assert.match((await arrancarPar({ agentId: "a1", modo: "prompt", texto: "   " }, paseo)).error!, /Prompt/);
-    assert.equal(llamas.length, 0);
-  });
-
-  it("el 409 del supervisor se enseña con su motivo (pareja viva, A es una B o el rutador la lleva)", async () => {
-    respuestas = [{ status: 409, body: { error: "A ya tiene pareja viva" } }];
-    const r = await arrancarPar({ agentId: "a1", modo: "prompt", texto: "haz X" }, paseo);
-    assert.equal(r.ok, false);
-    assert.equal(r.error, "A ya tiene pareja viva");
-  });
-
-  it("un 503 o un cuerpo sin {error} caen al status; sin respuesta, lo dice", async () => {
-    respuestas = [{ status: 503 }];
-    assert.match((await arrancarPar({ agentId: "a1", modo: "prompt", texto: "haz X" }, paseo)).error!, /503/);
-    falla = new Error("socket hang up");
-    assert.match((await arrancarPar({ agentId: "a1", modo: "prompt", texto: "haz X" }, paseo)).error!, /no respondió \(socket hang up\)/);
-  });
-
-  it("sin token en el home, no se sale a la red", async () => {
-    rmSync(join(HOME, ".company", "jira-trigger", "secret"));
-    const r = await arrancarPar({ agentId: "a1", modo: "prompt", texto: "haz X" }, paseo);
-    assert.equal(r.ok, false);
-    assert.match(r.error!, /jira-trigger\/secret/);
-    assert.equal(llamas.length, 0);
-  });
-
-  it("sin SUPERVISOR_URL, la base del clúster", async () => {
-    delete process.env.SUPERVISOR_URL;
-    await arrancarPar({ agentId: "a1", modo: "prompt", texto: "haz X" }, paseo);
-    assert.equal(llamas[0]!.url, "http://company.paseo.svc.cluster.local:19911/autopilot/par");
-    process.env.SUPERVISOR_URL = "http://supervisor.example:19911";
-  });
-});
-
-describe("«Empezar» de la ✦ dentro del plazo del RPC", () => {
-  beforeEach(() => {
-    llamas.length = 0;
-    respuestas = [];
-    falla = null;
-    process.env.SUPERVISOR_URL = "http://supervisor.example:19911";
-    escribe(join(HOME, ".company", "jira-trigger", "secret"), "token-de-prueba");
-  });
-
-  it("si el supervisor tarda más que el plazo, responde ok ya: la ✦ lee la pareja reservada en su registro", async () => {
-    let suelta = () => {};
-    const antes = globalThis.fetch;
-    globalThis.fetch = (() => new Promise((ok) => { suelta = () => ok(new Response("{}", { status: 201 })); })) as typeof fetch;
-    try {
-      assert.deepEqual(await arrancarEnPlazo({ agentId: "a1", modo: "prompt", texto: "haz X" }, paseo, 20), { ok: true });
-    } finally {
-      suelta();
-      globalThis.fetch = antes;
-    }
-  });
-
-  it("si contesta a tiempo, su respuesta pasa tal cual (también el rechazo con su motivo)", async () => {
-    respuestas = [{ status: 409, body: { error: "a1 ya tiene autopilot (activa); apágalo antes" } }];
-    assert.deepEqual(await arrancarEnPlazo({ agentId: "a1", modo: "prompt", texto: "haz X" }, paseo, 1_000), { ok: false, error: "a1 ya tiene autopilot (activa); apágalo antes" });
-  });
-});
 
 describe("apagar la pareja", () => {
   beforeEach(() => {
@@ -155,71 +51,4 @@ describe("apagar la pareja", () => {
     assert.equal(r.error, "esa sesión no es tuya");
   });
 });
-
-describe("sesión con goal", () => {
-  const A = "3f2a8b1c-4d5e-4f70-8192-a3b4c5d6e7f8";
-  let creadas: any[] = [];
-  let fallaCrear: Error | null = null;
-  const conWorkspace = {
-    agents: {
-      ref: (id: string) => ({ refresh: async () => ({ agent: { id, cwd: "/home/node/k8s/nuevo", title: "deja verde el CI", provider: "claude" } }) }),
-    },
-    workspaces: {
-      ref: (workspaceId: string) => ({
-        agents: {
-          create: async (opciones: object) => {
-            if (fallaCrear) throw fallaCrear;
-            creadas.push({ workspaceId, ...opciones });
-            return { id: A };
-          },
-        },
-      }),
-    },
-  } as never;
-  beforeEach(() => {
-    llamas.length = 0;
-    respuestas = [];
-    falla = null;
-    creadas = [];
-    fallaCrear = null;
-    process.env.SUPERVISOR_URL = "http://supervisor.example:19911";
-    escribe(join(HOME, ".company", "jira-trigger", "secret"), "token-de-prueba");
-  });
-
-  it("crea la sesión en el workspace, sin prompt y en bypass, y arranca su pareja con el goal", async () => {
-    const r = await sesionConGoal({ workspaceId: "w1", texto: "deja verde el CI\ncon la PR fusionada", sesion: "claude/claude-opus-5-5", modelo: "claude-fable-5-2" }, conWorkspace);
-    assert.deepEqual(r, { ok: true, agentId: A });
-    assert.deepEqual(creadas, [{ workspaceId: "w1", config: { provider: "claude/claude-opus-5-5", modeId: "bypassPermissions" }, title: "deja verde el CI" }]);
-    assert.equal("prompt" in creadas[0], false, "el primer mensaje lo escribe el auditor");
-    assert.deepEqual(llamas[0]!.cuerpo.objetivo, { modo: "prompt", texto: "deja verde el CI\ncon la PR fusionada" });
-    assert.equal(llamas[0]!.cuerpo.a.id, A);
-    assert.equal(llamas[0]!.cuerpo.modelo, "claude-fable-5-2");
-  });
-
-  it("si el supervisor rechaza la pareja, enseña su motivo y la sesión queda para reintentar", async () => {
-    respuestas = [{ status: 409, body: { error: "el rutador coordina esta sesión" } }];
-    const r = await sesionConGoal({ workspaceId: "w1", texto: "haz X", sesion: "claude/claude-opus-5-5" }, conWorkspace);
-    assert.equal(r.ok, false);
-    assert.equal(r.agentId, A);
-    assert.match(r.error!, /^el rutador coordina esta sesión\. La sesión queda creada/);
-  });
-
-  it("si el supervisor tarda más que el plazo del RPC, responde ya con la sesión creada (su ✦ dirá cómo acaba)", async () => {
-    let suelta = () => {};
-    const antes = globalThis.fetch;
-    globalThis.fetch = (() => new Promise((ok) => { suelta = () => ok(new Response("{}", { status: 201 })); })) as typeof fetch;
-    try {
-      const r = await sesionConGoal({ workspaceId: "w1", texto: "haz X", sesion: "claude/x" }, conWorkspace, 20);
-      assert.deepEqual(r, { ok: true, agentId: A });
-    } finally {
-      suelta();
-      globalThis.fetch = antes;
-    }
-  });
-
-  it("si Paseo no crea la sesión, lo dice sin llamar al supervisor", async () => {
-    fallaCrear = new Error("workspace not found");
-    assert.equal((await sesionConGoal({ workspaceId: "w1", texto: "haz X", sesion: "claude/x" }, conWorkspace)).error, "no se pudo crear la sesión (workspace not found)");
-    assert.equal(llamas.length, 0);
-  });
-});
+after(() => rmSync(HOME, { recursive: true, force: true }));

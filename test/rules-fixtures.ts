@@ -67,6 +67,10 @@ export const CASOS: [string, string, "dispara" | "no dispara"][] = [
   ["D8", "revisa el PR de publicación del blog", "no dispara"],
   ["D9", "añade una línea al crontab del x86", "dispara"],
   ["D9", "revisa el log del despliegue de ayer", "no dispara"],
+  ["D9", '¿Existe la página `/crontab`? Usa `git grep -l "crontab" app/` y lee secciones-b/crontab.js', "no dispara"],
+  ["D9", "lee crontab.js y añade una línea al crontab del x86", "dispara"],
+  ["D9", "comprueba la página `/crontab` y crea una tarea programada", "dispara"],
+  ["D9", "modifica /etc/crontab", "dispara"],
   // `~` es la casa del cwd (16-11): la misma ruta con `~` es del cwd, y el prefijo se corta en una frontera de ruta. Van antes
   // de la de k8s-litellm: la última `dispara` de cada regla es su sonda en el eval (eval/eval.ts, SONDAS).
   ["D10", "usa el script de ~/k8s/k8s-paseo-pocharlies/scripts/x.sh", "no dispara"],

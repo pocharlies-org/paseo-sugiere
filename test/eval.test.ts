@@ -42,7 +42,7 @@ describe("eval: los casos", () => {
 
 describe("eval: D0-D14 sin tocar", () => {
   it("service/rules.ts es el de la línea base (cambiar una regla es cambiar la especificación, y se repinea aquí a la vista)", () => {
-    assert.equal(huellaReglas(), "d65bef3c29a2af3a"); // 18-11: D10 normaliza la ruta (16-11: expande `~` a la casa del cwd)
+    assert.equal(huellaReglas(), "dec4d76481d66245"); // D9 distingue referencias y D10 normaliza rutas.
   });
 
   it("cada sonda cae en su regla, de D0 a D14", () => {

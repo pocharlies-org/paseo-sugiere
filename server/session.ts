@@ -12,6 +12,7 @@ type PaseoApi = PluginHandlerContext["paseo"];
 
 const TIMEOUT_MS = 120_000;
 const SUGIERE_TIMEOUT_MS = SUGGEST_WAIT_MS + 15_000; // lo que espera el servicio al residente, y margen
+const VERDICT_TIMEOUT_MS = 75_000; // la rúbrica mantiene 60 s (docs §3); el seguimiento la espera en segundo plano, sin RPC
 const MAX_BYTES = 4 * 1024 * 1024;
 
 const FAILURE_TEXT = {
@@ -53,15 +54,23 @@ export async function locateSession(agentId: string, paseo: PaseoApi): Promise<s
 
 /** El servicio `sugiere` del clúster: la única puerta de la sugerencia, la misma que usa la compañía (Dani, 05-11). En el
  * pod de Paseo se resuelve por el DNS del clúster; fuera, `SUGIERE_URL` apunta a su IP. Su plazo es mayor que el del
- * servicio (`SUGGEST_WAIT_MS` esperando al residente), o toda sugerencia lenta se perdería aquí. */
+ * servicio (`SUGGEST_WAIT_MS` esperando al residente), o toda sugerencia lenta se perdería aquí.
+ * Con `objetivo` («Seguir en automático») el objetivo conversacional viaja como turno sintético de
+ * usuario al final del transcript: sin plan de Jira y sin el sistema de entrega de Jira — el mismo /v1/suggest de la ✦,
+ * un motor para los dos. Sin objetivo, la llamada es byte a byte la de siempre. */
 export async function sugiereRequest(
   sid: string,
   turno: number,
   lines: string[],
   plan: object | null,
+  objetivo = "",
 ): Promise<{ status: number; sugerencia: string; modelo: string; en_plan: string | null; criterio: string | null }> {
   const contexto = { kind: "live", ...(plan ? { plan } : {}) };
-  const { status, out } = await sugierePost("/v1/suggest", { sid, turno, transcript: lines.join("\n"), contexto }, SUGIERE_TIMEOUT_MS);
+  const sintetica = objetivo.trim()
+    ? JSON.stringify({ type: "user", message: { role: "user", content: [{ type: "text", text: objetivo.trim() }] } })
+    : null;
+  const transcript = sintetica ? [...lines, sintetica].join("\n") : lines.join("\n");
+  const { status, out } = await sugierePost("/v1/suggest", { sid, turno, transcript, contexto }, SUGIERE_TIMEOUT_MS);
   return {
     status,
     sugerencia: typeof out.sugerencia === "string" ? out.sugerencia.trim() : "",
@@ -69,6 +78,18 @@ export async function sugiereRequest(
     en_plan: typeof out.en_plan === "string" ? out.en_plan : null,
     criterio: typeof out.criterio === "string" && out.criterio ? out.criterio : null,
   };
+}
+
+/** El dictamen del juez sobre un mensaje a punto de enviarse (`POST /v1/verdict`, docs/servicio-sugiere.md §3): la puerta
+ * juzga exactamente el texto que el llamante va a mandar. La rúbrica tarda hasta 60 s; sin respuesta a tiempo es
+ * `SessionError("servicio")` y el llamante lo trata como veto — fail closed, como manda el contrato. */
+export async function verdictRequest(
+  sid: string,
+  turno: number,
+  sugerencia: string,
+  contexto: object,
+): Promise<{ status: number; out: Record<string, unknown> }> {
+  return sugierePost("/v1/verdict", { sid, turno, sugerencia, contexto }, VERDICT_TIMEOUT_MS);
 }
 
 /** One POST to the `sugiere` service: the status and the JSON body (empty if it is not JSON). No answer in time is `SessionError("servicio")`. */

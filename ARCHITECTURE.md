@@ -28,12 +28,7 @@ al modelo de la sesión, sin compartir la caché de la sesión.
 - `server/pares.ts` — lectura del registro de parejas del supervisor (`~/.company/jira-trigger/autopilot-pares.json`, contrato
   `file.autopilot.pares.v1`, productor el supervisor de la compañía): `{version:1, pares:{[a_id]: Par}}`. Solo lectura: ausente =
   sin pareja; ilegible / no-JSON / v1 incompleto = estado desconocido sin romper la píldora. El plugin nunca escribe este fichero.
-- `server/supervisor.ts` — la mitad del plugin de la API de autopilot del supervisor (contrato `http.supervisor.autopilot.v1`):
-  `POST /autopilot/par` (cuerpo del contrato: id/cwd/workspace/título de A, objetivo — la `key` del ancla de paseo-plan o un prompt —,
-  modelo del auditor, `origen: "paseo"`) y `DELETE /autopilot/par/<a_id>`, con `X-Company-Token` de
-  `~/.company/jira-trigger/secret` y base `http://company.paseo.svc.cluster.local:19911` (env `SUPERVISOR_URL`). La respuesta se
-  convierte en `{ok, error?}` y el error se enseña una vez en el popover. El plugin no pilota ni decide: eso es de la sesión
-  auditora B, que crea el supervisor.
+- `server/supervisor.ts` solo permite parar una pareja anterior (`DELETE /autopilot/par/<a_id>`). No crea sesiones ni decide el siguiente mensaje.
 - `client/suggest-pill.tsx` — píldora en el composer; no pregunta nunca con reloj: una sola llamada `suggest.watch`
   retenida por app, que el servidor contesta cuando cambia algún agente y que se reabre al responder (tras un fallo, al siguiente
   cambio de turno o snapshot de agentes); el popover abierto del autopilot oye su pareja por suscripción. El texto se tira al salir de idle, al enviar y al pasarlo al prompt. Su icono es el ancla del puente. Nada entra en el prompt
@@ -51,19 +46,8 @@ al modelo de la sesión, sin compartir la caché de la sesión.
   devuelve `false` y la píldora abre su popover. Un update de Paseo que mueva `data-testid="message-input-root"` o
   `data-composer-input` produce el mismo respaldo, nunca una escritura en otro agente. **Retirada**: se borra cuando la SDK exponga el
   borrador (discusión getpaseo/paseo#4688), o si dos updates seguidos de Paseo lo rompen sin esa API.
-- `index.server.ts` / `index.client.tsx` — enganche a los hooks `agent.turn_ended` /
-  `agent.turn_started`, al RPC `suggest.watch` y al ajuste `enabled`
-  (`registerSettings`, host): al desactivar, `setEnabled(false)` tira pendientes y mostradas y
-  `arm` deja de programar generaciones; `quietSeconds` es la ventana de silencio. La instrucción del modelo no
-  pasa por aquí: vive solo en el servicio (decisión 5). Con «Garantizar plan» (`anchor-<agentId>.json` de paseo-plan con
-  `guard` y criterios) `arm` genera al acabar el turno, sin ventana, y manda el ancla en `contexto.plan`; `suggest.feedback` cuenta
-  los «no es esto» (tres seguidos callan la ✦ hasta un clic). El autopilot ya no cuelga de aquí (14-11-2026): con pareja viva la
-  píldora pinta el estado del registro y la única generación por turno la decide el supervisor; `agent.turn_ended` va a `arm` y
-  `agent.turn_started` a `cancel`, como sin autopilot. `server/vigilia.ts` guarda el estado de cada píldora (sugerencia, último
-  forzado, pareja leída por `pares.ts` con el auditor mejorado al título de B vía `paseo.agents.list` una vez por id, y plan del ancla)
-  y retiene `suggest.watch` hasta 20 s (bajo los 30 s del host): `suggest.ts` avisa de cada cambio, y el registro de parejas y las
-  anclas de paseo-plan llegan por un inotify no recursivo de su directorio; solo despierta si cambia lo que pinta una píldora. `autopilot.start` y `autopilot.stop`
-  atienden el formulario y llaman a `supervisor.ts`.
+- `index.server.ts` une los turnos de Paseo con `server/suggest.ts`. Sugerir entrega el texto a la píldora; en «Seguir en automático» el mismo generador toma el objetivo revisado y somete cada envío a `/v1/verdict`. Parar invalida cualquier respuesta pendiente. El seguimiento es por sesión y no se reanuda tras reiniciar el plugin.
+- `server/vigilia.ts` notifica a la píldora por `suggest.watch` cuando cambia el estado.
 - `client/suggest-settings.tsx` — pantalla de ajustes propia (`addSettingsScreen` + `useSettings`):
   interruptor y ventana de silencio (los topes del autopilot murieron con su bucle: los pasos los decide el supervisor); el documento compartido está en `shared/settings.ts`.
 

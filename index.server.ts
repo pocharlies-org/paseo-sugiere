@@ -1,11 +1,11 @@
 import { readdirSync } from "node:fs";
 import { basename, dirname } from "node:path";
 import type { PluginHandlerContext, PluginServerContext } from "@getpaseo/plugin/server";
-import { autopilotGoal, autopilotStart, autopilotStop, suggestFeedback, suggestForce, suggestWatch, type EstadoAgente } from "./shared/contract.ts";
+import { seguir, autopilotStop, planLeer, suggestFeedback, suggestForce, suggestWatch, type EstadoAgente } from "./shared/contract.ts";
 import { suggestSettings, type SuggestValues } from "./shared/settings.ts";
 import { registro, rutaPorDefecto } from "./server/pares.ts";
 import { apagarPar } from "./server/supervisor.ts";
-import { arrancarEnPlazo, sesionConGoal } from "./server/goal.ts";
+import { objetivoDeAgente } from "./server/objetivo.ts";
 import * as suggest from "./server/suggest.ts";
 import { observa, vigilia } from "./server/vigilia.ts";
 
@@ -21,10 +21,9 @@ export default function contribute(server: PluginServerContext) {
   };
   settings.subscribe(apply);
   void settings.read().then(apply, () => apply({ status: "invalid" }));
-  // The autopilot is not this plugin's loop anymore (auditor session + supervisor, 14-11): a completed turn only arms the
-  // suggestion. A failed or canceled turn does nothing either way: the supervisor's RETOMA covers cuts, and an Esc pauses without switching off.
+  // Only a completed turn can advance automatic following.
   server.on("agent.turn_ended", ({ agent, outcome }, context) => {
-    if (outcome.kind !== "completed") return suggest.cancel(agent.id);
+    if (outcome.kind !== "completed") return suggest.finFallido(agent.id);
     suggest.arm(agent.id, context);
   });
   server.on("agent.turn_started", ({ agent }) => suggest.cancel(agent.id));
@@ -42,6 +41,7 @@ export default function contribute(server: PluginServerContext) {
     return {
       text: suggest.get(agentId),
       ...suggest.state(agentId),
+      seguimiento: suggest.seguimiento(agentId),
       ...suggest.anchor(agentId),
       autopilot: titulo ? { ...autopilot, auditor: titulo } : autopilot,
       plan: suggest.planAnchor(agentId),
@@ -87,9 +87,9 @@ export default function contribute(server: PluginServerContext) {
     nombraAuditores();
     return vigia.espera(input.since);
   });
-  server.handle(autopilotStart, (input, context) => arrancarEnPlazo(input, context.paseo));
+  server.handle(seguir, (input, context) => suggest.seguir(input.agentId, input.objetivo, context));
   server.handle(autopilotStop, (input) => apagarPar(input.agentId));
-  server.handle(autopilotGoal, (input, context) => sesionConGoal(input, context.paseo));
+  server.handle(planLeer, (input, context) => objetivoDeAgente(input.agentId, context.paseo));
   server.handle(suggestFeedback, (input) => suggest.feedback(input.agentId, input.verdict));
   server.handle(suggestForce, (input, context) => ({ started: suggest.force(input.agentId, context) }));
   return () => {

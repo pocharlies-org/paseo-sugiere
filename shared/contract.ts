@@ -30,6 +30,7 @@ const estadoAgente = z.object({
   en_plan: z.string().nullable(),
   criterio: z.string().nullable(),
   muted: z.boolean(),
+  seguimiento: z.object({ activo: z.boolean(), objetivo: z.string(), motivo: z.string() }).optional(),
   autopilot: par,
   plan: z.object({ key: z.string(), criterios: z.number().int() }).nullable(),
 });
@@ -56,37 +57,10 @@ export const suggestWatch = defineRpc({
   output: z.object({ version: z.number().int(), completo: z.boolean(), agentes: z.record(z.string(), estadoAgente) }),
 });
 
-/** «Empezar» in the ✦'s popover: the server POSTs `/autopilot/par` to the supervisor (`http.supervisor.autopilot.v1`), which
- * creates the auditor session B and registers the pair. The plugin only asks — with the plan the session is anchored to, or
- * with the prompt the user typed — and the supervisor decides everything else. `texto` is required with `prompt`, ignored
- * with `plan` (the server takes the key from the anchor); `modelo` is the auditor's, from A's provider. */
-export const autopilotStart = defineRpc({
-  name: "autopilot.start",
-  input: z
-    .object({
-      agentId: z.string().min(1).max(64),
-      modo: z.enum(["plan", "prompt"]),
-      texto: z.string().trim().max(4000).optional(),
-      modelo: z.string().max(120).optional(),
-    })
-    .strict(),
+export const seguir = defineRpc({
+  name: "suggest.seguir",
+  input: z.object({ agentId: z.string().min(1).max(64), objetivo: z.string().trim().min(1).max(4000).nullable() }).strict(),
   output: z.object({ ok: z.boolean(), error: z.string().optional() }),
-});
-
-/** «Goal» in a workspace's header (Dani 15-11: «crear un goal en una sesión nueva»): the server creates a new session
- * in that workspace and starts its autopilot pair with the goal as the prompt objective — a session born piloted. `sesion` is
- * the new session's `provider/model`, `modelo` the auditor's. */
-export const autopilotGoal = defineRpc({
-  name: "autopilot.goal",
-  input: z
-    .object({
-      workspaceId: z.string().min(1).max(64),
-      texto: z.string().trim().min(1).max(4000),
-      sesion: z.string().min(1).max(120),
-      modelo: z.string().max(120).optional(),
-    })
-    .strict(),
-  output: z.object({ ok: z.boolean(), error: z.string().optional(), agentId: z.string().optional() }),
 });
 
 /** The popover's stop button: `DELETE /autopilot/par/<agentId>` — the supervisor unregisters the pair and archives B. */
@@ -94,6 +68,12 @@ export const autopilotStop = defineRpc({
   name: "autopilot.stop",
   input: z.object({ agentId: z.string().min(1).max(64) }).strict(),
   output: z.object({ ok: z.boolean(), error: z.string().optional() }),
+});
+
+export const planLeer = defineRpc({
+  name: "plan.leer",
+  input: z.object({ agentId: z.string().min(1).max(64) }).strict(),
+  output: z.object({ objetivo: z.string().nullable() }),
 });
 
 /** «no es esto» on an anchored suggestion, or the suggestion was used: three «no es esto» in a row and the ✦ goes quiet. */

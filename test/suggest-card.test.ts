@@ -20,7 +20,10 @@ function canal() {
 }
 const estado = (extra: object = {}) => ({ text: null, pending: false, error: null, nada: false, en_plan: null, criterio: null, muted: false, autopilot: { estado: "sin-par", motivo: "" }, plan: null, ...extra });
 const sinSondeo = () => { throw new Error("the client never asks on a clock"); };
-const contrato = { suggestWatch: "watch", suggestForce: "force", suggestFeedback: "feedback", autopilotStart: "start", autopilotStop: "stop", ESTADO_VACIO: estado() };
+// 18-11: the client speaks `seguir` (start with the objective, stop with null), `plan.leer` (the objective to review) and
+// `autopilot.stop` (a legacy pair can only be stopped). The old start route — autopilotStart, autopilotGoal, the auditor model —
+// is gone from the contract and must not reappear in the client.
+const contrato = { suggestWatch: "watch", suggestForce: "force", suggestFeedback: "feedback", autopilotStop: "stop", planLeer: "objetivo", seguir: "seguir", ESTADO_VACIO: estado() };
 
 // Render the plugin with host primitives, without loading React Native's native runtime in Node.
 test("suggestion card uses the sheet-aware input, edits before sending and has a reachable mobile button", async () => {
@@ -87,9 +90,10 @@ test("suggestion card uses the sheet-aware input, edits before sending and has a
     assert.equal(render(), null);
     effects.splice(0).forEach((effect) => effect());
     let card = render();
-    const [row, autopilot] = card.props.children;
+    const [row, panel] = card.props.children;
     const [input, hint, send] = row.props.children;
-    assert.equal(autopilot.props.par.estado, "sin-par", "the card carries the autopilot start form (the mobile card)");
+    assert.equal(panel.props.par.estado, "sin-par", "the card carries the follow form under the field (the mobile card)");
+    assert.equal(panel.props.seguimiento, null, "nothing is being followed yet");
     assert.equal(hint, null, "a short suggestion needs no scroll hint");
     assert.equal(input.type, "SheetAwareInput");
     assert.equal(closed, false);
@@ -167,7 +171,7 @@ test("a forced suggestion stays on the pill until its button is pressed", async 
   assert.equal(button.behavior.kind, "popover", "an idle agent with no suggestion yet shows the plain ✦, whose popover offers «Sugerir ahora»");
   let closed = false;
   const panel = button.behavior.Content({ theme: { colors: {} }, close: () => { closed = true; } });
-  assert.equal(panel.props.par.estado, "sin-par", "next to the autopilot start form");
+  assert.equal(panel.props.par.estado, "sin-par", "next to the follow form");
   panel.props.suggestNow();
   assert.ok(closed, "pressing it closes the popover");
   await settled();
@@ -180,18 +184,18 @@ test("a forced suggestion stays on the pill until its button is pressed", async 
   stop();
 });
 
-// With a live autopilot pair (the auditor pilots the session, 14-11) the ✦ only speaks for it: gold with «esperando: …», red
-// with «necesita acción: …», its popover is the status and the «Parar» button, it stays reachable while a turn runs, and no
-// suggestion or «no es esto» shows next to it.
-test("a piloted ✦ is gold while it waits, red when it needs a person, and its popover is the status with «Parar»", async () => {
+// 18-11: a legacy autopilot pair (auditor B, 14-11) can only be stopped from the plugin: the ✦ paints from its registry state,
+// its popover is the status with «Parar», it stays reachable while a turn runs, and the old start route (Empezar, model select,
+// Jira) never reappears.
+function loadStatusPill() {
   const source = readFileSync(new URL("../client/suggest-pill.tsx", import.meta.url), "utf8");
   const { outputText } = ts.transpileModule(source, {
     compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX },
   });
   const jsx = (type: unknown, props: unknown) => ({ type, props });
   const modules: Record<string, unknown> = {
-    "react/jsx-runtime": { jsx, jsxs: jsx },
-    react: { useState: (i: unknown) => [i, () => {}], useEffect: () => {}, useMemo: (f: () => unknown) => f(), useRef: () => ({ current: null }) },
+    "react/jsx-runtime": { jsx, jsxs: jsx, Fragment: "Fragment" },
+    react: { useState: (i: unknown) => [typeof i === "function" ? (i as () => unknown)() : i, () => {}], useEffect: () => {}, useMemo: (f: () => unknown) => f(), useRef: () => ({ current: null }) },
     "react-native": { View: "View", Text: "Text", Pressable: "Pressable", AccessibilityInfo: {} },
     "@getpaseo/plugin/client/ui": { SettingsAction: "SettingsAction", SettingsSelect: "SettingsSelect" },
     "@getpaseo/plugin/client/react-native": { Icon: "Icon", TextInput: "Input" },
@@ -206,6 +210,21 @@ test("a piloted ✦ is gold while it waits, red when it needs a person, and its 
     sinSondeo,
     sinSondeo,
   );
+  return exports;
+}
+
+function idlePaseo(onUpdate: (send: (agent: object) => void) => void) {
+  return { agents: {
+      list: async () => ({ subscription: { subscribe: ({ snapshot, update: u }: any) => {
+        onUpdate((agent) => u({ type: "agent_update", payload: { kind: "upsert", agent } }));
+        snapshot({ entries: [{ agent: { id: "a", workspaceId: "w", status: "idle" } }] });
+      } } }),
+      ref: () => ({ send: () => {} }),
+    } };
+}
+
+test("a piloted ✦ is gold while it waits, red when it needs a person, and its popover is the status with «Parar» — stop only", async () => {
+  const exports = loadStatusPill();
   const watch = canal();
   watch.empuja({ version: 1, completo: true, agentes: { a: estado({ text: "una sugerencia vieja", en_plan: "en-plan", criterio: "c", autopilot: { estado: "esperando", motivo: "ESPERA: ci" } }) } });
   const paros: unknown[] = [];
@@ -221,13 +240,7 @@ test("a piloted ✦ is gold while it waits, red when it needs a person, and its 
       paros.push(input);
       return Promise.resolve({ ok: true });
     },
-    paseo: { agents: {
-      list: async () => ({ subscription: { subscribe: ({ snapshot, update: u }: any) => {
-        update = (agent) => u({ type: "agent_update", payload: { kind: "upsert", agent } });
-        snapshot({ entries: [{ agent: { id: "a", workspaceId: "w", status: "idle" } }] });
-      } } }),
-      ref: () => ({ send: () => {} }),
-    } },
+    paseo: idlePaseo(fn => { update = fn; }),
   });
   const settled = () => new Promise<void>((resolve) => setImmediate(resolve));
   await settled();
@@ -237,6 +250,10 @@ test("a piloted ✦ is gold while it waits, red when it needs a person, and its 
   const panel = buttons.suggest.behavior.Content({ theme: { colors: {} }, close() {} });
   assert.equal(panel.props.par.estado, "esperando");
   assert.equal(panel.props.suggestNow, undefined, "no «Sugerir ahora» while the auditor pilots: one generation per turn");
+  const tree = JSON.stringify((panel.type as (p: unknown) => unknown)(panel.props));
+  assert.ok(tree.includes("Parar"), "the popover is the status with «Parar»");
+  assert.ok(!tree.includes("Empezar"), "the old start route is gone: a legacy pair can only be stopped");
+  assert.ok(!tree.includes("SettingsSelect"), "no auditor model and no Jira choice");
   const oidos: string[] = [];
   const deja = panel.props.escucha((par: any) => oidos.push(par.estado)); // the open popover follows its pair
   watch.empuja({ version: 2, completo: false, agentes: { a: estado({ autopilot: { estado: "humano", motivo: "dinero" } }) } });
@@ -255,7 +272,7 @@ test("a piloted ✦ is gold while it waits, red when it needs a person, and its 
   assert.equal(buttons.suggest.visible, false, "stopped, the ✦ is the plain one again: hidden while the turn runs");
   assert.equal(exports.autopilotLine({ estado: "pensando", motivo: "" }), "autopilot: el auditor está pensando");
   assert.equal(exports.autopilotLine({ estado: "degradada", motivo: "" }), "autopilot degradado: el auditor no responde");
-  assert.equal(exports.autopilotLine({ estado: "entregada", motivo: "TAREA-1000001 verificado" }), "entregado: TAREA-1000001 verificado");
+  assert.equal(exports.autopilotLine({ estado: "entregada", motivo: "el plan está verificado" }), "entregado: el plan está verificado");
   const now = Date.parse("2026-11-08T12:00:00Z");
   assert.deepEqual(
     exports.autopilotDetails(
@@ -265,5 +282,145 @@ test("a piloted ✦ is gold while it waits, red when it needs a person, and its 
     ["sigue solo cuando llegue el EVENTO del supervisor", "2 pasos seguidos · 9 en la sesión", "en marcha hace 1 h · actualizado hace 30 s", "último envío: «[AUTOPILOT] sigue»", "auditor: Auditor de la historia"],
   );
   assert.deepEqual(exports.autopilotDetails({ estado: "activa", motivo: "" }, now), [], "nothing invented before the first decision");
+  stop();
+});
+
+// 18-11: el formulario de «Seguir en automático» arranca con el objetivo de la conversación (plan.leer), prefijado para
+// revisarlo —abrir no ejecuta nada— y «Seguir» manda exactamente lo que hay en el campo, editado y recortado. Sin modelo del
+// auditor, sin Jira y sin selector de ningún tipo: la configuración anterior desapareció del popover.
+test("the follow form prefills the conversation's objective, never runs by opening, and sends exactly what is reviewed", async () => {
+  const source = readFileSync(new URL("../client/suggest-pill.tsx", import.meta.url), "utf8");
+  const { outputText } = ts.transpileModule(source, {
+    compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX },
+  });
+  const jsx = (type: unknown, props: any) => ({ type, props });
+  let states: unknown[] = [];
+  let cursor = 0;
+  let effects: Array<() => void> = [];
+  const modules: Record<string, unknown> = {
+    "react/jsx-runtime": { jsx, jsxs: jsx, Fragment: "Fragment" },
+    react: {
+      useState(initial: unknown) {
+        const index = cursor++;
+        if (!(index in states)) states[index] = typeof initial === "function" ? (initial as () => unknown)() : initial;
+        return [states[index], (value: unknown) => { states[index] = typeof value === "function" ? (value as (p: unknown) => unknown)(states[index]) : value; }];
+      },
+      useEffect(effect: () => void) { effects.push(effect); },
+      useMemo: (factory: () => unknown) => factory(),
+    },
+    "react-native": { View: "View", Text: "Text", Pressable: "Pressable", AccessibilityInfo: {} },
+    "@getpaseo/plugin/client/ui": { SettingsAction: "SettingsAction", SettingsSelect: "SettingsSelect" },
+    "@getpaseo/plugin/client/react-native": { Icon: "Icon", TextInput: "Input" },
+    "../shared/contract.ts": contrato,
+    "./composer-bridge.ts": { insertSuggestion: () => false, registerPillAnchor: () => () => {} },
+    "./estrella.ts": { gira },
+  };
+  const exports: any = {};
+  new Function("require", "exports", "setInterval", "setTimeout", outputText)(
+    (name: string) => { assert.ok(name in modules, name); return modules[name]; },
+    exports,
+    sinSondeo,
+    sinSondeo,
+  );
+  const OBJETIVO = "Objetivo: dejar verde el CI\nCriterios:\nC1 [abierta] npm test en el pod";
+  const seguirs: any[] = [];
+  const watch = canal();
+  watch.empuja({ version: 1, completo: true, agentes: { a: estado() } });
+  let button: any;
+  const stop = exports.addSuggestPill({
+    addComposerPill: ({ id, button: next }: any) => {
+      if (id === "suggest") button = next;
+      return { update: (next: unknown) => { if (id === "suggest") button = next; }, remove() {} };
+    },
+    rpc: (name: string, input: any) => {
+      if (name === "watch") return watch.pide();
+      if (name === "objetivo") return Promise.resolve({ objetivo: OBJETIVO });
+      if (name === "seguir") { seguirs.push(input); return Promise.resolve({ ok: true }); }
+      return Promise.resolve({});
+    },
+    paseo: {
+      agents: {
+        list: async () => ({ subscription: { subscribe: ({ snapshot }: any) => snapshot({ entries: [{ agent: { id: "a", workspaceId: "w", status: "idle" } }] }) } }),
+        ref: () => ({ send: () => {} }),
+      },
+    },
+  });
+  const settled = () => new Promise<void>((resolve) => setImmediate(resolve));
+  await settled();
+  await settled();
+  const theme = { colors: { foreground: "white", foregroundMuted: "gray", border: "gray", accent: "green", accentForeground: "black" } };
+  const element = button.behavior.Content({ theme, close() {} });
+  const render = () => { cursor = 0; return element.type(element.props); };
+  effects.length = 0;
+  const first = render();
+  effects.splice(0).forEach((e) => e()); // abre el popover: lee el objetivo para revisarlo, no ejecuta nada
+  await settled();
+  await settled();
+  const tree = JSON.stringify(render());
+  assert.ok(!tree.includes("SettingsSelect"), "sin selector de modelo del auditor y sin elección de Jira: la configuración anterior fuera");
+  assert.ok(!tree.includes("Empezar"), "la ruta vieja de arranque no reaparece");
+  const form = render().props.children[3].props.children;
+  const [campo, accion] = [form[1], form[2]];
+  assert.equal(campo.props.value, OBJETIVO, "prefijado con el texto real de la conversación, para revisarlo");
+  assert.equal(accion.props.actionLabel, "Seguir", "el botón del popover es «Seguir en automático»");
+  assert.equal(seguirs.length, 0, "abrir el popover no arranca el seguimiento");
+  accion.props.onPress();
+  await settled();
+  assert.deepEqual(seguirs.at(-1), { agentId: "a", objetivo: OBJETIVO }, "se manda el objetivo revisado, tal cual está en el campo");
+  campo.props.onChangeText("  otro objetivo editado  ");
+  const form2 = render().props.children[3].props.children;
+  assert.equal(form2[2].props.disabled, false, "con texto, «Seguir» está disponible");
+  form2[2].props.onPress();
+  await settled();
+  assert.deepEqual(seguirs.at(-1), { agentId: "a", objetivo: "otro objetivo editado" }, "lo editado es lo que se manda, recortado");
+  form2[1].props.onChangeText("");
+  const form3 = render().props.children[3].props.children;
+  assert.equal(form3[2].props.disabled, true, "sin objetivo no se arranca nada");
+  stop();
+});
+
+// 18-11: siguiendo, la ✦ es la amarilla que gira y visible también a mitad de turno (el «Parar» tiene que estar al alcance);
+// el popover es el estado —objetivo y qué está haciendo— con «Parar» en el mismo sitio del «Seguir», y parar manda objetivo null.
+test("while following, the ✦ turns, stays reachable mid-turn, and the popover is the status with «Parar» in the same place", async () => {
+  const exports = loadStatusPill();
+  const OBJETIVO = "Dejar verde el CI y fusionar el PR";
+  const seguirs: any[] = [];
+  const watch = canal();
+  watch.empuja({ version: 1, completo: true, agentes: { a: estado({ seguimiento: { activo: true, objetivo: OBJETIVO, motivo: "paso 2: abre el PR" } }) } });
+  const buttons: Record<string, any> = {};
+  let update: (agent: object) => void = () => {};
+  const stop = exports.addSuggestPill({
+    addComposerPill: ({ id, button }: any) => {
+      buttons[id] = button;
+      return { update: (next: unknown) => { buttons[id] = next; }, remove() {} };
+    },
+    rpc: (name: string, input: any) => {
+      if (name === "watch") return watch.pide();
+      if (name === "seguir") { seguirs.push(input); return Promise.resolve({ ok: true }); }
+      return Promise.resolve({ ok: true });
+    },
+    paseo: idlePaseo(fn => { update = fn; }),
+  });
+  const settled = () => new Promise<void>((resolve) => setImmediate(resolve));
+  await settled();
+  await settled();
+  assert.equal(buttons.suggest.label, "siguiendo", "la ✦ dice que la sesión avanza sola (y gira: el estado es el amarillo en marcha)");
+  const panel = buttons.suggest.behavior.Content({ theme: { colors: { foreground: "white", foregroundMuted: "gray" } }, close() {} });
+  const block = (panel.type as (p: unknown) => any)(panel.props).props.children[1];
+  assert.equal(block.props.children[0].props.children[1], "paso 2: abre el PR", "qué está haciendo ahora");
+  assert.equal(block.props.children[1].props.children, OBJETIVO, "el objetivo que persigue, a la vista");
+  assert.equal(block.props.children[2].props.actionLabel, "Parar", "«Parar» en el mismo sitio del «Seguir»");
+  assert.equal(block.props.children[2].props.label, "Seguir en automático");
+  const tree = JSON.stringify((panel.type as (p: unknown) => unknown)(panel.props));
+  assert.ok(!tree.includes("Empezar") && !tree.includes("SettingsSelect"), "ni arranque viejo ni configuración de auditor/Jira en el popover");
+  block.props.children[2].props.onPress();
+  await settled();
+  assert.deepEqual(seguirs, [{ agentId: "a", objetivo: null }], "parar es seguir con objetivo null: una pulsación, sin nada que escribir");
+  update({ id: "a", workspaceId: "w", status: "running" });
+  assert.equal(buttons.suggest.visible, true, "a mitad de turno el «Parar» sigue al alcance");
+  assert.equal(buttons.suggest.label, "siguiendo", "y la píldora lo sigue diciendo");
+  watch.empuja({ version: 2, completo: false, agentes: { a: estado({ seguimiento: { activo: false, objetivo: OBJETIVO, motivo: "" } }) } }); // parado, empujado
+  await settled();
+  assert.equal(buttons.suggest.visible, false, "parado, la ✦ vuelve a ser la normal: oculta mientras dura el turno");
   stop();
 });

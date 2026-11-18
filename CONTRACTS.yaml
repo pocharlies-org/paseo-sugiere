@@ -38,7 +38,8 @@ contracts:
     note: >-
       Registro retroactivo (07-11-2026). Entrada {sid, turno, sugerencia, contexto{cwd, key?, resumen?, criterio?}}; salida
       siempre 200 {ok, riesgo ninguno|bajo|alto|dinero, motivo, via, traza?}; 422 cuerpo inválido o sin contexto.cwd;
-      fail-closed. Consumidor: x86-host-runtime libexec/sugiere_puerta.py. Spec: docs/servicio-sugiere.md §3-§6.
+      fail-closed. D9 comprueba el paso aun si cita ficheros de la interfaz: la referencia no autoriza programar tareas.
+      Consumidor: x86-host-runtime libexec/sugiere_puerta.py. Spec: docs/servicio-sugiere.md §3-§6.
   - id: http.sugiere.autopilot.v1
     kind: http-route
     value: "POST /v1/autopilot"
@@ -77,9 +78,7 @@ contracts:
       lee validado (server/delegation.ts): ausente = normal; ilegible, no-JSON o v1 incompleto = fail closed (el autopilot
       no reclama la sesión: rechaza encenderse y para a rojo sin enviar ni archivar). El rutador no escribe
       autopilot.json y el plugin no escribe este fichero.
-      Deprecado (14-11-2026): el bucle del plugin y su lector (server/delegation.ts) murieron con él; la valla contra un
-      producer pilotado la ponen ahora el rutador (lee `file.autopilot.pares.v1`) y el supervisor (POST /autopilot/par
-      responde 409 con una delegación activa).
+      El seguimiento de Sugerir comprueba esta reserva antes de enviar, además del registro de parejas del supervisor.
     replaced_by: file.autopilot.pares.v1
     remove_after: 2026-11-28
   - id: http.supervisor.autopilot.v1
@@ -91,13 +90,8 @@ contracts:
       - server/supervisor.ts
     status: active
     note: >-
-      14-11-2026 (autopilot como sesión auditora). Productor: el supervisor de la compañía (x86-host-runtime, que lleva la
-      entrada canónica en su CONTRACTS.yaml); consumidor: el plugin de este repo, que solo arranca y para la pareja y enseña
-      su estado — no pilota. POST {a{id,tipo,cwd,titulo}, objetivo{modo plan+key|prompt+texto}, modelo?, origen} → 201 par
-      creado, 409 ya hay pareja viva o A es una B, 422 cuerpo inválido o A sin cwd, 503 supervisor no disponible; DELETE
-      /autopilot/par/<a_id> → 200 (también 404: no había pareja). Base http://company.paseo.svc.cluster.local:19911 (env
-      SUPERVISOR_URL) y cabecera X-Company-Token (~/.company/jira-trigger/secret). Aditivo (16-11): el plugin manda
-      también `a.workspace`, el workspace de Paseo de A, para que el supervisor cree B en él, justo a continuación de A.
+      El supervisor sigue siendo el productor de la API de parejas. El plugin solo conserva DELETE /autopilot/par/<a_id>
+      para parar parejas existentes. «Seguir en automático» no invoca el POST de creación ni crea sesiones auditoras.
   - id: file.autopilot.pares.v1
     kind: file-schema
     value: "autopilot-pares.json"

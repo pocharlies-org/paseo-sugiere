@@ -22,18 +22,8 @@ prompt, ready to edit and send with Enter.
   narrow layouts, or a prompt it cannot tell apart from another pane's), the pill opens a small editable card instead, with a send
   button.
 - A new turn drops the pending suggestion. Nothing is sent for you unless you start the agent's **Autopilot**.
-- **Autopilot** (a start form in the ✦'s popover and in the mobile card, per agent; since 14-11-2026): «Empezar» asks the
-  company supervisor to pair this session with an auditor session B — another model (Opus 5.5 by default, from your provider's
-  model list) that plans, audits against the criteria and writes A's next prompt; B never implements. The objective is the plan
-  the session is anchored to or a prompt you write. The plugin only starts and stops the pair and shows its state: gold and
-  spinning while it works or waits, bright red and pulsing when a person is needed (fixed red when the auditor stopped
-  answering), green once delivered; the popover carries the reason, the steps, the last send, the auditor and «Parar». Its
-  state comes from the supervisor's registry (`~/.company/jira-trigger/autopilot-pares.json`): no file means no pair. It is
-  not the «suggest automatically» setting, which only proposes.
-- **Goal** (a button in each workspace's header; since 15-11-2026): write a goal, pick the session's and the auditor's models,
-  and «Empezar» creates a new session in that workspace already paired with its auditor, which writes its first message.
-- Settings (plugin settings screen): on/off and the quiet window (the autopilot's caps died with the plugin's loop — the
-  supervisor decides the steps).
+- **Seguir en automático** reuses the next-message suggestion at turn end, with an editable conversation objective and a verdict before every send. Stop from the same composer; no ticket, model picker or new session. An existing supervisor pair can still be stopped.
+- Plugin settings control suggestions and their quiet window; enabling automatic previews does not authorize sending messages.
 
 ## Requirements
 

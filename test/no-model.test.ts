@@ -7,6 +7,7 @@ let calls = 0;
 let transcript = ['{"type":"user","message":{"role":"user","content":"hola"}}'];
 mock.module(new URL("../server/session.ts", import.meta.url).href, {
   namedExports: {
+    verdictRequest: async () => { throw new Error("unexpected automatic send in a manual suggestion test"); },
     SessionError: class extends Error {},
     locateSession: async () => transcript,
     nativeSuggestion: async () => null, // sin fichero nativo : la llamada al servicio es el camino normal

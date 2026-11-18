@@ -12,6 +12,7 @@ const TRANSCRIPT = [
 let respuesta: () => Promise<{ status: number; sugerencia: string; modelo: string }>;
 mock.module(new URL("../server/session.ts", import.meta.url).href, {
   namedExports: {
+    verdictRequest: async () => { throw new Error("unexpected automatic send in a manual suggestion test"); },
     SessionError: class extends Error {},
     locateSession: async () => TRANSCRIPT,
     nativeSuggestion: async () => null,
