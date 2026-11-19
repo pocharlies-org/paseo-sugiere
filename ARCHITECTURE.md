@@ -68,8 +68,10 @@ deprecada desde el 14-11-2026 (el plugin dejó de llamarla: el autopilot es la s
 
 ## Riesgos conocidos
 
-- `requirements.paseo` pide `>=0.16.2`, sin tope: el host lo comprueba al instalar o actualizar, pero un Paseo
-  nuevo que rompa el SDK solo se ve al cargar el plugin; el tipado y los tests van contra 0.16.2.
+- `requirements.paseo` pide `>=0.16.0`, sin tope: lo comprueba el cliente (no el daemon) al cargar el plugin, y con
+  la app por detrás el plugin figura cargado pero no pinta nada (19-11). El badge de fila
+  (`addWorkspaceRowBadgeItem`, 0.16.2) va tras `?.`: en un cliente anterior se pierde el badge, no la píldora. El
+  tipado y los tests van contra 0.16.2.
 - El ahorro por KV-cache (APC) es la hipótesis de diseño, no una medición en vivo.
 
 ## Publicación

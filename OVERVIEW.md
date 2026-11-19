@@ -38,7 +38,7 @@ This plugin was built for one setup and is published as it runs there. Read this
 - **Cost.** Each suggestion sends the conversation (up to ~100k tokens) to the session's model, without sharing the session's cache.
 - **Spanish by default.** The instruction asks for the suggestion in Spanish and the settings screen is in Spanish. The
   instruction lives in the `sugiere` service only; the plugin sends none.
-- Paseo `>=0.16.2`.
+- Paseo `>=0.16.0`. The workspace-row badge needs 0.16.2; on an older client the pill works and the badge is skipped.
 
 ## What it reads, sends and writes
 
