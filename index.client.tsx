@@ -9,7 +9,8 @@ import { BadgeFila } from "./client/workspace-badge.tsx";
 // own pushed state (client/estado-agentes.ts): one stream, no second watch.
 export default function contribute(client: PluginClientContext) {
   const pill = addSuggestPill(client);
-  const badge = client.addWorkspaceRowBadgeItem({ id: "autopilot", title: "Autopilot en marcha", icon: "Sparkles", Component: BadgeFila });
+  // El badge de fila es de 0.16.2: un cliente anterior se queda con la píldora y sin badge, no sin plugin (Dani 19-11).
+  const badge = client.addWorkspaceRowBadgeItem?.({ id: "autopilot", title: "Autopilot en marcha", icon: "Sparkles", Component: BadgeFila }) ?? (() => {});
   const screen = client.addSettingsScreen({ id: "paseo-sugiere", title: "Sugerencia del siguiente mensaje", icon: "Sparkles", Component: SuggestSettings });
   return () => {
     pill();
