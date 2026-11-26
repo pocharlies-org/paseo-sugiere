@@ -4,9 +4,10 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, beforeEach, describe, it } from "node:test";
 
-// The pill with the real session module and real files: the native suggestion is not consumed by reading (a second force of the
-// same turn shows it again), «no es esto» on it makes the next force go to the service, and rejecting a service suggestion leaves
-// the native file alone. The service and Paseo are fakes; HOME is a scratch dir, set before the modules read their paths.
+// The pill with the real session module and real files: the native suggestion is shown hours after the turn, and serving it consumes
+// the file, so a second force of the same turn (after a dismissal, say) goes to the service, as before the native file lived on.
+// A native file that is not served (the session moved on) is left where it is. The service and Paseo are fakes; HOME is a scratch
+// dir, set before the modules read their paths.
 const ROOT = mkdtempSync(join(tmpdir(), "native-pill-"));
 process.env.HOME = ROOT;
 process.env.PASEO_HOME = join(ROOT, "paseo");
@@ -57,47 +58,54 @@ describe("the pill and the native suggestion", () => {
   });
   after(() => rmSync(ROOT, { recursive: true, force: true }));
 
-  it("shows the native text hours after the turn, and shows it again on a second force: reading does not consume it", async () => {
+  it("shows the native text hours after the turn, with no call to the service, and consumes the file", async () => {
     native("ejecuta los tests", T0 + 37_000);
     await forzar();
     assert.equal(suggest.get("a1"), "ejecuta los tests");
-    await forzar();
-    assert.equal(suggest.get("a1"), "ejecuta los tests");
-    assert.equal(llamadas, 0); // no call to the service: the transcript is not resent
-    assert.ok(existsSync(SUGGEST));
+    assert.equal(llamadas, 0); // the transcript is not resent
+    assert.equal(existsSync(SUGGEST), false);
   });
 
-  it("«no es esto» on the native text: the next force of the same turn goes to the service", async () => {
+  it("a second force of the same turn goes to the service: one native suggestion per turn, a dismissal gets an alternative", async () => {
     native("ejecuta los tests", T0 + 37_000);
     servicio = ["revisa el diff"];
     await forzar();
     assert.equal(suggest.get("a1"), "ejecuta los tests");
-    suggest.feedback("a1", "no-es-esto");
+    suggest.cancel("a1"); // the pill dismisses it
     assert.equal(suggest.get("a1"), null);
-    assert.equal(existsSync(SUGGEST), false);
     await forzar();
     assert.equal(suggest.get("a1"), "revisa el diff");
     assert.equal(llamadas, 1);
   });
 
-  it("«no es esto» on a service text leaves the native file of the next turn alone", async () => {
+  it("«no es esto» on the native text, then a re-force: the service answers, not the same native text", async () => {
+    native("ejecuta los tests", T0 + 37_000);
     servicio = ["revisa el diff"];
-    await forzar(); // no native file: the service answers
-    assert.equal(suggest.get("a1"), "revisa el diff");
-    write(TRANSCRIPT, [...turn(T0), ...turn(T0 + 3_600_000)].join("\n") + "\n"); // the next turn ends, its fork lands
-    native("del turno siguiente", T0 + 3_600_000 + 37_000);
-    suggest.feedback("a1", "no-es-esto");
-    assert.ok(existsSync(SUGGEST));
     await forzar();
-    assert.equal(suggest.get("a1"), "del turno siguiente");
+    suggest.feedback("a1", "no-es-esto");
+    assert.equal(suggest.get("a1"), null);
+    await forzar();
+    assert.equal(suggest.get("a1"), "revisa el diff");
   });
 
-  it("a native file the user already answered is not shown: the next message made it stale", async () => {
+  it("a native file the user already answered is not shown and not deleted: the next message made it stale", async () => {
     native("ejecuta los tests", T0 + 37_000);
     write(TRANSCRIPT, [...turn(T0), ...turn(T0 + 3_600_000)].join("\n") + "\n");
     servicio = ["revisa el diff"];
     await forzar();
     assert.equal(suggest.get("a1"), "revisa el diff");
     assert.equal(llamadas, 1);
+    assert.ok(existsSync(SUGGEST)); // left for the next turn to overwrite
+  });
+
+  it("the fork of the next turn is served again: consuming one turn's file does not touch the next", async () => {
+    native("del turno uno", T0 + 37_000);
+    await forzar();
+    assert.equal(suggest.get("a1"), "del turno uno");
+    write(TRANSCRIPT, [...turn(T0), ...turn(T0 + 3_600_000)].join("\n") + "\n");
+    native("del turno dos", T0 + 3_600_000 + 37_000);
+    await forzar();
+    assert.equal(suggest.get("a1"), "del turno dos");
+    assert.equal(llamadas, 0);
   });
 });

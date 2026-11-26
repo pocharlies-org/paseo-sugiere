@@ -21,8 +21,11 @@ al modelo de la sesión, sin compartir la caché de la sesión.
   en vez de extraer un paquete común porque son dos repos con ciclos de release
   distintos y el aplanado son ~60 líneas estables. Si el de cuentas cambia, este no
   lo sabe; la duplicación es a propósito y `duplicados` (jscpd) no la ve porque es
-  entre repos.
-- `server/session.ts` — localizar el transcript y la única llamada a LiteLLM (fetch).
+  entre repos. `newestMessage` (el último mensaje de conversación y si cierra un turno, para
+  validar la sugerencia nativa) **no** es parte de esa copia: es código propio de este repo.
+- `server/session.ts` — localizar el transcript de la sesión, las llamadas (fetch) al servicio `sugiere` del clúster (`/v1/suggest` y
+  `/v1/verdict`) y la lectura de la sugerencia nativa del daemon (`nativeSuggestion`, contrato `file.paseo.suggest-native.v1`: se
+  valida contra el último mensaje del transcript y se consume al servirla).
 - `server/suggest.ts` — ventana de silencio de 60 s con `seq`: un turno nuevo mata la
   sugerencia pendiente y descarta una respuesta en vuelo.
 - `server/pares.ts` — lectura del registro de parejas del supervisor (`~/.company/jira-trigger/autopilot-pares.json`, contrato

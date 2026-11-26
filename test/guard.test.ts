@@ -24,7 +24,6 @@ mock.module(new URL("../server/session.ts", import.meta.url).href, {
       '{"type":"assistant","message":{"role":"assistant","model":"claude-opus-5-5","content":"hola, dime"}}',
     ],
     nativeSuggestion: async () => "la nativa, que no vio el plan",
-    rejectNative: () => {},
     sugiereRequest: async (sid: string, _turno: number, _lines: string[], plan: object | null) => {
       pedidos.push({ sid, plan });
       return { status: 200, sugerencia: "relee el estado", modelo: "m", en_plan: plan ? "verificar" : null, criterio: plan ? "C1 — c1" : null };

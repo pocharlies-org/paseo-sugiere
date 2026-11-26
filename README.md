@@ -26,10 +26,11 @@ no consume su contrato `file.claude-cuentas.v1`: la llamada va a LiteLLM con la 
   (`{text, at}`, una por turno: cada turno sobrescribe la anterior); solo se paga el decode. Vale **hasta el siguiente mensaje de
   la sesión**, sin límite de tiempo: el fichero tiene que ser posterior al último mensaje de la conversación del transcript (las
   líneas `user` y `assistant` del hilo principal, sin subagentes ni contexto inyectado) y ese mensaje tiene que cerrar un turno.
-  Cualquier mensaje nuevo (el del usuario, el `[SEGUIMIENTO]`, una notificación de tarea) la deja obsoleta. Leerla no la consume:
-  un segundo force del mismo turno devuelve el mismo texto. «no es esto» sobre una nativa borra ese fichero, y el siguiente force
-  del turno va al servicio. Si el transcript no se puede leer (sin sesión, sin fichero, ilegible), rige la regla antigua: solo vale
-  con 15 min o menos. Sin una nativa válida, el servicio `sugiere` del clúster con `kind: "live"`: mismo modelo que la
+  Cualquier mensaje nuevo (el del usuario, el `[SEGUIMIENTO]`, una notificación de tarea) la deja obsoleta. Se comprueba primero y
+  se consume solo al servirla: una nativa por turno, así que un segundo force del mismo turno (tras descartar la primera) va al
+  servicio. Un fichero obsoleto, vacío o mal formado no se borra al leerlo: el turno siguiente lo sobrescribe. Si la sesión no
+  tiene id de Claude no hay fichero que leer y no hay nativa; si el transcript no se puede leer (sin fichero, sin mensajes,
+  config ilegible), rige la regla antigua: solo vale con 15 min o menos. Sin una nativa válida, el servicio `sugiere` del clúster con `kind: "live"`: mismo modelo que la
   sesión (el `message.model` del último mensaje del asistente; se ignora `<synthetic>`), sin compartir su caché. La compañía
   llama al mismo servicio sin `kind` y le contesta el residente local (Dani 06-11). Si la sesión aún no tiene un modelo real no
   se llama a nada: el force de la píldora muestra «la sesión aún no tiene modelo». Los tool calls del transcript dejan una línea,

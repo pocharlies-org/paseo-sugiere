@@ -13,7 +13,6 @@ mock.module(new URL("../server/session.ts", import.meta.url).href, {
     SessionError: class extends Error {},
     locateSession: async () => TRANSCRIPT,
     nativeSuggestion: async () => null, // sin fichero nativo : la llamada al servicio es el camino normal
-    rejectNative: () => {},
     sugiereRequest: async () => ({ status: 200, sugerencia: "sigue con el merge", modelo: "qwen38-off" }),
   },
 });

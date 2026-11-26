@@ -1,7 +1,6 @@
 // Finding the agent's transcript and the one call to the model door. The suggestion goes with the session's own model. The house retired the loopback claude-router (18791, unit stopped and deleted 20-10): the door is now LiteLLM, whose url and key live in
 // ~/.config/claude-local/env (`export NOMBRE=valor`, one per line) — the same file company_env.py reads. The key goes in the header, never in argv.
-import { readFileSync, rmSync } from "node:fs";
-import { open, readdir, readFile, stat } from "node:fs/promises";
+import { open, readdir, readFile, rm, stat } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import type { PluginHandlerContext } from "@getpaseo/plugin/server";
@@ -126,15 +125,15 @@ const NATIVE_FALLBACK_MS = 15 * 60_000;
 // The tail of the transcript is read, not all of it: a session open for weeks is tens of MB, and its last message is at the end.
 const TAIL_START = 256 * 1024;
 const TAIL_MAX = 32 * 1024 * 1024;
-// The native file last handed out per agent: «no es esto» deletes exactly that one (see `rejectNative`).
-const served = new Map<string, { file: string; at: number }>();
 
+// CONTRACT: file.paseo.suggest-native.v1
 /** The native suggestion of the session : the patched Paseo daemon writes the `prompt_suggestion` the CLI forks
 from the session's own cached prefix to `$PASEO_HOME/.paseo/suggest/<claude-session-id>.json` as `{text, at}`, once per turn,
 overwriting the last one. It is valid until the session's next message: the file must be newer than the newest conversation
-message of the transcript, and that message must close a turn (`isCurrent`). There is no time limit, and reading does not consume
-it: a second force in the same turn gets the same text. Null on anything else (malformed, empty or missing file included) —
-the caller then makes its own call as before. */
+message of the transcript, and that message must close a turn (`isCurrent`), however long ago that was. The file is checked first
+and consumed only when its text is served (one native suggestion per turn: the next force of the turn goes to the service). A file
+that is stale, malformed or empty is never deleted by a read — the next turn overwrites it. Null on anything else, and the caller
+then makes its own call as before. */
 export async function nativeSuggestion(agentId: string, paseo: PaseoApi): Promise<string | null> {
   try {
     const { entries } = await paseo.agents.list({ page: { limit: 200 } });
@@ -148,25 +147,21 @@ export async function nativeSuggestion(agentId: string, paseo: PaseoApi): Promis
     const { text, at } = JSON.parse(raw) as { text?: unknown; at?: unknown };
     if (typeof text !== "string" || !text.trim() || typeof at !== "number") return null;
     if (!(await isCurrent(sessionId, at))) return null;
-    served.set(agentId, { file, at });
+    await consumeNative(file, at);
     return text.trim();
   } catch {
     return null;
   }
 }
 
-/** «no es esto» on a native suggestion: the next force of the same turn must not bring the same text back. The file is deleted,
- * after it was checked and served, and only if it is still the one handed out (same `at`): a fork of a newer turn that landed
- * meanwhile stays. Deleting rather than remembering the `at` in memory means it also holds across a restart of the host. Sync, so
- * a force right after the click cannot read the file before it is gone. */
-export function rejectNative(agentId: string): void {
-  const handedOut = served.get(agentId);
-  served.delete(agentId);
-  if (!handedOut) return;
+/** Deletes the native file that was just served, but only if it still is that one (same `at`): the daemon may have written the fork
+ * of the next turn while the transcript was being read, and that one must survive. Anything unreadable is left alone. Exported for
+ * its test: the window between the check and the delete cannot be hit from outside. */
+export async function consumeNative(file: string, at: number): Promise<void> {
   try {
-    if ((JSON.parse(readFileSync(handedOut.file, "utf8")) as { at?: unknown }).at === handedOut.at) rmSync(handedOut.file, { force: true });
+    if ((JSON.parse(await readFile(file, "utf8")) as { at?: unknown }).at === at) await rm(file, { force: true });
   } catch {
-    // already gone or rewritten: nothing to reject
+    // gone, being rewritten or not JSON: nothing to consume
   }
 }
 

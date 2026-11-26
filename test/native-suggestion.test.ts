@@ -1,15 +1,16 @@
 import assert from "node:assert/strict";
-import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, before, beforeEach, describe, it } from "node:test";
-import { nativeSuggestion, rejectNative } from "../server/session.ts";
+import { consumeNative, nativeSuggestion } from "../server/session.ts";
 import { newestMessage } from "../shared/transcript.ts";
 
 // The file contract of the patched daemon: $PASEO_HOME/.paseo/suggest/<claude-session-id>.json = {text, at}, written once per turn.
 // The suggestion stays valid until the session's next message: `at` must be later than the newest conversation message of the
 // main transcript (<CLAUDE_CONFIG_DIR>/projects/<proj>/<sid>.jsonl, found through the providers of $PASEO_HOME/config.json), and that
-// message must close a turn. No time limit, reading never deletes, «no es esto» does. With no readable transcript: 15 minutes.
+// message must close a turn. No time limit. The file is checked first and consumed only when its text is served (one native
+// suggestion per turn); a file that is not served is never deleted. With no readable transcript: 15 minutes.
 const ROOT = join(tmpdir(), `paseo-native-${process.pid}`);
 const HOME = join(ROOT, "paseo");
 const CLAUDE = join(ROOT, "claude");
@@ -50,7 +51,6 @@ describe("the native suggestion of the patched daemon", () => {
   });
   beforeEach(() => {
     rmSync(ROOT, { recursive: true, force: true });
-    rejectNative("a1"); // forget what an earlier test handed out: the module remembers it per agent
     mkdirSync(HOME, { recursive: true });
     config();
   });
@@ -115,60 +115,57 @@ describe("the native suggestion of the patched daemon", () => {
     });
   });
 
-  describe("reading does not consume the file", () => {
-    it("a second force in the same turn gets the same text, and the file stays", async () => {
+  describe("the file is checked first and consumed only when its text is served", () => {
+    it("serving consumes it: the same turn gets one native suggestion, the second read finds none", async () => {
       transcript(user(T0), closing(T0 + 10_000));
       put({ text: "ejecuta los tests", at: T0 + 37_000 });
       assert.equal(await nativeSuggestion("a1", paseo), "ejecuta los tests");
-      assert.equal(await nativeSuggestion("a1", paseo), "ejecuta los tests");
-      assert.ok(existsSync(SUGGEST));
-    });
-
-    it("a stale, malformed or empty file is not deleted either: it is read, judged, and left", async () => {
-      transcript(user(T0), closing(T0 + 10_000), user(T0 + HOUR));
-      for (const body of [{ text: "vieja", at: T0 + 37_000 }, "{not json", "", { text: "x" }]) {
-        put(body);
-        assert.equal(await nativeSuggestion("a1", paseo), null);
-        assert.ok(existsSync(SUGGEST));
-      }
-    });
-  });
-
-  describe("«no es esto» on a native suggestion", () => {
-    it("deletes the file it handed out: the next force of the same turn gets nothing native", async () => {
-      transcript(user(T0), closing(T0 + 10_000));
-      put({ text: "ejecuta los tests", at: T0 + 37_000 });
-      assert.equal(await nativeSuggestion("a1", paseo), "ejecuta los tests");
-      rejectNative("a1");
       assert.equal(existsSync(SUGGEST), false);
       assert.equal(await nativeSuggestion("a1", paseo), null);
     });
 
-    it("leaves a newer file alone: the daemon wrote the next turn's fork between the click and the delete", async () => {
-      transcript(user(T0), closing(T0 + 10_000));
-      put({ text: "del turno N", at: T0 + 37_000 });
-      assert.equal(await nativeSuggestion("a1", paseo), "del turno N");
-      transcript(user(T0), closing(T0 + 10_000), user(T0 + HOUR), closing(T0 + HOUR + 5_000));
-      put({ text: "del turno N+1", at: T0 + HOUR + 30_000 });
-      rejectNative("a1");
-      assert.equal(await nativeSuggestion("a1", paseo), "del turno N+1");
-    });
-
-    it("does nothing for an agent that was handed no native file (a service suggestion was rejected)", async () => {
-      transcript(user(T0), closing(T0 + 10_000));
-      put({ text: "ejecuta los tests", at: T0 + 37_000 });
-      rejectNative("a1"); // never read through nativeSuggestion in this process
-      rejectNative("nadie");
+    it("a stale file is not deleted by a read: it is read, judged and left (the next turn overwrites it)", async () => {
+      transcript(user(T0), closing(T0 + 10_000), user(T0 + HOUR));
+      put({ text: "vieja", at: T0 + 37_000 });
+      assert.equal(await nativeSuggestion("a1", paseo), null);
+      assert.ok(existsSync(SUGGEST));
+      transcript(user(T0), closing(T0 + 10_000), user(T0 + HOUR), toolUse(T0 + HOUR + 1_000)); // a fork that landed mid-turn
+      put({ text: "a medio turno", at: T0 + HOUR + 2_000 });
+      assert.equal(await nativeSuggestion("a1", paseo), null);
       assert.ok(existsSync(SUGGEST));
     });
 
-    it("rejects once: the same file is not rejected twice by two clicks", async () => {
+    it("a malformed, empty or incomplete file is not deleted by a read either", async () => {
       transcript(user(T0), closing(T0 + 10_000));
-      put({ text: "ejecuta los tests", at: T0 + 37_000 });
-      await nativeSuggestion("a1", paseo);
-      rejectNative("a1");
-      put({ text: "ejecuta los tests", at: T0 + 37_000 }); // the same bytes written again: not the one handed out any more
-      rejectNative("a1");
+      for (const body of ["{not json", "[]", { text: "sin at" }, { text: "   ", at: T0 + 37_000 }, { at: T0 + 37_000 }]) {
+        put(body);
+        assert.equal(await nativeSuggestion("a1", paseo), null, JSON.stringify(body));
+        assert.ok(existsSync(SUGGEST), JSON.stringify(body));
+      }
+    });
+
+    it("a file older than 15 minutes is served and consumed when the transcript says it is current (no time limit)", async () => {
+      transcript(user(T0), closing(T0 + 10_000));
+      put({ text: "tres horas despues", at: T0 + 37_000 });
+      assert.equal(await nativeSuggestion("a1", paseo), "tres horas despues");
+      assert.equal(existsSync(SUGGEST), false);
+    });
+
+    it("a newer fork that landed between the check and the delete survives: only the file that was served is consumed", async () => {
+      put({ text: "del turno N+1", at: T0 + HOUR + 30_000 });
+      await consumeNative(SUGGEST, T0 + 37_000); // the one that was served is the turn N's: the file on disk is not it
+      assert.deepEqual(JSON.parse(readFileSync(SUGGEST, "utf8")), { text: "del turno N+1", at: T0 + HOUR + 30_000 });
+      await consumeNative(SUGGEST, T0 + HOUR + 30_000); // the same `at`: consumed
+      assert.equal(existsSync(SUGGEST), false);
+    });
+
+    it("consuming a file that is gone, half written or not JSON does nothing and does not throw", async () => {
+      await consumeNative(SUGGEST, 1); // missing
+      put("{\"text\":\"cortado");
+      await consumeNative(SUGGEST, 1);
+      assert.ok(existsSync(SUGGEST));
+      put("");
+      await consumeNative(SUGGEST, 1);
       assert.ok(existsSync(SUGGEST));
     });
   });
@@ -204,15 +201,25 @@ describe("the native suggestion of the patched daemon", () => {
       assert.equal(await nativeSuggestion("a1", paseo), null);
     });
 
-    it("no session: the agent has no Claude session id, so there is no file to read", async () => {
+    it("the same consume rule: a file served by the fallback is consumed, one refused by it is left", async () => {
       fresh();
-      const sinSesion = { agents: { list: async () => ({ entries: [{ agent: { id: "a1" } }] }) } } as never;
-      assert.equal(await nativeSuggestion("a1", sinSesion), null);
-      assert.equal(await nativeSuggestion("otro", paseo), null);
+      assert.equal(await nativeSuggestion("a1", paseo), "reciente");
+      assert.equal(existsSync(SUGGEST), false);
+      old();
+      assert.equal(await nativeSuggestion("a1", paseo), null);
+      assert.ok(existsSync(SUGGEST));
     });
   });
 
   describe("bad files", () => {
+    it("is null with no session: the agent has no Claude session id, so there is no file to read (the 15 minutes do not apply)", async () => {
+      put({ text: "reciente", at: Date.now() - MIN });
+      const sinSesion = { agents: { list: async () => ({ entries: [{ agent: { id: "a1" } }] }) } } as never;
+      assert.equal(await nativeSuggestion("a1", sinSesion), null);
+      assert.equal(await nativeSuggestion("otro", paseo), null);
+      assert.ok(existsSync(SUGGEST));
+    });
+
     it("is null when malformed, empty, missing, without text or at, or with a blank text", async () => {
       transcript(user(T0), closing(T0 + 10_000));
       for (const body of ["{not json", "", "[]", "null", { text: "sin at" }, { at: T0 + 37_000 }, { text: 7, at: T0 + 37_000 }, { text: "at texto", at: "1" }, { text: "   ", at: T0 + 37_000 }]) {
