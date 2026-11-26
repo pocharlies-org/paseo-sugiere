@@ -44,6 +44,30 @@ export function forService(lines: string[]): string[] {
   return [...lines.slice(0, boundary).filter(userText), ...lines.slice(boundary)];
 }
 
+/** The newest conversation message of a transcript: when its line was written, and whether it closes a turn (an assistant message
+ * whose last block is text: the model has said its piece, nothing else is coming). Conversation is a `user` or `assistant` line of
+ * the main thread: a sub-agent's (`isSidechain`) or injected context (`isMeta`) is not, and neither are the bookkeeping lines
+ * (`attachment`, `api-request`, `system`, `pr-link`, `queue-operation`, …), which never carry those two types: measured 26-11
+ * on the pod, an idle session can get a `pr-link` line after its last turn, and that is not a message. Null when no line
+ * qualifies. Pure: lines in, no Node. */
+export function newestMessage(lines: string[]): { at: number; endsTurn: boolean } | null {
+  let newest: { at: number; endsTurn: boolean } | null = null;
+  for (const line of lines) {
+    let entry: any;
+    try {
+      entry = JSON.parse(line);
+    } catch {
+      continue; // a line cut by a write in progress, or by the start of a tail read
+    }
+    if ((entry?.type !== "user" && entry?.type !== "assistant") || entry.isSidechain === true || entry.isMeta === true) continue;
+    const at = typeof entry.timestamp === "string" ? Date.parse(entry.timestamp) : NaN;
+    if (Number.isNaN(at) || (newest && at < newest.at)) continue; // the later line wins a tie
+    const content = entry.message?.content;
+    newest = { at, endsTurn: entry.type === "assistant" && (Array.isArray(content) ? content.at(-1)?.type === "text" : typeof content === "string") };
+  }
+  return newest;
+}
+
 /** The messages of the transcript since its last compaction, and the last real model the session used (null if none: no assistant yet, or only synthetic ones). */
 export function transcriptMessages(lines: string[]): { messages: Message[]; model: string | null } {
   const start = lines.findLastIndex((l) => l.includes('"compact_boundary"')) + 1;

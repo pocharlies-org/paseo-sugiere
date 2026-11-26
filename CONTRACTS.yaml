@@ -108,3 +108,22 @@ contracts:
       ilegible, no-JSON o v1 incompleto = estado desconocido, sin romper la píldora. El plugin nunca escribe este fichero.
       16-11-2026: lo relee solo cuando cambia (inotify no recursivo de ~/.company/jira-trigger, filtrado por el nombre; la
       escritura atómica por rename es la que lo dispara) y empuja el estado a las píldoras; ya no lo lee en cada consulta.
+  - id: file.paseo.suggest-native.v1
+    kind: file-schema
+    value: ".paseo/suggest/<claude-session-id>.json"
+    role: consumer
+    files:
+      - server/session.ts
+    status: active
+    note: >-
+      26-11-2026 (la sugerencia nativa de la ✦). Productor: el parche `promptSuggestions` del daemon de Paseo en paseo-0
+      (repo k8s-paseo-pocharlies, k8s/cron-loop.yaml, `parche-prompt-suggestions.mjs`), único escritor: el fork del CLI de
+      Claude Code desde el prefijo cacheado de la sesión. Fichero `<claude-session-id>.json` en `$PASEO_HOME/.paseo/suggest/`
+      (sin `PASEO_HOME`, `$HOME/.paseo/suggest/`), schema v1: {text: string, at: number (ms epoch en que lo escribió el daemon)}.
+      Uno por sesión: cada turno sobrescribe el anterior, y cae de mediana 27 s (p90 103 s) tras el último mensaje del
+      asistente. Consumidor: el plugin lo lee en `nativeSuggestion` (server/session.ts) cuando la ✦ genera, y es el único que lo
+      borra. Valida antes de consumir: vale mientras `at` sea posterior al último mensaje de conversación del transcript
+      principal (líneas user/assistant, sin sidechain ni meta) y ese mensaje cierre un turno, sin límite de tiempo; si el
+      transcript no se puede leer, solo vale con 15 min o menos. Se consume al servirlo (una nativa por turno; el siguiente
+      force va al servicio), y solo si el `at` del disco sigue siendo el servido; uno obsoleto, vacío o mal formado no se
+      borra al leerlo. Ausente, ilegible o sin `text`/`at` = no hay nativa, sin romper la píldora. El plugin nunca lo escribe.
