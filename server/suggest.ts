@@ -10,7 +10,7 @@ import type { Plan } from "../shared/suggest.ts";
 import { transcriptMessages } from "../shared/transcript.ts";
 import { bloqueoDelegacion } from "./delegation.ts";
 import { rutaPorDefecto } from "./pares.ts";
-import { SessionError, locateSession, nativeSuggestion, sugiereRequest, verdictRequest } from "./session.ts";
+import { SessionError, locateSession, nativeSuggestion, rejectNative, sugiereRequest, verdictRequest } from "./session.ts";
 
 // The settings document in force: off drops every pending and shown suggestion; auto gates only the quiet window (the pill's
 // force works without it); quiet is the silence window.
@@ -79,10 +79,12 @@ const MAX_NOES = 3;
 // pending/error/nada describe only the last FORCE (the pill spins on pending, shows error once, says «nada que sugerir» on nada);
 // the quiet window stays silent by design.
 // en_plan/criterio come with an anchored suggestion; noes/muted survive turns (the streak is across turns) and only reset on use or click.
+// native: the text shown is the daemon's native suggestion (not the service's), so «no es esto» must reject that file too.
 type Entry = {
   timer?: ReturnType<typeof setTimeout>;
   seq: number;
   text: string | null;
+  native: boolean;
   en_plan: string | null;
   criterio: string | null;
   pending: boolean;
@@ -92,8 +94,8 @@ type Entry = {
   muted: boolean;
 };
 const agents = new Map<string, Entry>();
-const fresh = (): Entry => ({ seq: 0, text: null, en_plan: null, criterio: null, pending: false, error: null, nada: false, noes: 0, muted: false });
-const clear = (entry: Entry) => Object.assign(entry, { text: null, en_plan: null, criterio: null, pending: false, error: null, nada: false });
+const fresh = (): Entry => ({ seq: 0, text: null, native: false, en_plan: null, criterio: null, pending: false, error: null, nada: false, noes: 0, muted: false });
+const clear = (entry: Entry) => Object.assign(entry, { text: null, native: false, en_plan: null, criterio: null, pending: false, error: null, nada: false });
 
 /** A turn ended completed: after the quiet window, one generation, unless anything happens first. Only with `auto` —
 off by default (Dani 25-10): each automatic suggestion pays the whole transcript of its session; without auto the user's click forces it.
@@ -164,7 +166,9 @@ export function anchor(agentId: string): { en_plan: string | null; criterio: str
   return { en_plan: entry?.text ? entry.en_plan : null, criterio: entry?.text ? entry.criterio : null, muted: entry?.muted ?? false };
 }
 
-/** «no es esto» drops the suggestion and counts toward going quiet; a used suggestion breaks the streak. */
+/** «no es esto» drops the suggestion and counts toward going quiet; a used suggestion breaks the streak. A native suggestion is not
+ * consumed when read (it stays valid until the session's next message), so rejecting one also rejects its file: the next force of the
+ * same turn goes to the service instead of bringing the same text back. */
 export function feedback(agentId: string, verdict: "no-es-esto" | "usada"): { muted: boolean } {
   const entry = agents.get(agentId) ?? fresh();
   agents.set(agentId, entry);
@@ -172,7 +176,9 @@ export function feedback(agentId: string, verdict: "no-es-esto" | "usada"): { mu
   else {
     entry.noes += 1;
     entry.muted = entry.noes >= MAX_NOES;
+    if (entry.native) rejectNative(agentId);
     entry.text = entry.en_plan = entry.criterio = null;
+    entry.native = false;
   }
   avisa(agentId);
   return { muted: entry.muted };
@@ -229,6 +235,7 @@ async function generate(agentId: string, seq: number, context: PluginHandlerCont
       if (entry && entry.seq === seq) {
         console.log(`suggest: nativa  para ${agentId}: ${JSON.stringify(native.slice(0, 60))}`);
         entry.text = native;
+        entry.native = true;
       }
       return;
     }
@@ -248,6 +255,7 @@ async function generate(agentId: string, seq: number, context: PluginHandlerCont
     if (entry && entry.seq === seq && text) {
       console.log(`suggest: generada para ${agentId} con ${answer.modelo}${plan ? ` (${answer.en_plan} · ${answer.criterio})` : ""}: ${JSON.stringify(text.slice(0, 60))}`);
       entry.text = text;
+      entry.native = false;
       entry.en_plan = answer.en_plan;
       entry.criterio = answer.criterio;
     } else if (entry && entry.seq === seq) {

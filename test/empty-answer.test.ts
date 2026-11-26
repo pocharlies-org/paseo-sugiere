@@ -16,6 +16,7 @@ mock.module(new URL("../server/session.ts", import.meta.url).href, {
     SessionError: class extends Error {},
     locateSession: async () => TRANSCRIPT,
     nativeSuggestion: async () => null,
+    rejectNative: () => {},
     sugiereRequest: () => respuesta(),
   },
 });

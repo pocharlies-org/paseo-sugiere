@@ -1,11 +1,12 @@
 // Finding the agent's transcript and the one call to the model door. The suggestion goes with the session's own model. The house retired the loopback claude-router (18791, unit stopped and deleted 20-10): the door is now LiteLLM, whose url and key live in
 // ~/.config/claude-local/env (`export NOMBRE=valor`, one per line) — the same file company_env.py reads. The key goes in the header, never in argv.
-import { readdir, readFile, rm, stat } from "node:fs/promises";
+import { readFileSync, rmSync } from "node:fs";
+import { open, readdir, readFile, stat } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import type { PluginHandlerContext } from "@getpaseo/plugin/server";
 import { SUGGEST_WAIT_MS } from "../shared/suggest.ts";
-import { forService } from "../shared/transcript.ts";
+import { forService, newestMessage } from "../shared/transcript.ts";
 
 // The server runtime boundary forbids importing @getpaseo/client: the API type comes from the SDK's own context.
 type PaseoApi = PluginHandlerContext["paseo"];
@@ -36,20 +37,27 @@ export async function locateSession(agentId: string, paseo: PaseoApi): Promise<s
     const agent = entries.find(({ agent }) => agent.id === agentId)?.agent;
     const sessionId = (agent as { persistence?: { sessionId?: string } } | undefined)?.persistence?.sessionId;
     if (!sessionId) throw new SessionError("no-session");
-    const home = process.env.PASEO_HOME || join(homedir(), ".paseo");
-    const config = JSON.parse(await readFile(join(home, "config.json"), "utf8"));
-    const providers: Record<string, any> = { claude: {}, ...config?.agents?.providers };
-    for (const p of Object.values(providers)) {
-      if (p?.enabled === false) continue;
-      const projects = join(p?.env?.CLAUDE_CONFIG_DIR || join(homedir(), ".claude"), "projects");
-      const found = await findIn(projects, `${sessionId}.jsonl`);
-      if (found) return forService((await readFile(found, "utf8")).split("\n"));
-    }
+    const found = await findTranscript(sessionId);
+    if (found) return forService((await readFile(found, "utf8")).split("\n"));
     throw new SessionError("no-transcript");
   } catch (error) {
     if (error instanceof SessionError) throw error;
     throw new SessionError("unreadable", error);
   }
+}
+
+/** The file of a session's transcript, or null if no provider has it. Throws if Paseo's config cannot be read. */
+async function findTranscript(sessionId: string): Promise<string | null> {
+  const home = process.env.PASEO_HOME || join(homedir(), ".paseo");
+  const config = JSON.parse(await readFile(join(home, "config.json"), "utf8"));
+  const providers: Record<string, any> = { claude: {}, ...config?.agents?.providers };
+  for (const p of Object.values(providers)) {
+    if (p?.enabled === false) continue;
+    const projects = join(p?.env?.CLAUDE_CONFIG_DIR || join(homedir(), ".claude"), "projects");
+    const found = await findIn(projects, `${sessionId}.jsonl`);
+    if (found) return found;
+  }
+  return null;
 }
 
 /** El servicio `sugiere` del clúster: la única puerta de la sugerencia, la misma que usa la compañía (Dani, 05-11). En el
@@ -113,9 +121,19 @@ async function sugierePost(path: string, body: object, timeoutMs: number): Promi
   }
 }
 
+// Only when the transcript cannot be read: then the age of the file is all there is to go by.
+const NATIVE_FALLBACK_MS = 15 * 60_000;
+// The tail of the transcript is read, not all of it: a session open for weeks is tens of MB, and its last message is at the end.
+const TAIL_START = 256 * 1024;
+const TAIL_MAX = 32 * 1024 * 1024;
+// The native file last handed out per agent: «no es esto» deletes exactly that one (see `rejectNative`).
+const served = new Map<string, { file: string; at: number }>();
+
 /** The native suggestion of the session : the patched Paseo daemon writes the `prompt_suggestion` the CLI forks
-from the session's own cached prefix to `$PASEO_HOME/.paseo/suggest/<claude-session-id>.json`. Consumed on read (one suggestion
-per turn) and only while fresh (15 min): a stale file belongs to a turn the user already answered. Null on anything else —
+from the session's own cached prefix to `$PASEO_HOME/.paseo/suggest/<claude-session-id>.json` as `{text, at}`, once per turn,
+overwriting the last one. It is valid until the session's next message: the file must be newer than the newest conversation
+message of the transcript, and that message must close a turn (`isCurrent`). There is no time limit, and reading does not consume
+it: a second force in the same turn gets the same text. Null on anything else (malformed, empty or missing file included) —
 the caller then makes its own call as before. */
 export async function nativeSuggestion(agentId: string, paseo: PaseoApi): Promise<string | null> {
   try {
@@ -127,12 +145,60 @@ export async function nativeSuggestion(agentId: string, paseo: PaseoApi): Promis
     const file = join(process.env.PASEO_HOME || process.env.HOME || homedir(), ".paseo", "suggest", `${sessionId}.json`);
     const raw = await readFile(file, "utf8").catch(() => "");
     if (!raw) return null;
-    await rm(file, { force: true }).catch(() => {});
     const { text, at } = JSON.parse(raw) as { text?: unknown; at?: unknown };
-    if (typeof text !== "string" || typeof at !== "number" || Date.now() - at > 15 * 60_000) return null;
-    return text.trim() || null;
+    if (typeof text !== "string" || !text.trim() || typeof at !== "number") return null;
+    if (!(await isCurrent(sessionId, at))) return null;
+    served.set(agentId, { file, at });
+    return text.trim();
   } catch {
     return null;
+  }
+}
+
+/** «no es esto» on a native suggestion: the next force of the same turn must not bring the same text back. The file is deleted,
+ * after it was checked and served, and only if it is still the one handed out (same `at`): a fork of a newer turn that landed
+ * meanwhile stays. Deleting rather than remembering the `at` in memory means it also holds across a restart of the host. Sync, so
+ * a force right after the click cannot read the file before it is gone. */
+export function rejectNative(agentId: string): void {
+  const handedOut = served.get(agentId);
+  served.delete(agentId);
+  if (!handedOut) return;
+  try {
+    if ((JSON.parse(readFileSync(handedOut.file, "utf8")) as { at?: unknown }).at === handedOut.at) rmSync(handedOut.file, { force: true });
+  } catch {
+    // already gone or rewritten: nothing to reject
+  }
+}
+
+/** Whether a native file written at `at` still belongs to the end of the session's last turn: it must be newer than the newest
+ * conversation message of the main transcript, and that message must be the assistant's closing one. A new user message — the
+ * user's, Seguir's, a task notification — makes it stale; so does a fork that landed after the next turn had started (the
+ * newest line is then a user message or a tool step, not a closing answer). With no readable transcript (no session file, no
+ * message, an error) the old rule: valid only if at most 15 minutes old. */
+async function isCurrent(sessionId: string, at: number): Promise<boolean> {
+  const newest = await newestMessageOf(sessionId).catch(() => null);
+  if (!newest) return Date.now() - at <= NATIVE_FALLBACK_MS;
+  return newest.endsTurn && at > newest.at;
+}
+
+/** `newestMessage` of the session's transcript, read from the back in growing windows until one holds a message. */
+async function newestMessageOf(sessionId: string): Promise<{ at: number; endsTurn: boolean } | null> {
+  const file = await findTranscript(sessionId);
+  if (!file) return null;
+  const handle = await open(file, "r");
+  try {
+    const { size } = await handle.stat();
+    for (let bytes = TAIL_START; ; bytes = Math.min(bytes * 4, TAIL_MAX)) {
+      const start = Math.max(0, size - bytes);
+      const buffer = Buffer.alloc(size - start);
+      const { bytesRead } = await handle.read(buffer, 0, buffer.length, start);
+      const lines = buffer.toString("utf8", 0, bytesRead).split("\n");
+      if (start > 0) lines.shift(); // the first line is cut by the window
+      const found = newestMessage(lines);
+      if (found || start === 0 || bytes >= TAIL_MAX) return found;
+    }
+  } finally {
+    await handle.close();
   }
 }
 

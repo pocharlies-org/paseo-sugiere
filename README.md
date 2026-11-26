@@ -22,8 +22,14 @@ no consume su contrato `file.claude-cuentas.v1`: la llamada va a LiteLLM con la 
 
 - `agent.turn_ended` (completed) abre una ventana de silencio de 60 s; `agent.turn_started` la cierra.
 - Primero, la **sugerencia nativa**: el daemon parcheado deja la que el CLI de Claude Code bifurca del prefijo **cacheado** de la
-  propia sesión, con su mismo modelo (Claude, GPT o Alibaba por LiteLLM), en `$PASEO_HOME/.paseo/suggest/<sid>.json`; solo se
-  paga el decode. Si no hay una fresca (≤ 15 min), el servicio `sugiere` del clúster con `kind: "live"`: mismo modelo que la
+  propia sesión, con su mismo modelo (Claude, GPT o Alibaba por LiteLLM), en `$PASEO_HOME/.paseo/suggest/<sid>.json`
+  (`{text, at}`, una por turno: cada turno sobrescribe la anterior); solo se paga el decode. Vale **hasta el siguiente mensaje de
+  la sesión**, sin límite de tiempo: el fichero tiene que ser posterior al último mensaje de la conversación del transcript (las
+  líneas `user` y `assistant` del hilo principal, sin subagentes ni contexto inyectado) y ese mensaje tiene que cerrar un turno.
+  Cualquier mensaje nuevo (el del usuario, el `[SEGUIMIENTO]`, una notificación de tarea) la deja obsoleta. Leerla no la consume:
+  un segundo force del mismo turno devuelve el mismo texto. «no es esto» sobre una nativa borra ese fichero, y el siguiente force
+  del turno va al servicio. Si el transcript no se puede leer (sin sesión, sin fichero, ilegible), rige la regla antigua: solo vale
+  con 15 min o menos. Sin una nativa válida, el servicio `sugiere` del clúster con `kind: "live"`: mismo modelo que la
   sesión (el `message.model` del último mensaje del asistente; se ignora `<synthetic>`), sin compartir su caché. La compañía
   llama al mismo servicio sin `kind` y le contesta el residente local (Dani 06-11). Si la sesión aún no tiene un modelo real no
   se llama a nada: el force de la píldora muestra «la sesión aún no tiene modelo». Los tool calls del transcript dejan una línea,
